@@ -2,11 +2,13 @@
 import logging
 import os
 import re
+from pathlib import Path
 
 import jwt
 import psycopg2
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app import email as emailer
@@ -21,6 +23,9 @@ log = logging.getLogger("tradealert")
 app = FastAPI(title="tradealert.me", docs_url="/api/docs",
               openapi_url="/api/openapi.json")
 bearer = HTTPBearer(auto_error=False)
+
+_ROOT = Path(__file__).resolve().parent.parent
+_STATIC = _ROOT / "static"
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -149,3 +154,6 @@ def verify(token: str):
     if not row:
         raise HTTPException(404, "user not found")
     return {"verified": True, "email": row[0]}
+
+if _STATIC.is_dir():
+    app.mount("/", StaticFiles(directory=str(_STATIC), html=True), name="static")

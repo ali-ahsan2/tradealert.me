@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in - tradealert.me</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 360px; margin: 40px auto; padding: 0 16px; }
+  h1 { font-size: 20px; }
+  label { display: block; margin-top: 12px; }
+  input { box-sizing: border-box; width: 100%; padding: 8px; margin-top: 4px; }
+  button { margin-top: 16px; width: 100%; padding: 10px; }
+  #msg { margin-top: 12px; color: #b00020; white-space: pre-wrap; }
+  p.dim { color: #555; font-size: 14px; }
+</style>
+</head>
+<body>
+<h1>Log in</h1>
+<form id="form">
+  <label for="email">Email</label>
+  <input id="email" type="email" autocomplete="email" required>
+  <label for="password">Password</label>
+  <input id="password" type="password" autocomplete="current-password" required>
+  <button type="submit">Log in</button>
+</form>
+<div id="msg"></div>
+<p class="dim">No account yet? <a href="signup.html">Sign up</a>.</p>
+
+<script>
+const form = document.getElementById('form');
+const msg = document.getElementById('msg');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  msg.textContent = '';
+  const res = await fetch('/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: document.getElementById('email').value,
+      password: document.getElementById('password').value,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    msg.textContent = data.detail || 'Login failed';
+    return;
+  }
+  localStorage.setItem('token', data.token);
+  window.location.href = 'app.html';
+});
+</script>
+</body>
+</html>

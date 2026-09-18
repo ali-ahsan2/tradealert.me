@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard - tradealert.me</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; }
+  h1 { font-size: 20px; }
+  #user { background: #f0f4ff; border: 1px solid #c6d4f7; border-radius: 6px; padding: 12px 16px; }
+  #ping { margin-top: 16px; padding: 12px 16px; border-radius: 6px; }
+  #ping.ok { background: #e8f7ec; border: 1px solid #b8e0c4; }
+  .dim { color: #555; }
+</style>
+</head>
+<body>
+<h1>You're in.</h1>
+<div id="user">Loading...</div>
+<div id="ping" class="ok">Calling <code>/api/me</code> with your JWT...</div>
+<button id="logout" style="margin-top:24px">Log out</button>
+
+<script>
+let token = localStorage.getItem('token');
+
+if (!token) {
+  window.location.href = 'login.html';
+}
+
+const userEl = document.getElementById('user');
+const pingEl = document.getElementById('ping');
+
+async function load() {
+  const res = await fetch('/api/me', {
+    headers: { 'Authorization': 'Bearer ' + token },
+  });
+  const data = await res.json();
+  if (res.status === 401) {
+    localStorage.removeItem('token');
+    window.location.href = 'login.html';
+    return;
+  }
+  userEl.textContent = `Logged in as ${data.email}` + (data.verified ? ' (verified)' : ' (not verified)');
+  pingEl.textContent = 'JWT-authenticated ping succeeded: /api/me returned 200 for this account.';
+}
+
+document.getElementById('logout').addEventListener('click', () => {
+  localStorage.removeItem('token');
+  window.location.href = 'login.html';
+});
+
+load();
+</script>
+</body>
+</html>
