@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+psycopg2-binary
+yfinance
+bcrypt
+PyJWT
+boto3
