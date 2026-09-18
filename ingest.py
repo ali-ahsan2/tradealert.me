@@ -17,7 +17,7 @@ Usage:
 
 import argparse
 import datetime as dt
-import sys
+import time
 
 import refresh
 from app.db import get_conn
@@ -169,7 +169,6 @@ def main():
                   flush=True)
             total += len(rows)
             if i < len(tickers) - 1:
-                import time
                 time.sleep(args.sleep)
     finally:
         conn.close()
