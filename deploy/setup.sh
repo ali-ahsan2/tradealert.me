@@ -38,6 +38,10 @@ else
     echo "refusing to run with the placeholder JWT_SECRET; set a real one in /opt/tradealert.me/.env" >&2
     exit 1
   }
+  grep -q '^POSTGRES_PASSWORD=dev-only-change-me' .env && {
+    echo "refusing to run with the placeholder POSTGRES_PASSWORD; set a real one in /opt/tradealert.me/.env" >&2
+    exit 1
+  }
 fi
 
 echo "== apt =="
@@ -59,8 +63,9 @@ echo "== TLS (certbot) =="
 sudo certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos \
   -m "admin@${DOMAIN}" --redirect
 
-echo "== cron =="
+echo "== cron + log rotation =="
 sudo cp deploy/crontab /etc/crontab
+sudo cp deploy/logrotate /etc/logrotate.d/tradealert
 
 echo
 echo "Done. Remaining manual steps:"

@@ -22,33 +22,42 @@
 <script>
 let token = localStorage.getItem('token');
 
-if (!token) {
-  window.location.href = 'login.html';
-}
-
 const userEl = document.getElementById('user');
 const pingEl = document.getElementById('ping');
 
-async function load() {
-  const res = await fetch('/api/me', {
-    headers: { 'Authorization': 'Bearer ' + token },
-  });
-  const data = await res.json();
-  if (res.status === 401) {
+if (!token) {
+  window.location.href = 'login.html';
+} else {
+  async function load() {
+    try {
+      const res = await fetch('/api/me', {
+        headers: { 'Authorization': 'Bearer ' + token },
+      });
+      let data = {};
+      try { data = await res.json(); } catch (_) {}
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = 'login.html';
+        return;
+      }
+      if (!res.ok) {
+        userEl.textContent = 'Error ' + res.status;
+        return;
+      }
+      userEl.textContent = `Logged in as ${data.email}` + (data.verified ? ' (verified)' : ' (not verified)');
+      pingEl.textContent = 'JWT-authenticated ping succeeded: /api/me returned 200 for this account.';
+    } catch (err) {
+      userEl.textContent = 'Network error: could not reach the server.';
+    }
+  }
+
+  document.getElementById('logout').addEventListener('click', () => {
     localStorage.removeItem('token');
     window.location.href = 'login.html';
-    return;
-  }
-  userEl.textContent = `Logged in as ${data.email}` + (data.verified ? ' (verified)' : ' (not verified)');
-  pingEl.textContent = 'JWT-authenticated ping succeeded: /api/me returned 200 for this account.';
+  });
+
+  load();
 }
-
-document.getElementById('logout').addEventListener('click', () => {
-  localStorage.removeItem('token');
-  window.location.href = 'login.html';
-});
-
-load();
 </script>
 </body>
 </html>

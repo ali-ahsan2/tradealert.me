@@ -19,8 +19,8 @@
 <form id="form">
   <label for="email">Email</label>
   <input id="email" type="email" autocomplete="email" required>
-  <label for="password">Password (8+ characters)</label>
-  <input id="password" type="password" autocomplete="new-password" minlength="8" required>
+  <label for="password">Password (8-72 characters)</label>
+  <input id="password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
   <button type="submit">Sign up</button>
 </form>
 <div id="msg"></div>
@@ -41,9 +41,10 @@ form.addEventListener('submit', async (e) => {
       password: document.getElementById('password').value,
     }),
   });
-  const data = await res.json();
+  let data = {};
+  try { data = await res.json(); } catch (_) {}
   if (!res.ok) {
-    msg.textContent = data.detail || 'Signup failed';
+    msg.textContent = data.detail || res.statusText || 'Signup failed';
     return;
   }
   localStorage.setItem('token', data.token);

@@ -44,6 +44,12 @@ def _rate_limited(route, ip):
         return False
     limit, window = _RATE_LIMITS[route]
     now = time.time()
+    if len(_hits) > 10_000:
+        # bound memory on a busy or abusively-proxied box: drop every bucket
+        # whose newest hit is already past its window
+        for key in [k for k, q in _hits.items()
+                    if not q or now - q[0] > _RATE_LIMITS[k[0]][1]]:
+            del _hits[key]
     q = _hits[(route, ip)]
     while q and now - q[0] > window:
         q.popleft()
@@ -77,6 +83,8 @@ def _user_payload(row):
 
 
 def _get_by(conn, column, value):
+    if column not in {"email", "id"}:
+        raise ValueError(f"unexpected column {column!r}")
     cur = conn.cursor()
     cur.execute(f"SELECT id, email, password_hash, verified, created_at "
                 f"FROM users WHERE {column} = %s", (value,))

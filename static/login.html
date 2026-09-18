@@ -41,9 +41,10 @@ form.addEventListener('submit', async (e) => {
       password: document.getElementById('password').value,
     }),
   });
-  const data = await res.json();
+  let data = {};
+  try { data = await res.json(); } catch (_) {}
   if (!res.ok) {
-    msg.textContent = data.detail || 'Login failed';
+    msg.textContent = data.detail || res.statusText || 'Login failed';
     return;
   }
   localStorage.setItem('token', data.token);
