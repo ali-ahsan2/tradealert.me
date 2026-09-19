@@ -1,6 +1,10 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+        PIP_FIND_LINKS: ${PIP_FIND_LINKS:-}
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -8,6 +12,20 @@ services:
       APP_BASE_URL: ${APP_BASE_URL}
       AWS_REGION: ${AWS_REGION}
       SES_VERIFIED_SENDER: ${SES_VERIFIED_SENDER}
+      WEBHOOK_SECRET_KEY: ${WEBHOOK_SECRET_KEY}
+      BILLING_DEV_MODE: ${BILLING_DEV_MODE:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_PRICE_ID_free: ${STRIPE_PRICE_ID_free}
+      STRIPE_PRICE_ID_basic: ${STRIPE_PRICE_ID_basic}
+      STRIPE_PRICE_ID_pro: ${STRIPE_PRICE_ID_pro}
+      STRIPE_PRICE_ID_investor: ${STRIPE_PRICE_ID_investor}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_SUBJECT: ${VAPID_SUBJECT}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_FROM: ${TWILIO_FROM}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:

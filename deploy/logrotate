@@ -1,4 +1,4 @@
-/var/log/tradealert-ingest.log {
+/var/log/tradealert-ingest.log /var/log/tradealert-jobs.log {
     weekly
     rotate 8
     compress

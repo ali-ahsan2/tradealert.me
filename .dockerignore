@@ -5,6 +5,6 @@
 __pycache__
 *.pyc
 deploy
-static
 db
 tests
+.vscode

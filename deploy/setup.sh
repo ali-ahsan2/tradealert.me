@@ -22,6 +22,7 @@ if [ ! -f .env ]; then
   umask 077
   PASSWORD="$(gen)"
   JWT="$(gen)"
+  HOOK="$(gen)"
   cat > .env <<EOF
 POSTGRES_DB=tradealert
 POSTGRES_USER=tradealert
@@ -31,6 +32,20 @@ JWT_SECRET=${JWT}
 APP_BASE_URL=https://${DOMAIN}
 AWS_REGION=
 SES_VERIFIED_SENDER=alerts@${DOMAIN}
+STRIPE_SECRET_KEY=
+STRIPE_PRICE_ID_free=
+STRIPE_PRICE_ID_basic=
+STRIPE_PRICE_ID_pro=
+STRIPE_PRICE_ID_investor=
+STRIPE_WEBHOOK_SECRET=
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:alerts@${DOMAIN}
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_FROM=
+WEBHOOK_SECRET_KEY=${HOOK}
+BILLING_DEV_MODE=0
 EOF
 else
   echo "== existing .env left in place =="
@@ -69,6 +84,8 @@ sudo cp deploy/logrotate /etc/logrotate.d/tradealert
 
 echo
 echo "Done. Remaining manual steps:"
-echo "  1. Verify alerts@${DOMAIN} in SES and set AWS_REGION and SES_VERIFIED_SENDER in /opt/tradealert.me/.env, then:  docker compose restart app"
-echo "  2. Point the domain's DNS at this box and make sure the EC2 security group allows 80 and 443 from 0.0.0.0/0."
-echo "  3. Check:  curl -I https://${DOMAIN}/api/docs"
+echo "  1. Verify alerts@${DOMAIN} in SES; set AWS_REGION and SES_VERIFIED_SENDER in /opt/tradealert.me/.env, then:  docker compose restart app"
+echo "  2. To take payments: set the STRIPE_* keys in .env, point Stripe webhooks at https://${DOMAIN}/api/billing/webhook, restart app."
+echo "  3. Optional push/SMS: generate a VAPID keypair (web-push generate-vapid-keys) and set the VAPID_* and TWILIO_* keys in .env."
+echo "  4. Point the domain's DNS at this box and make sure the EC2 security group allows 80 and 443 from 0.0.0.0/0."
+echo "  5. Check:  curl -I https://${DOMAIN}/api/docs"

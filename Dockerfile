@@ -1,16 +1,23 @@
-FROM python:3.14-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY requirements.txt ./
+# PIP_FIND_LINKS builds offline from a local wheelhouse (fast on Docker
+# Desktop, where BuildKit networking is throttled); otherwise install from
+# the index. PUT WHEELS INTO ./wheelhouse to build offline, or leave empty.
 ARG PIP_INDEX_URL=https://pypi.org/simple
-# --network=host: buildkit's sandboxed network is pathologically slow on
-# Docker Desktop; the host resolver pulls the same wheels orders of magnitude
-# faster. Rebuild override:  docker compose build --build-arg PIP_INDEX_URL=...
-RUN --network=host pip install --no-cache-dir --index-url "${PIP_INDEX_URL}" -r requirements.txt
+ARG PIP_FIND_LINKS=
+COPY requirements.txt ./
+COPY wheelhouse/ ./wheelhouse/
+RUN if [ -n "$PIP_FIND_LINKS" ]; then \
+      pip install --no-cache-dir --no-index --find-links "$PIP_FIND_LINKS" -r requirements.txt; \
+    else \
+      pip install --no-cache-dir --index-url "$PIP_INDEX_URL" -r requirements.txt; \
+    fi
 
 COPY app/ app/
 COPY refresh.py ingest.py ./
+COPY static/ static/
 RUN python -c "from app.main import app"
 
 EXPOSE 8000

@@ -25,13 +25,14 @@ def _secret():
     return os.environ["JWT_SECRET"]
 
 
-def make_token(user_id, purpose="session", expires_days=30):
+def make_token(user_id, purpose="session", expires_days=30, **extra):
     now = dt.datetime.now(dt.timezone.utc)
     payload = {
         "sub": str(user_id),
         "purpose": purpose,
         "iat": now,
         "exp": now + dt.timedelta(days=expires_days),
+        **extra,
     }
     return jwt.encode(payload, _secret(), algorithm="HS256")
 

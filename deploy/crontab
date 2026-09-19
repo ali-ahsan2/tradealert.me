@@ -1,6 +1,10 @@
-# /etc/crontab entry on the EC2 box — daily ingest of the full universe.
+# /etc/crontab entry on the EC2 box — universe ingest + scheduled jobs.
 # The compose project must be reachable from where this runs.
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # hh:mm UTC; 02:30 avoids market-open load and lets yfinance settle.
 30 2 * * * root cd /opt/tradealert.me && docker compose exec -T app python ingest.py --all --stats-max-age 7 >> /var/log/tradealert-ingest.log 2>&1
+# alert sweep — matches the last 24h of impersonal events against armed rules.
+*/5 * * * * root cd /opt/tradealert.me && docker compose exec -T app python -m app.jobs sweep >> /var/log/tradealert-jobs.log 2>&1
+# daily board digest — each user's day/hour gate lives inside the job.
+5 * * * * root cd /opt/tradealert.me && docker compose exec -T app python -m app.jobs digest >> /var/log/tradealert-jobs.log 2>&1
