@@ -15,18 +15,36 @@ export function logout() {
 
 export class ApiError extends Error {
   constructor(status, detail) {
-    super(typeof detail === "string" ? detail : "request failed");
+    super(toStringDetail(detail));
     this.status = status;
-    this.detail = detail;
+    this.detail = toStringDetail(detail);
   }
+}
+
+function toStringDetail(detail) {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d) => (d && d.msg) || String(d))
+      .filter(Boolean)
+      .join("; ");
+  }
+  if (detail && typeof detail === "object") return JSON.stringify(detail);
+  return "request failed";
 }
 
 export async function api(path, opts = {}) {
   const headers = { ...(opts.headers || {}) };
-  if (opts.json !== undefined) headers["content-type"] = "application/json";
+  const hasBody = opts.json !== undefined;
+  if (hasBody) headers["content-type"] = "application/json";
   const token = getToken();
   if (token) headers["authorization"] = `Bearer ${token}`;
-  const res = await fetch(`/api${path}`, { ...opts, headers });
+  const { json: _json, ...rest } = opts;
+  const res = await fetch(`/api${path}`, {
+    ...rest,
+    headers,
+    ...(hasBody ? { body: JSON.stringify(_json) } : {}),
+  });
   let body = null;
   try {
     body = await res.json();

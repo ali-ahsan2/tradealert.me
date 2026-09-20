@@ -5,6 +5,9 @@
 __pycache__
 *.pyc
 deploy
-db
+db/*
+!db/migrate.py
+!db/migrations/
+!db/seed_lab.py
 tests
 .vscode

@@ -41,7 +41,7 @@ The UX and design documents were written by agents working from the architecture
 These come from `PROJECT_HANDOFF.md` and `SCAFFOLD_SPEC.md` and are repeated here because a one-shot build is the highest-risk moment for silently dropping them.
 
 - No paid SaaS subscription anywhere in the stack. AWS pay-as-you-go (EC2, SES, S3) is fine. A payment provider charging per-transaction (not a monthly platform fee) is fine per `UX_SPEC.md` block 6's note — use Stripe in per-transaction mode, do not sign up for a paid tier of anything else.
-- No framework, no build step, no npm, no bundler on the frontend. Plain HTML/CSS/vanilla JS, served as static files by FastAPI.
+- Frontend is React, built with Vite (see the frontend framework update above). Vite is a build-time dependency only — no Node process runs in production; the build output is static JS/CSS served by nginx/FastAPI exactly like the earlier plain-HTML approach. No separate app server, no SSR, no new AWS services.
 - Single EC2 instance. Postgres in Docker on the same box, not RDS. Cron, not a message queue.
 - The visible-universe rule is a security property, not a display preference: a 404 for a name outside a subscriber's tier-limited universe must be byte-identical to a 404 for a name that doesn't exist. This governs both the API (section 5) and every screen that can render a 404 (`UX_SPEC.md` section 1.4).
 - Every score-bearing screen shows its data's age. No number without a timestamp.
@@ -453,7 +453,93 @@ Do not implement a runtime theme switcher (a `<select>` that toggles themes via 
 
 ---
 
-## 7. Build order
+## 7. Design revision (v1 build reviewed, changes required)
+
+The v1 build was reviewed against a live running instance (screenshots of the landing page, the Fast Mover board, signup, and login). The backend and data pipeline are sound — real tickers, real theses, working coverage/band/calibration logic. The frontend implementation is faithful to `PRODUCT_DESIGN.md`'s literal instructions but the result reads as visibly AI-generated and unfinished rather than as a polished product. This section is corrective and takes priority over the conflicting parts of `PRODUCT_DESIGN.md` and `UX_SPEC.md` it references below.
+
+### 7.1 Remove the "AI tell" visual markers
+
+`PRODUCT_DESIGN.md` section 3.4's hatched-border treatment for provisional strategies (a `repeating-linear-gradient` dashed left rule on cards, and dashed borders on thin-coverage score badges per section 4.4) is the single biggest contributor to the site reading as machine-generated. Remove it entirely:
+
+- **No dashed borders anywhere.** Not on provisional strategy cards, not on thin-coverage score badges, not on any other element. Dashed/hatched borders read as a placeholder or a default framework style, not a deliberate design choice.
+- **Replace the provisional-strategy signal** with something quieter and more considered: a small solid-fill label chip (not a border treatment) reading "Provisional" in `--warn` text on a pale `--warn`-tinted background, positioned inline with the strategy name, not as a structural border around the whole card. The card itself keeps the same solid, clean border as a calibrated strategy's card — the distinction lives in the label, not in defacing the container.
+- **Replace the thin-coverage `~` treatment's dashed badge border** with a solid border in the badge's normal band color, and let the `~` prefix on the number itself (already specified, keep this part) do the signaling work alone. One honesty signal per data point, not two competing ones.
+- **Audit every other component for the same pattern** (dotted underlines, dashed dividers, bordered "notice" boxes with dashed edges) and convert each to either a solid border, a subtle background tint, or a label — whichever reads as intentional rather than default.
+
+### 7.2 The site must look designed, not templated
+
+Concretely, beyond "remove dashes":
+
+- **Increase visual contrast and hierarchy on the landing page.** The current version is technically correct (right copy, right numbers) but visually flat: every section uses the same card style, the same spacing, the same weight. Vary it: give the hero section more breathing room (larger top/bottom padding than any other section), let the strategy cards use a slightly heavier shadow or a subtle background tint to lift them off the page, and make the primary CTA button meaningfully larger than any other button on the page so there's no ambiguity about the one thing a first-time visitor should click.
+- **Add a real footer to every page** (currently missing entirely). Contents: the tradealert.me wordmark, links to `/legal/terms`, `/legal/privacy`, `/legal/disclaimer` (from `UX_SPEC.md` section 1.1, P8 — these routes were specified but the footer that should link to them was never built), a one-line restatement of the "not investment advice" disclaimer, and a copyright line. Keep it in the same muted, quiet register as the rest of the design — small text, `--ink-faint`, generous padding, a `--border` top rule separating it from page content.
+- **Add a consistent header treatment across authenticated and public pages.** The current header (logo, Board, Plans, Sign in x2) is functional but underdesigned for a page that's supposed to feel like a finished product. Give it: a subtle bottom border or shadow separating it from content (currently it sits flush with no separation on some pages), consistent padding that matches the footer's rhythm, and treat it as a real navigation bar, not a leftover scaffold artifact.
+
+### 7.3 Fix the broken navigation and auth entry points
+
+Direct bugs found in the current build, not stylistic notes:
+
+- **The header shows "Sign in" as both a text link and a filled button — there is no signup link or button anywhere in the header.** This is a functional defect: a new visitor landing on any page other than the homepage hero has no way to find signup. Fix: header shows two distinct, clearly labeled actions for a logged-out visitor — a plain text or outline "Log in" and a filled primary "Sign up" — never two buttons that both say "Sign in." For a logged-in subscriber, this area becomes the tier chip and account menu per `UX_SPEC.md` section 1.2, unchanged.
+- **The signup and login cards are left-aligned on the page instead of centered.** Both `signup.html`'s and `login.html`'s equivalents in the React build render the form card pinned near the left edge with the remaining ~75% of the viewport empty. Fix: center the auth card both horizontally and vertically in the available viewport height below the header (a flex or grid container with `place-items: center` on a full-height wrapper), with a max-width on the card itself (~420px, matching the original static scaffold's intent) so it doesn't stretch absurdly wide on large screens either.
+
+### 7.4 The Fast Mover board needs onboarding and in-context help
+
+Currently the board is a raw table with zero explanation for a first-time visitor — no indication of what a score means, what a band means, what the coverage fraction means, or what to do next. Add, in order of priority:
+
+1. **A one-time first-visit strip above the table** (per `UX_SPEC.md` section 3.7's "first-run Board strip" pattern, which was specified but not built): one sentence explaining the table — "Scores update daily. Click any row for the full evaluation report; the coverage column shows how much data backed each score." Dismissible, persisted in `localStorage`, shown once.
+2. **Column header tooltips.** Every column header that isn't self-explanatory (`Score`, `Band`, `Coverage`, `Lane`) gets a small info affordance (a subtle `?` glyph or an underline-on-hover) that shows a one-sentence definition on hover/focus. `UX_SPEC.md` section 3.1 already specifies the exact `aria-label` text for the coverage column ("Coverage 2 of 3: some inputs missing, score shrunk toward neutral") — surface that same sentence visually on hover, not only to screen readers.
+3. **A short "How to read this board" link or collapsible section** near the top of the page, separate from the dismissible strip, that stays permanently available (not one-time) and explains: what a band means, why some strategies are marked provisional, and what the coverage fraction represents. This is the persistent reference the dismissible strip can't be, since the strip disappears after first view.
+4. **Empty and loading states get real content**, not blank space, per `UX_SPEC.md` section 3.1's states table — confirm these are actually implemented, since the current build doesn't show one to verify against.
+
+### 7.5 What this changes in the build order
+
+Add a stage between the existing stage 2 (shared assets) and stage 3 (Board) in section 8 below: **stage 2.5, header/footer/auth-centering fix**, so these structural layout problems are corrected before any further screens are built on top of the same flawed shell. Doing this early is cheaper than retrofitting every screen after the fact.
+
+---
+
+## 8. Strategy visualization and analysis (operator tool, not subscriber-facing)
+
+Not in `UX_SPEC.md` or `PRODUCT_DESIGN.md` — those cover the subscriber product. This is a gap against the PDF's Score and Run layers: the PDF shows a "Strategy engine — shared math" box and a "Calibration journal" / "Recalibration loop" pair, but nothing in the current build lets a human actually see what's inside those boxes for a given strategy, over time, or test a hypothesis against history. Requested need: visualize each strategy's inputs, how it uses them, what past versions of the strategy existed, how each version performed for specific stocks or stock types, with full regression capability.
+
+This is an internal/admin tool, gated the same way as the existing `POST /api/admin/strategies/{key}/calibrate` endpoint (an admin flag on the `users` row, not exposed to subscribers). It does not belong on the Board or any subscriber screen — a provisional strategy's internal regression diagnostics are not something a paying subscriber should see, since it would expose exactly the "how to copy this" detail `PROJECT_HANDOFF.md`'s moat discussion argued against showing publicly.
+
+### 8.1 What needs to exist to make this possible
+
+The current schema records a score's output (`value`, `band`, `component_json`) but not the *strategy version* that produced it. Without versioning, "how did this strategy perform historically" can't be answered precisely, because there's no way to know which weight set was live for any given past score. Add:
+
+```sql
+CREATE TABLE IF NOT EXISTS strategy_versions (
+    id                  BIGSERIAL PRIMARY KEY,
+    strategy_id         BIGINT NOT NULL REFERENCES strategies(id),
+    version_number       INT NOT NULL,
+    band_cutoffs_json    JSONB NOT NULL,
+    component_weights_json JSONB NOT NULL,   -- {component_key: weight}, pre-renormalization
+    effective_from       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    effective_to         TIMESTAMPTZ,          -- NULL = current
+    created_by_admin_id  BIGINT NOT NULL REFERENCES users(id),
+    change_reason        TEXT NOT NULL DEFAULT '',
+    UNIQUE (strategy_id, version_number)
+);
+CREATE INDEX IF NOT EXISTS idx_strategy_versions_lookup ON strategy_versions (strategy_id, effective_from DESC);
+```
+
+`scores.strategy_version_id` (new nullable column, backfilled where knowable) ties every historical score to the exact version that produced it. `calibration_events` (already in section 3) becomes the source that writes a new `strategy_versions` row each time weights change, rather than only recording the before/after cutoffs inline — this makes the calibration audit trail and the version history the same underlying data, not two parallel records that can drift apart.
+
+**Known limitation, not silently swept under "backfilled where knowable":** any `scores` row written before `strategy_versions` existed has no reliable way to be matched to the exact filter/weight set that actually produced it — the backfill can only assign the earliest known version and cannot rule out that an unrecorded change happened before tracking began. `STRATEGY_ANALYSIS_TOOL.md`'s Lab must treat any backtest or regression that includes pre-tracking scores as carrying an unverifiable version assumption: tag such rows with a `version_confidence: 'assumed'` flag (versus `'recorded'` for anything scored after `strategy_versions` went live) at backfill time, and surface it the same way the synthetic-data flag is surfaced (`STRATEGY_ANALYSIS_TOOL.md` section 6.7) — visibly, not as a silent default.
+
+### 8.2 What the tool needs to show
+
+1. **Per-strategy input map.** For a selected strategy, list every component it declares (from the current `strategy_versions.component_weights_json`), each component's data source (cross-referenced against the Ingest layer: FINRA, SEC EDGAR, yfinance, etc.), and its current weight. This is a direct visualization of the PDF's "a strategy only declares components" rule — make that declaration inspectable, not just true in code.
+2. **Version history timeline.** For a selected strategy, a chronological list of every `strategy_versions` row: what changed, when, who approved it (`created_by_admin_id`), and why (`change_reason`). This is the audit trail `BUILD_SPEC.md` section 4.5 already requires for calibration events, surfaced as a browsable history rather than a single latest-state record.
+3. **Per-version, per-stock (or per-stock-type) backtest.** Given a strategy version and a ticker (or a filter like industry/theme/market-cap band), show every historical score that version would have produced against real historical data, and the actual subsequent price/volume outcome — the same method already proven out in `test_results.md`'s Fast Mover backtest (real FINRA/SEC/price data, not synthetic), generalized so it can be pointed at any strategy version and any stock subset instead of being a one-off script.
+4. **Full regression capability**, not a fixed report. The existing `test_results.md` methodology is a specific, one-time analysis. This tool needs to let an operator choose the independent variables (any subset of a strategy's components), the dependent variable (hit rate, return magnitude, days-to-resolution), the stock subset (by ticker, industry, market-cap band, or filter-pass/fail status), and the time window, then run the regression and show r², coefficient significance, and sample size — reusable infrastructure, not a script written fresh for each question the way the original Fast Mover backtest was.
+
+### 8.3 Where this fits in the build
+
+Sequenced after the subscriber product's core stages (this doc's section 9, stages 1-8) and after the missing Publish layer (flagged separately as the highest-priority gap against the PDF), because it's an internal analysis tool rather than something subscribers or revenue depend on. It does depend on `strategy_versions` existing, so the schema addition in section 8.1 should land whenever the next strategy calibration work happens, even if the visualization UI itself comes later — recording version history from day one is cheap; reconstructing it retroactively from `calibration_events` alone is not guaranteed to be possible once versions have already drifted.
+
+---
+
+## 9. Build order
 
 Supersedes `UX_SPEC.md` section 7 by inserting the schema and seed work that document didn't know was missing. Each stage independently testable, matching the existing scaffold's git-commit-per-stage convention.
 

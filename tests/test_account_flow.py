@@ -146,6 +146,36 @@ def test_reset_link_is_single_use():
     assert status == 200
 
 
+def test_swap_drops_oldest_pin():
+    tag = str(int(time.time()))
+    email = f"swap{tag}@example.com"
+    token = new_user(email)
+    post("/billing/dev/preview", {"tier_key": "basic"}, token)
+
+    status, body = post("/me/picks", {"symbol": "PDYN"}, token)
+    assert status == 200 and not body.get("dropped"), body
+    status, body = post("/me/picks", {"symbol": "LEU"}, token)
+    assert status == 200 and not body.get("dropped"), body
+
+    status, body = post("/me/picks", {"symbol": "NNE"}, token)
+    assert status == 403, "basic tier pick cap (2) must 403 before swap"
+
+    status, body = post("/me/picks/swap", {"symbol": "NNE"}, token)
+    assert status == 200, body
+    assert body["added"] == "NNE" and body["dropped"] == "PDYN", body
+    assert body["score_at_pin"] is not None, body
+
+    status, body = get("/me/picks", token=token)
+    assert status == 200, body
+    assert [p["symbol"] for p in body["picks"]] == ["LEU", "NNE"], body
+
+    status, body = post("/me/picks/swap", {"symbol": "LEU"}, token)
+    assert status == 409, "swapping to an already-pinned name must 409"
+
+    status, _ = post("/me/picks/swap", {"symbol": "NOSUCH"}, token)
+    assert status == 404
+
+
 def test_visibility_404_out_of_scope():
     tag = str(int(time.time()))
     email = f"vis{tag}@example.com"

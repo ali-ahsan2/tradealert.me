@@ -12,6 +12,31 @@ import Pricing from "./views/Pricing.jsx";
 import Settings from "./views/Settings.jsx";
 import Onboarding from "./views/Onboarding.jsx";
 import Reset from "./views/Reset.jsx";
+import Legal from "./views/Legal.jsx";
+
+function Footer() {
+  const go = (e, to) => { e.preventDefault(); navigate(to); };
+  return (
+    <footer className="footer">
+      <div className="frow">
+        <span className="fword">
+          <span className="mark">FM</span>tradealert.me
+        </span>
+        <nav className="fnav">
+          <a href="/legal/terms" onClick={(e) => go(e, "/legal/terms")}>Terms</a>
+          <a href="/legal/privacy" onClick={(e) => go(e, "/legal/privacy")}>Privacy</a>
+          <a href="/legal/disclaimer" onClick={(e) => go(e, "/legal/disclaimer")}>Disclaimer</a>
+          <a href="/pricing" onClick={(e) => go(e, "/pricing")}>Plans</a>
+        </nav>
+        <span className="spacer" style={{ flex: 1 }} />
+        <span className="mono">© 2026 tradealert.me</span>
+      </div>
+      <p className="flegal">
+        Machine-scored notes, not investment advice. Verify every figure against primary sources.
+      </p>
+    </footer>
+  );
+}
 
 export function usePath() {
   const [path, setPath] = useState(window.location.pathname + window.location.search);
@@ -49,13 +74,14 @@ function Shell({ children }) {
     return;
   }, []);
   useEffect(() => {
-    const onToast = (e) => setToast(e.detail);
+    const onToast = (e) =>
+      setToast(typeof e.detail === "string" ? e.detail : JSON.stringify(e.detail));
     window.addEventListener("toast", onToast);
     return () => window.removeEventListener("toast", onToast);
   }, []);
   const acct = me
     ? `${me.email} · ${me.tier ? me.tier.label : "Free"}`
-    : "Sign in";
+    : "";
   const nav = (label, to, active) => (
     <a
       className={`navlink ${active ? "active" : ""}`}
@@ -102,31 +128,45 @@ function Shell({ children }) {
         </a>
         <span className="navlinks">{links}</span>
         <div className="spacer" />
-        <span className="acct mono">{checked ? acct : "…"}</span>
         {me ? (
-          <button
-            className="btn btn-secondary"
-            style={{ padding: "6px 14px", fontSize: "var(--fs-sm)" }}
-            onClick={() => {
-              logout();
-              setMe(null);
-              navigate("/");
-            }}
-          >
-            Sign out
-          </button>
+          <>
+            <span className="acct mono">{checked ? acct : "…"}</span>
+            <button
+              className="btn btn-secondary"
+              style={{ padding: "6px 14px", fontSize: "var(--fs-sm)" }}
+              onClick={() => {
+                logout();
+                setMe(null);
+                navigate("/");
+              }}
+            >
+              Sign out
+            </button>
+          </>
         ) : (
-          <a
-            className="btn btn-primary"
-            style={{ padding: "6px 14px", fontSize: "var(--fs-sm)" }}
-            href="/login"
-            onClick={(e) => {
-              e.preventDefault();
-              navigate("/login");
-            }}
-          >
-            Sign in
-          </a>
+          <>
+            <a
+              className="navlink"
+              href="/login"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate("/login");
+              }}
+            >
+              Log in
+            </a>
+            <a
+              className="btn btn-primary"
+              style={{ padding: "6px 14px", fontSize: "var(--fs-sm)" }}
+              href="/signup"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate("/signup");
+              }}
+            >
+              Sign up
+            </a>
+          </>
         )}
       </nav>
       {toast && (
@@ -135,6 +175,7 @@ function Shell({ children }) {
         </div>
       )}
       {children}
+      <Footer />
     </>
   );
 }
@@ -176,6 +217,9 @@ function Route({ path }) {
   if (path.startsWith("/settings")) return <Settings />;
   if (path.startsWith("/onboarding")) return <Onboarding />;
   if (path.startsWith("/reset")) return <Reset />;
+  const legalMatch = path.match(/^\/legal\/(terms|privacy|disclaimer)/);
+  if (legalMatch) return <Legal page={legalMatch[1]} />;
+  if (path.startsWith("/legal")) return <NotFound what={qs.get("what") || "Not found"} />;
   return <NotFound what={qs.get("what") || "Not found"} />;
 }
 

@@ -30,7 +30,7 @@ export default function Auth({ mode }) {
 
   if (done) {
     return (
-      <div className="wrap">
+      <div className="auth-shell">
         <div className="form-card">
           <h1 style={{ marginTop: 0, fontSize: "var(--fs-md)" }}>
             Check your inbox
@@ -53,7 +53,7 @@ export default function Auth({ mode }) {
   }
 
   return (
-    <div className="wrap">
+    <div className="auth-shell">
       <div className="form-card">
         <h1 style={{ marginTop: 0, fontSize: "var(--fs-md)" }}>
           {mode === "signup" ? "Create an account" : "Sign in"}

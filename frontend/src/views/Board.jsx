@@ -12,6 +12,14 @@ export default function Board() {
   const [err, setErr] = useState(null);
   const [band, setBand] = useState("");
   const [me, setMe] = useState(null);
+  const [strip, setStrip] = useState(
+    () => window.localStorage.getItem("ta_board_intro_hidden") !== "1"
+  );
+
+  const hideStrip = () => {
+    window.localStorage.setItem("ta_board_intro_hidden", "1");
+    setStrip(false);
+  };
 
   useEffect(() => {
     if (getToken()) {
@@ -82,7 +90,51 @@ export default function Board() {
           .
         </p>
       )}
+      {strip && (
+        <div className="boardstrip">
+          <span>
+            Scores update daily. Click any row for the full evaluation report;
+            the coverage column shows how much data backed each score.
+          </span>
+          <button className="btn-quiet" onClick={hideStrip}>Dismiss</button>
+        </div>
+      )}
+      <details className="howto">
+        <summary>How to read this board</summary>
+        <div className="howbody">
+          <ul>
+            <li>
+              <b>Band</b> — the score's bracket. Strong and elevated are the
+              actionable brackets; neutral and weak names scored below both
+              cutoffs.
+            </li>
+            <li>
+              <b>Coverage</b> — how many scoring inputs had data. Thin coverage
+              shrinks the score toward neutral; the number carries a{" "}
+              <span className="mono">~</span> and the badge shows its solid band
+              color regardless.
+            </li>
+            <li>
+              <b>Lane</b> — which angle of the thesis drove the score, e.g.
+              float, borrow, or supply.
+            </li>
+            <li>
+              <b>Provisional strategies</b> — marked with a label chip; their
+              weights still wait on resolved outcomes.
+            </li>
+          </ul>
+        </div>
+      </details>
       {err && <p className="empty">{err}</p>}
+      {!data && !err && (
+        <div className="table-card empty">
+          <p>Loading the latest run…</p>
+          <p className="st" style={{ marginTop: "var(--s-2)" }}>
+            Boards regenerate on the operator&rsquo;s schedule; scores are
+            whatever the last run computed.
+          </p>
+        </div>
+      )}
       {data && rows.length === 0 && (
         <div className="table-card empty">No names in this band on the latest run.</div>
       )}
@@ -96,10 +148,14 @@ export default function Board() {
                   <th>Ticker</th>
                   <th>Theme</th>
                   <th>Industry</th>
-                  <th>Lane</th>
-                  <th style={{ textAlign: "right" }}>Score</th>
-                  <th>Band</th>
-                  <th style={{ textAlign: "right" }}>Coverage</th>
+                  <th>Lane<span className="thinfo" title="Lane: the angle of the thesis that drove the score, e.g. float, borrow, or supply." aria-label="Lane. The angle of the thesis that drove the score.">?</span></th>
+                  <th style={{ textAlign: "right" }}>
+                    Score<span className="thinfo" title="Score: 0-100 composite of present inputs. Thin coverage shrinks it toward neutral and marks the number with ~." aria-label="Score. A 0 to 100 composite; thin coverage shrinks it toward neutral.">?</span>
+                  </th>
+                  <th>Band<span className="thinfo" title="Band: strong, elevated, neutral, or weak, by the calibrated cutoffs." aria-label="Band. Strong, elevated, neutral, or weak by the calibrated cutoffs.">?</span></th>
+                  <th style={{ textAlign: "right" }}>
+                    Coverage<span className="thinfo" title="Coverage 2 of 3: some inputs missing, score shrunk toward neutral." aria-label="Coverage 2 of 3: some inputs missing, score shrunk toward neutral.">?</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>

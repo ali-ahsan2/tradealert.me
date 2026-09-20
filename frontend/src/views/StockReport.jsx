@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { api, fmtMoney } from "../api.js";
+import { api, fmtMoney, getToken } from "../api.js";
 import { navigate } from "../main.jsx";
 import SearchBar from "../components/SearchBar.jsx";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Pin from "../components/Pin.jsx";
+
+const toast = (msg) => window.dispatchEvent(new CustomEvent("toast", { detail: msg }));
 
 const BAND_LABEL = {
   strong: "top of the range on this run",
@@ -16,6 +18,9 @@ const BAND_LABEL = {
 export default function StockReport({ symbol }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
+  const [cap, setCap] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [pinKey, setPinKey] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -26,6 +31,39 @@ export default function StockReport({ symbol }) {
       alive = false;
     };
   }, [symbol]);
+
+  useEffect(() => {
+    if (!getToken()) return;
+    let alive = true;
+    Promise.all([api("/entitlements"), api("/me/picks")])
+      .then(([ent, picks]) => {
+        if (!alive) return;
+        const limit = (ent.current && ent.current.picks_limit) || 999;
+        setCap({
+          limit,
+          used: ent.usage ? ent.usage.picks_used : 0,
+          pinned: (picks.picks || []).map((p) => p.symbol.toUpperCase()),
+        });
+      })
+      .catch(() => setCap(null));
+    return () => {
+      alive = false;
+    };
+  }, [symbol, pinKey]);
+
+  const swap = async () => {
+    setBusy(true);
+    try {
+      const r = await api("/me/picks/swap", { method: "POST", json: { symbol: d.symbol } });
+      if (r.dropped) toast(`Dropped ${r.dropped} and pinned ${d.symbol}.`);
+      else toast(`Pinned ${d.symbol}.`);
+      setPinKey((k) => k + 1);
+    } catch (e2) {
+      toast(e2.detail || String(e2.message || e2));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   if (err) {
     return (
@@ -57,19 +95,34 @@ export default function StockReport({ symbol }) {
   const thin = s && s.components_present < s.components_total * 0.5;
   const snaps = Object.entries(d.snapshot || {});
   const hf = (s && s.hard_filters) || [];
+  const pinned = cap && cap.pinned.includes(d.symbol);
+  const atCap = cap && cap.used >= cap.limit && !pinned;
 
   return (
     <div className="wrap">
       <header>
         <h1>
           {d.symbol}
-          <Pin symbol={d.symbol} />
+          <Pin key={pinKey} symbol={d.symbol} />
           <span className="sub">{d.theme}</span>
         </h1>
         <div className="meta">
           {d.industry.label} · benchmark {d.industry.benchmark_etf} · group{" "}
           {d.group} · lane {d.lane || "—"}
         </div>
+        {atCap && (
+          <p className="meta" style={{ marginTop: "var(--s-2)", marginBottom: 0 }}>
+            <button
+              className="btn btn-quiet"
+              disabled={busy}
+              onClick={swap}
+              title="Drops your oldest watchlist pick to make room"
+            >
+              Watchlist full ({cap.used}/{cap.limit}) — replace your oldest pin with{" "}
+              {d.symbol}
+            </button>
+          </p>
+        )}
       </header>
 
       <div className="report">

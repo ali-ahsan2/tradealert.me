@@ -16,9 +16,12 @@ RUN if [ -n "$PIP_FIND_LINKS" ]; then \
     fi
 
 COPY app/ app/
+COPY db/migrate.py db/migrate.py
+COPY db/migrations/ db/migrations/
+COPY db/seed_lab.py db/seed_lab.py
 COPY refresh.py ingest.py ./
 COPY static/ static/
 RUN python -c "from app.main import app"
 
 EXPOSE 8000
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "python db/migrate.py && exec python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]

@@ -1,0 +1,1072 @@
+import React, { useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
+import "./lab.css";
+import { api, login, getToken, logout } from "../api.js";
+
+const ADMIN_CHECK = "/admin/_check";
+
+function pct(x) {
+  return x == null ? "—" : (x * 100).toFixed(1) + "%";
+}
+
+function errText(detail) {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) return detail.map(String).join("\n");
+  if (detail && typeof detail === "object") {
+    const claim = detail.claim;
+    if (Array.isArray(claim)) return claim.join("\n");
+    return JSON.stringify(detail, null, 2);
+  }
+  return "request failed";
+}
+
+function useFetch(deps, loader) {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setErr("");
+    loader()
+      .then((d) => alive && setData(d))
+      .catch((e) => alive && setErr(e.message))
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, deps);
+  return { data, err, loading };
+}
+
+function Load({ data, err, children }) {
+  if (err) return <div className="errorbox" role="alert">{err}</div>;
+  if (data === null) return <p className="muted">Loading…</p>;
+  return children;
+}
+
+function useGate() {
+  const [state, setState] = useState(getToken() ? "checking" : "unauthed");
+  const [nonce, setNonce] = useState(0);
+  useEffect(() => {
+    if (!getToken()) {
+      setState("unauthed");
+      return;
+    }
+    setState("checking");
+    api(ADMIN_CHECK)
+      .then(() => setState("ok"))
+      .catch((e) => {
+        if (e.status === 401) {
+          logout();
+          setState("unauthed");
+        } else {
+          setState("denied");
+        }
+      });
+  }, [nonce]);
+  return { state, retry: () => setNonce((n) => n + 1) };
+}
+
+function Gate({ retry }) {
+  const [email, setEmail] = useState("");
+  const [pass, setPass] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setErr("");
+    try {
+      await login(email, pass);
+      retry();
+    } catch (ex) {
+      setErr(ex.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="gate">
+      <h1>Lab</h1>
+      <p className="muted">Sign in to the strategy analysis tool.</p>
+      {err && <div className="errorbox" role="alert">{err}</div>}
+      <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
+        <label className="labfield">
+          Email
+          <input
+            type="email"
+            value={email}
+            aria-label="Email"
+            autoComplete="username"
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </label>
+        <label className="labfield">
+          Password
+          <input
+            type="password"
+            value={pass}
+            aria-label="Password"
+            autoComplete="current-password"
+            onChange={(e) => setPass(e.target.value)}
+          />
+        </label>
+        <button className="btn btn-primary" disabled={busy}>
+          {busy ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function Denied({ retry }) {
+  return (
+    <div className="gate">
+      <h1>Lab</h1>
+      <p className="muted">
+        The Lab is restricted to administrator accounts. Nothing here is
+        shown to visitors.
+      </p>
+      <button
+        className="btn"
+        onClick={() => {
+          logout();
+          retry();
+        }}
+      >
+        Sign in as a different account
+      </button>
+    </div>
+  );
+}
+
+function StratPicker({ value, options, onChange }) {
+  return (
+    <label className="labfield">
+      Strategy
+      <select value={value} aria-label="Strategy" onChange={(e) => onChange(e.target.value)}>
+        {options.map((o) => (
+          <option key={o.key} value={o.key}>{o.label}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function StrategiesScreen({ strategies, onPick }) {
+  const list = strategies?.strategies || [];
+  return (
+    <div className="labgrid">
+      {list.map((s) => (
+        <div className="card" key={s.key}>
+          <h3>{s.label}</h3>
+          <dl className="kv">
+            <dt>key</dt>
+            <dd className="mono">{s.key}</dd>
+            <dt>version</dt>
+            <dd>{s.version_number ?? "—"}</dd>
+            <dt>calibrated</dt>
+            <dd>{s.calibrated ? "yes" : "no"}</dd>
+            <dt>last query</dt>
+            <dd>{s.last_query_at ? `${s.last_query_by} · ${s.last_query_at}` : "never"}</dd>
+          </dl>
+          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+            <button className="btn btn-primary" onClick={() => onPick(s.key, "inputs")}>
+              Inputs
+            </button>
+            <button className="btn" onClick={() => onPick(s.key, "versions")}>
+              Versions
+            </button>
+            <button className="btn" onClick={() => onPick(s.key, "backtest")}>
+              Backtest
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FiltersTable({ filters }) {
+  if (!filters || filters.length === 0) {
+    return <p className="muted">No hard filters declared for this version.</p>;
+  }
+  return (
+    <table className="labtable">
+      <caption className="mono">hard filters</caption>
+      <thead>
+        <tr><th>Key</th><th>Label</th><th>Rule</th><th>Unit</th></tr>
+      </thead>
+      <tbody>
+        {filters.map((f, i) => (
+          <tr key={i}>
+            <td className="mono">{f.key}</td>
+            <td>{f.label}</td>
+            <td className="mono">{JSON.stringify(f.op ? [f.op, f.value] : f.value)}</td>
+            <td>{f.unit || ""}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function WeightsTable({ weights }) {
+  const entries = Object.entries(weights || {});
+  if (entries.length === 0) return <p className="muted">No weights recorded for this version.</p>;
+  const total = entries.reduce((a, [, w]) => a + w, 0);
+  return (
+    <table className="labtable">
+      <caption className="mono">component weights · total {total.toFixed(1)}</caption>
+      <thead>
+        <tr><th>Component</th><th>Weight</th><th>Share</th></tr>
+      </thead>
+      <tbody>
+        {entries.map(([k, w]) => (
+          <tr key={k}>
+            <td className="mono">{k}</td>
+            <td>{w}</td>
+            <td>{pct(w / total)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function BandsTable({ bands }) {
+  const entries = Object.entries(bands || {});
+  if (entries.length === 0) return <p className="muted">No band cutoffs recorded.</p>;
+  return (
+    <table className="labtable">
+      <caption className="mono">band cutoffs</caption>
+      <thead>
+        <tr><th>Band</th><th>Cutoff</th></tr>
+      </thead>
+      <tbody>
+        {entries.map(([k, v]) => (
+          <tr key={k}>
+            <td>{k}</td>
+            <td className="mono">{JSON.stringify(v)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function InputsScreen({ strat, strategies, setStrat }) {
+  const { data, err } = useFetch([strat], () =>
+    api(`/admin/lab/strategies/${strat}/inputs`));
+  const coverage = useFetch([strat], () =>
+    api(`/admin/lab/strategies/${strat}/coverage`));
+  return (
+    <div className="labgrid">
+      <div className="card">
+        <StratPicker value={strat} options={strategies} onChange={setStrat} />
+      </div>
+      <Load data={data} err={err}>
+        <div className="card">
+          <h3>{data.strategy.label} — inputs</h3>
+          <p className="muted">Version {data.version ? data.version.version_number : "?"} since {data.version ? data.version.effective_from : "—"}</p>
+          {data.version && data.version.change_reason && (
+            <p className="muted">{data.version.change_reason}</p>
+          )}
+          <div className="labgrid" style={{ marginTop: 12 }}>
+            <div className="card-stack">
+              <WeightsTable weights={data.version ? data.version.component_weights : {}} />
+            </div>
+            <div className="card-stack">
+              <BandsTable bands={data.version ? data.version.band_cutoffs : {}} />
+              {data.version && <FiltersTable filters={data.version.hard_filters} />}
+            </div>
+          </div>
+          {data.score_evidence_note && (
+            <p className="muted" style={{ marginTop: 12 }}>Score evidence: {data.score_evidence_note}</p>
+          )}
+        </div>
+        <div className="card">
+          <h3>Related findings</h3>
+          {data.findings.length === 0 ? (
+            <p className="muted">No findings recorded for this strategy.</p>
+          ) : (
+            data.findings.map((f, i) => (
+              <div className="rel" key={f.id || i} style={{ marginBottom: 8 }}>
+                <span>
+                  <span className="badge">{f.evidence_grade}</span>{" "}
+                  <span className="badge">{f.status}</span>{" "}
+                  <span className="mono">{f.claim_kind}</span>
+                </span>
+                <p style={{ margin: 0 }}>{f.claim}</p>
+              </div>
+            ))
+          )}
+        </div>
+      </Load>
+      <Load data={coverage.data} err={coverage.err}>
+        <div className="card">
+          <h3>Event coverage</h3>
+          <dl className="kv">
+            <dt>instruments</dt><dd>{coverage.data.instruments}</dd>
+            <dt>events</dt><dd>{coverage.data.events} ({coverage.data.events_complete} complete)</dd>
+            <dt>kinds available</dt><dd>{coverage.data.events_kinds ? coverage.data.events_kinds.join(", ") : "earnings"}</dd>
+          </dl>
+          <table className="labtable" style={{ marginTop: 8 }}>
+            <caption className="mono">by industry</caption>
+            <thead>
+              <tr><th>Industry</th><th>Events</th><th>Instruments</th><th>Synthetic</th></tr>
+            </thead>
+            <tbody>
+              {coverage.data.industries.map((r, i) => (
+                <tr key={i}>
+                  <td>{r.label}</td>
+                  <td>{r.events}</td>
+                  <td>{r.instruments}</td>
+                  <td>{r.synthetic ? "yes" : "no"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Load>
+    </div>
+  );
+}
+
+function VersionsScreen({ strat, strategies, setStrat }) {
+  const { data, err } = useFetch([strat], () =>
+    api(`/admin/lab/strategies/${strat}/versions`));
+  const [a, setA] = useState("");
+  const [b, setB] = useState("");
+  const [diff, setDiff] = useState(null);
+  const [diffErr, setDiffErr] = useState("");
+  useEffect(() => {
+    if (data && data.versions.length) {
+      setA(String(data.versions[1]?.version_number ?? data.versions[0].version_number));
+      setB(String(data.versions[0].version_number));
+    }
+  }, [data]);
+  const runDiff = async () => {
+    setDiffErr("");
+    setDiff(null);
+    try {
+      const d = await api(`/admin/lab/strategies/${strat}/versions/diff?a=${a}&b=${b}`);
+      setDiff(d);
+    } catch (e) {
+      setDiffErr(e.message);
+    }
+  };
+  const DiffList = ({ title, items }) =>
+    items.length === 0 ? null : (
+      <div className="card">
+        <h3>{title}</h3>
+        <table className="labtable">
+          <thead>
+            <tr><th>Key</th><th>Before</th><th>After</th></tr>
+          </thead>
+          <tbody>
+            {items.map((it, i) => (
+              <tr key={i}>
+                <td className="mono">{it.key}</td>
+                <td className="mono">{JSON.stringify(it.before)}</td>
+                <td className="mono">{JSON.stringify(it.after)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  return (
+    <div className="labgrid">
+      <div className="card">
+        <StratPicker value={strat} options={strategies} onChange={setStrat} />
+      </div>
+      <Load data={data} err={err}>
+        <div className="card">
+          <h3>Versions</h3>
+          {data.versions.length === 0 ? (
+            <p className="muted">No versions recorded.</p>
+          ) : (
+            data.versions.map((v) => (
+              <div className="rel" key={v.id} style={{ marginBottom: 8 }}>
+                <dl className="kv">
+                  <dt>version</dt><dd>{v.version_number}</dd>
+                  <dt>effective</dt><dd>{v.effective_from}{v.effective_to ? ` → ${v.effective_to}` : " → now"}</dd>
+                  <dt>by</dt><dd>{v.created_by}</dd>
+                </dl>
+                {v.change_reason && <p className="muted" style={{ margin: 0 }}>{v.change_reason}</p>}
+              </div>
+            ))
+          )}
+        </div>
+        <div className="card">
+          <h3>Diff versions</h3>
+          <div className="formrow">
+            <label className="labfield">
+              Earlier version
+              <select aria-label="Earlier version" value={a} onChange={(e) => setA(e.target.value)}>
+                {(data.versions || []).map((v) => (
+                  <option key={v.id} value={v.version_number}>{v.version_number}</option>
+                ))}
+              </select>
+            </label>
+            <label className="labfield">
+              Later version
+              <select aria-label="Later version" value={b} onChange={(e) => setB(e.target.value)}>
+                {(data.versions || []).map((v) => (
+                  <option key={v.id} value={v.version_number}>{v.version_number}</option>
+                ))}
+              </select>
+            </label>
+            <button className="btn btn-primary" style={{ alignSelf: "end" }} onClick={runDiff}>
+              Compare
+            </button>
+          </div>
+          {diffErr && <div className="errorbox" style={{ marginTop: 8 }}>{diffErr}</div>}
+          {diff && (
+            <div className="labgrid" style={{ marginTop: 12 }}>
+              <p className="muted">v{diff.earlier} → v{diff.later}</p>
+              <DiffList title="Hard filters" items={diff.hard_filters} />
+              <DiffList title="Component weights" items={diff.component_weights} />
+              <DiffList title="Band cutoffs" items={diff.band_cutoffs} />
+            </div>
+          )}
+        </div>
+      </Load>
+    </div>
+  );
+}
+
+const KINDS = ["earnings", "random_day", "fda", "contract_award", "filing", "macro"];
+
+function BacktestScreen({ strat, strategies, setStrat }) {
+  const industries = useFetch([], () => api("/industries"));
+  const versions = useFetch([strat], () => api(`/admin/lab/strategies/${strat}/versions`));
+  const [ver, setVer] = useState("");
+  const [tickers, setTickers] = useState("");
+  const [indKeys, setIndKeys] = useState([]);
+  const [capLo, setCapLo] = useState("");
+  const [capHi, setCapHi] = useState("");
+  const [group, setGroup] = useState("");
+  const [theme, setTheme] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [kinds, setKinds] = useState(["earnings"]);
+  const [price, setPrice] = useState("20");
+  const [vol, setVol] = useState("3.0");
+  const [combine, setCombine] = useState("or");
+  const [baselines, setBaselines] = useState(["all_events", "random_day"]);
+  const [hypothesis, setHypothesis] = useState("");
+  const [family, setFamily] = useState("");
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState(null);
+  const [runErr, setRunErr] = useState("");
+
+  const toggle = (arr, setArr, v) =>
+    setArr(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+
+  const run = async (e) => {
+    e.preventDefault();
+    setRunning(true);
+    setRunErr("");
+    setResult(null);
+    try {
+      const body = {
+        strategy_key: strat,
+        version_number: ver ? Number(ver) : null,
+        universe: {
+          tickers: tickers
+            ? tickers.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean)
+            : null,
+          industry_keys: indKeys.length ? indKeys : null,
+          market_cap_band: capLo !== "" && capHi !== "" ? [Number(capLo), Number(capHi)] : null,
+          instrument_group: group || null,
+          theme_regex: theme || null,
+        },
+        window: { from: from || null, to: to || null },
+        event_kinds: kinds,
+        hit_definition: {
+          price_move_pct: Number(price),
+          volume_spike_x: Number(vol),
+          combine,
+          window: "tight",
+        },
+        baselines: baselines,
+        hypothesis,
+        family_key: family || null,
+      };
+      const r = await api("/admin/lab/backtest", { method: "POST", json: body });
+      setResult(r);
+    } catch (ex) {
+      setRunErr(ex.message);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const GroupRows = ({ rows }) => (
+    <table className="labtable">
+      <caption className="mono">groups</caption>
+      <thead>
+        <tr>
+          <th>Group</th><th>n</th><th>Hits</th><th>Hit rate</th><th>95% CI</th>
+          <th>Instruments</th><th>Warnings</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((g) => (
+          <tr key={g.key}>
+            <td>{g.label}</td>
+            <td>{g.n}</td>
+            <td>{g.hits}</td>
+            <td className="rate">{pct(g.hit_rate)}</td>
+            <td className="mono">{g.ci95 ? `${pct(g.ci95[0])}–${pct(g.ci95[1])}` : "—"}</td>
+            <td>{g.distinct_instruments}</td>
+            <td>
+              {g.warnings.length
+                ? g.warnings.map((w, i) => (
+                    <span className={`badge ${w.severity}`} key={i} title={w.text}>{w.code}</span>
+                  ))
+                : "—"}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
+  const BaseRows = ({ rows }) => (
+    <table className="labtable">
+      <caption className="mono">baselines</caption>
+      <thead>
+        <tr><th>Baseline</th><th>n</th><th>Hits</th><th>Hit rate</th><th>95% CI</th></tr>
+      </thead>
+      <tbody>
+        {rows.map((b, i) => (
+          <tr key={i}>
+            <td>{b.label}</td>
+            <td>{b.n}</td>
+            <td>{b.hits}</td>
+            <td className="rate">{pct(b.hit_rate)}</td>
+            <td className="mono">{b.ci95 ? `${pct(b.ci95[0])}–${pct(b.ci95[1])}` : "—"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
+  return (
+    <div className="labgrid">
+      <div className="card">
+        <StratPicker value={strat} options={strategies} onChange={setStrat} />
+        <form onSubmit={run} style={{ display: "grid", gap: 14, marginTop: 12 }}>
+          <div className="formrow">
+            <label className="labfield">
+              Version
+              <select aria-label="Version" value={ver} onChange={(e) => setVer(e.target.value)}>
+                <option value="">current</option>
+                {(versions.data?.versions || []).map((v) => (
+                  <option key={v.id} value={v.version_number}>{v.version_number}</option>
+                ))}
+              </select>
+            </label>
+            <label className="labfield">
+              Hit: price move ≥ %
+              <input type="number" step="any" value={price} onChange={(e) => setPrice(e.target.value)} />
+            </label>
+            <label className="labfield">
+              Hit: volume spike ≥ ×
+              <input type="number" step="any" value={vol} onChange={(e) => setVol(e.target.value)} />
+            </label>
+            <label className="labfield">
+              Combine
+              <select value={combine} onChange={(e) => setCombine(e.target.value)}>
+                <option value="or">OR</option>
+                <option value="and">AND</option>
+              </select>
+            </label>
+          </div>
+          <div className="formrow">
+            <label className="labfield">
+              Tickers (comma-separated)
+              <input value={tickers} onChange={(e) => setTickers(e.target.value)} placeholder="PDYN, LEU" />
+            </label>
+            <label className="labfield">
+              Market cap band (USD)
+              <span style={{ display: "flex", gap: 6 }}>
+                <input type="number" placeholder="lo" value={capLo} onChange={(e) => setCapLo(e.target.value)} />
+                <input type="number" placeholder="hi" value={capHi} onChange={(e) => setCapHi(e.target.value)} />
+              </span>
+            </label>
+            <label className="labfield">
+              Instrument group
+              <input value={group} onChange={(e) => setGroup(e.target.value)} placeholder="Scan / A / Bench" />
+            </label>
+          </div>
+          <div className="formrow">
+            <label className="labfield">
+              Date from
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </label>
+            <label className="labfield">
+              Date to
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </label>
+            <label className="labfield">
+              Theme regex
+              <input value={theme} onChange={(e) => setTheme(e.target.value)} placeholder="uranium|nuclear" />
+            </label>
+          </div>
+          <div className="formrow">
+            <fieldset className="labfield" style={{ border: "1px solid var(--border-strong)", borderRadius: "var(--r-sm)", padding: 8 }}>
+              <legend>Event kinds</legend>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+                {KINDS.map((k) => (
+                  <label key={k} style={{ fontSize: "var(--fs-sm)" }}>
+                    <input type="checkbox" checked={kinds.includes(k)} onChange={() => toggle(kinds, setKinds, k)} /> {k}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <fieldset className="labfield" style={{ border: "1px solid var(--border-strong)", borderRadius: "var(--r-sm)", padding: 8 }}>
+              <legend>Baselines</legend>
+              <label style={{ display: "block", fontSize: "var(--fs-sm)" }}>
+                <input type="checkbox" checked={baselines.includes("all_events")} onChange={() => toggle(baselines, setBaselines, "all_events")} /> All selected events
+              </label>
+              <label style={{ display: "block", fontSize: "var(--fs-sm)" }}>
+                <input type="checkbox" checked={baselines.includes("random_day")} onChange={() => toggle(baselines, setBaselines, "random_day")} /> Random trading days
+              </label>
+            </fieldset>
+            <label className="labfield">
+              Industries
+              <select
+                multiple
+                value={indKeys}
+                onChange={(e) => setIndKeys([...e.target.selectedOptions].map((o) => o.value))}
+              >
+                {(industries.data?.industries || []).map((i) => (
+                  <option key={i.key} value={i.key}>{i.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label className="labfield">
+            Hypothesis (recorded with the run)
+            <input value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} />
+          </label>
+          <label className="labfield">
+            Family key (for Holm multiple-comparison adjustment)
+            <input value={family} onChange={(e) => setFamily(e.target.value)} placeholder="e.g. si-growth-2026" />
+          </label>
+          <button className="btn btn-primary" disabled={running}>
+            {running ? "Running…" : "Run backtest"}
+          </button>
+        </form>
+      </div>
+      <div aria-live="polite">
+        {runErr && <div className="errorbox">{runErr}</div>}
+        {result && (
+          <>
+            {result.provenance.synthetic_data_used && (
+              <div className="banner" style={{ marginBottom: 12 }}>
+                These results were computed on synthetic sandbox fixtures. Records in the
+                provenance notes which source produced them.
+              </div>
+            )}
+            {result.cached && (
+              <p className="notice">Served from an earlier identical query (#{result.cached_from_query_id}); still audited as a new run.</p>
+            )}
+            <div className="card">
+              <h3>Result · query #{result.query_id}</h3>
+              {result.warnings.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  {result.warnings.map((w, i) => (
+                    <div key={i}>
+                      <span className={`badge ${w.severity}`}>{w.code}</span>{" "}
+                      <span className="muted">{w.text}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <GroupRows rows={result.groups} />
+              {result.baselines.length > 0 && <div style={{ marginTop: 10 }}><BaseRows rows={result.baselines} /></div>}
+              {result.comparison && (
+                <div className="rel" style={{ marginTop: 12 }}>
+                  <h4>Pass group vs {result.comparison.vs}</h4>
+                  <dl className="kv">
+                    <dt>difference</dt><dd className="rate">{pct(result.comparison.difference)}</dd>
+                    <dt>test</dt><dd>{result.comparison.test}</dd>
+                    <dt>p</dt><dd className="mono">{result.comparison.p_value}</dd>
+                    <dt>p (Holm)</dt><dd className="mono">{result.comparison.p_value_adjusted}</dd>
+                    <dt>family</dt><dd>{result.comparison.adjustment.family_key || "—"} · {result.comparison.adjustment.tests_in_family} tests</dd>
+                  </dl>
+                </div>
+              )}
+              <details style={{ marginTop: 12 }}>
+                <summary className="muted">Provenance · {result.provenance.events_in_scope} events in scope</summary>
+                <dl className="kv" style={{ marginTop: 8 }}>
+                  <dt>events (after universe)</dt><dd>{result.provenance.events_total_after_universe}</dd>
+                  <dt>excluded</dt><dd>{result.provenance.events_excluded}</dd>
+                  <dt>assumed versions</dt><dd>{result.provenance.version_confidence_assumed_count} scores</dd>
+                  <dt>synthetic</dt><dd>{result.provenance.synthetic_data_used ? "yes" : "no"}</dd>
+                  <dt>sources</dt><dd><span className="mono">{result.provenance.sources.join("; ")}</span></dd>
+                </dl>
+                {result.provenance.exclusions.length > 0 && (
+                  <table className="labtable">
+                    <tbody>
+                      {result.provenance.exclusions.map((x, i) => (
+                        <tr key={i}>
+                          <td className="mono">{x.reason}</td>
+                          <td>{x.count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </details>
+              <p className="footer-note">{result.footer}</p>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const STATUSES = ["hypothesis", "tested", "held_up", "failed", "superseded"];
+const KINDFIELDS = ["filter", "weight", "band", "component", "other"];
+
+function FindingsScreen() {
+  const [filter, setFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const { data, err, loading: _l } = useFetch([filter, statusFilter], () => {
+    const q = [];
+    if (filter) q.push(`strategy=${encodeURIComponent(filter)}`);
+    if (statusFilter) q.push(`status=${encodeURIComponent(statusFilter)}`);
+    return api(`/admin/lab/findings${q.length ? "?" + q.join("&") : ""}`);
+  });
+  const [openId, setOpenId] = useState(null);
+  const [form, setForm] = useState({ title: "", claim: "", claim_kind: "filter", query_ids: "", notes: "" });
+  const [formErr, setFormErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const list = data?.findings || [];
+  void _l;
+
+  const create = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setFormErr("");
+    try {
+      await api("/admin/lab/findings", {
+        method: "POST",
+        json: {
+          title: form.title,
+          claim: form.claim,
+          claim_kind: form.claim_kind,
+          lab_query_ids: form.query_ids.split(",").map((s) => Number(s.trim())).filter(Boolean),
+          notes: form.notes,
+        },
+      });
+      setForm({ title: "", claim: "", claim_kind: "filter", query_ids: "", notes: "" });
+    } catch (ex) {
+      setFormErr(ex.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="labgrid">
+      <div className="card">
+        <form onSubmit={create} style={{ display: "grid", gap: 12 }}>
+          <h3>Record a finding</h3>
+          {formErr && <div className="errorbox">{formErr}</div>}
+          <label className="labfield">
+            Title
+            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+          </label>
+          <label className="labfield">
+            Claim
+            <textarea
+              rows="3"
+              value={form.claim}
+              onChange={(e) => setForm({ ...form, claim: e.target.value })}
+              placeholder={"Must carry a number and a data size (n=, events, instruments)."}
+            />
+          </label>
+          <div className="formrow">
+            <label className="labfield">
+              Kind
+              <select value={form.claim_kind} onChange={(e) => setForm({ ...form, claim_kind: e.target.value })}>
+                {KINDFIELDS.map((k) => (
+                  <option key={k} value={k}>{k}</option>
+                ))}
+              </select>
+            </label>
+            <label className="labfield">
+              Query IDs (comma-separated)
+              <input value={form.query_ids} onChange={(e) => setForm({ ...form, query_ids: e.target.value })} />
+            </label>
+          </div>
+          <label className="labfield">
+            Notes
+            <textarea rows="2" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          </label>
+          <button className="btn btn-primary" disabled={busy}>Save finding</button>
+        </form>
+      </div>
+      <div className="labgrid" style={{ alignContent: "start" }}>
+        <div className="card" style={{ display: "grid", gap: 10 }}>
+          <div className="formrow">
+            <label className="labfield">
+              Strategy filter
+              <input value={filter} onChange={(e) => setFilter(e.target.value)} />
+            </label>
+            <label className="labfield">
+              Status filter
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                <option value="">any</option>
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <Load data={data} err={err}>
+            {list.length === 0 ? (
+              <p className="muted">No findings.</p>
+            ) : (
+              list.map((f) => (
+                <div key={f.id}>
+                  <button
+                    className="card"
+                    style={{ textAlign: "left", width: "100%", cursor: "pointer" }}
+                    onClick={() => setOpenId(openId === f.id ? null : f.id)}
+                    aria-expanded={openId === f.id}
+                  >
+                    <span className="badge">{f.evidence_grade}</span>{" "}
+                    <span className="badge">{f.status}</span>{" "}
+                    <span className="mono">{f.claim_kind}</span>{" "}
+                    <span className="mono muted">#{f.id} · {f.strategy}</span>
+                    <p style={{ margin: "8px 0 0" }}>{f.title}</p>
+                  </button>
+                  {openId === f.id && (
+                    <FindingDetail fid={f.id} grade={f.evidence_grade} />
+                  )}
+                </div>
+              ))
+            )}
+          </Load>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FindingDetail({ fid, grade }) {
+  const { data, err } = useFetch([fid], () => api(`/admin/lab/findings/${fid}`));
+  const [addQ, setAddQ] = useState("");
+  const [addRel, setAddRel] = useState("supports");
+  const [msg, setMsg] = useState("");
+  const [status, setStatus] = useState("");
+  useEffect(() => {
+    if (data) setStatus(data.status);
+  }, [data]);
+  const patchStatus = async (s) => {
+    setMsg("");
+    try {
+      const d = await api(`/admin/lab/findings/${fid}`, { method: "PATCH", json: { status: s } });
+      setStatus(d.status);
+      setMsg("status updated; evidence grade is computed, not editable");
+    } catch (ex) {
+      setMsg(ex.message);
+    }
+  };
+  const add = async () => {
+    setMsg("");
+    try {
+      const d = await api(`/admin/lab/findings/${fid}/queries`, {
+        method: "POST",
+        json: { lab_query_id: Number(addQ), relation: addRel },
+      });
+      setMsg(`linked; evidence grade now ${d.evidence_grade}`);
+      setAddQ("");
+    } catch (ex) {
+      setMsg(ex.message);
+    }
+  };
+  const del = async (lqid) => {
+    setMsg("");
+    try {
+      const d = await api(`/admin/lab/findings/${fid}/queries/${lqid}`, { method: "DELETE" });
+      setMsg(`unlinked; evidence grade now ${d.evidence_grade}`);
+    } catch (ex) {
+      setMsg(ex.message);
+    }
+  };
+  return (
+    <div className="card" style={{ marginTop: 6 }}>
+      <Load data={data} err={err}>
+        <p style={{ marginTop: 0 }}>{data.claim}</p>
+        <div className="formrow">
+          <label className="labfield">
+            Status
+            <select value={status} onChange={(e) => patchStatus(e.target.value)}>
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </label>
+          <p className="muted" style={{ alignSelf: "end" }}>evidence grade: <span className="badge">{grade}</span></p>
+        </div>
+        {data.notes && <p className="muted">{data.notes}</p>}
+        <h4>Linked queries</h4>
+        {data.queries.length === 0 ? (
+          <p className="muted">None linked yet.</p>
+        ) : (
+          data.queries.map((q) => (
+            <div className="rel-select" key={q.id} style={{ marginBottom: 6 }}>
+              <span className="badge">{q.relation}</span>
+              <span className="mono">#{q.id}</span>
+              <span className="muted">{q.query_type} · {q.created_at}</span>
+              <button className="btn" style={{ marginLeft: "auto" }} onClick={() => del(q.id)}>Unlink</button>
+            </div>
+          ))
+        )}
+        <div className="rel-select" style={{ marginTop: 10 }}>
+          <input
+            className="mono"
+            style={{ width: 90, background: "var(--surface-sunken)", border: "1px solid var(--border-strong)", borderRadius: "var(--r-sm)", padding: "6px 8px", color: "var(--ink)" }}
+            placeholder="query id"
+            value={addQ}
+            onChange={(e) => setAddQ(e.target.value)}
+            aria-label="Query id"
+          />
+          <select value={addRel} onChange={(e) => setAddRel(e.target.value)}>
+            <option value="supports">supports</option>
+            <option value="contradicts">contradicts</option>
+            <option value="replicates">replicates</option>
+          </select>
+          <button className="btn btn-primary" onClick={add}>Link query</button>
+        </div>
+        {msg && <p className="notice">{msg}</p>}
+      </Load>
+    </div>
+  );
+}
+
+function LogScreen() {
+  const { data, err } = useFetch([], () => api("/admin/lab/queries?limit=100"));
+  return (
+    <div className="card">
+      <h3>Query audit log</h3>
+      <Load data={data} err={err}>
+        {data.queries.length === 0 ? (
+          <p className="muted">No queries recorded.</p>
+        ) : (
+          <table className="labtable">
+            <thead>
+              <tr>
+                <th>#</th><th>Strategy</th><th>Status</th><th>By</th>
+                <th>Family</th><th>Hypothesis</th><th>Hash</th><th>At</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.queries.map((q) => (
+                <tr key={q.id}>
+                  <td className="mono">{q.id}</td>
+                  <td>{q.strategy}</td>
+                  <td><span className="badge">{q.status}</span></td>
+                  <td className="mono">{q.by}</td>
+                  <td className="mono">{q.family_key || "—"}</td>
+                  <td>{q.hypothesis || "—"}</td>
+                  <td className="mono">{q.spec_hash}</td>
+                  <td className="mono">{q.created_at}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Load>
+    </div>
+  );
+}
+
+function LabApp() {
+  const { data: strategies, err } = useFetch([], () => api("/admin/lab/strategies"));
+  const [screen, setScreen] = useState("inputs");
+  const [strat, setStrat] = useState("");
+  useEffect(() => {
+    if (!strat && strategies) {
+      const first = strategies.strategies[0];
+      if (first) setStrat(first.key);
+    }
+  }, [strategies, strat]);
+  const go = async (key, s) => {
+    const d = await api("/admin/lab/strategies");
+    const list = d.strategies;
+    setStrat(list.some((x) => x.key === key) ? key : list[0].key);
+    setScreen(s);
+  };
+  const options = strategies ? strategies.strategies : [];
+  const tab = (label, id) => (
+    <button className={screen === id ? "active" : ""} onClick={() => setScreen(id)}>
+      {label}
+    </button>
+  );
+  return (
+    <>
+      <div className="labbar">
+        <span className="mark">LB</span>
+        <span className="muted">Lab</span>
+        <nav className="labnav">
+          {tab("Strategies", "strategies")}
+          {tab("Inputs", "inputs")}
+          {tab("Versions", "versions")}
+          {tab("Backtest", "backtest")}
+          {tab("Findings", "findings")}
+          {tab("Log", "log")}
+        </nav>
+        <span style={{ flex: 1 }} />
+        <span className="muted mono">{strategies ? `${strategies.events_total} fixture events` : ""}</span>
+        <button
+          className="btn"
+          onClick={() => {
+            logout();
+            window.location.reload();
+          }}
+        >
+          Sign out
+        </button>
+      </div>
+      <div className="labwrap">
+        {err && <div className="errorbox">{err}</div>}
+        {screen === "strategies" && (
+          <StrategiesScreen strategies={strategies} onPick={go} />
+        )}
+        {screen === "inputs" && (
+          <InputsScreen strat={strat} strategies={options} setStrat={setStrat} />
+        )}
+        {screen === "versions" && (
+          <VersionsScreen strat={strat} strategies={options} setStrat={setStrat} />
+        )}
+        {screen === "backtest" && (
+          <BacktestScreen strat={strat} strategies={options} setStrat={setStrat} />
+        )}
+        {screen === "findings" && <FindingsScreen />}
+        {screen === "log" && <LogScreen />}
+      </div>
+    </>
+  );
+}
+
+function App() {
+  const { state, retry } = useGate();
+  if (state === "checking") return <div className="gate"><p className="muted">Checking…</p></div>;
+  if (state === "unauthed") return <Gate retry={retry} />;
+  if (state === "denied") return <Denied retry={retry} />;
+  return <LabApp />;
+}
+
+createRoot(document.getElementById("root")).render(<App />);

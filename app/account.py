@@ -365,6 +365,80 @@ def add_pick(body: PickIn,
         conn.close()
 
 
+@router.post("/api/me/picks/swap")
+def swap_pick(body: PickIn,
+              creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
+    """Watchlist at its cap: drop the oldest pinned name and pin this one in
+    a single transaction, so a full board can be swapped from the stock page
+    instead of unpin-then-pin in two round trips."""
+    row = _require_user(creds)
+    uid = context.user_id(row)
+    sym = body.symbol.strip().upper()
+    conn = get_conn()
+    try:
+        scope.provision_free(conn, uid)
+        tier = scope.tier_for_user(conn, uid)
+        picks_limit = tier[5] if tier else 1
+        run_id = _latest_run_id(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT s.value FROM tickers t "
+                "JOIN instruments i ON i.ticker_id = t.id "
+                "LEFT JOIN scores s ON s.instrument_id = i.id AND s.run_id = %s "
+                "WHERE t.symbol = %s AND i.active "
+                "ORDER BY i.active DESC, s.value DESC NULLS LAST LIMIT 1",
+                (run_id, sym),
+            )
+            found = cur.fetchone()
+            if not found:
+                raise HTTPException(404, "not found")
+            cur.execute(
+                "SELECT i.id, p.id, p.active FROM instruments i "
+                "JOIN tickers t ON t.id = i.ticker_id "
+                "LEFT JOIN picks p ON p.instrument_id = i.id AND p.user_id = %s "
+                "WHERE t.symbol = %s AND i.active LIMIT 1",
+                (uid, sym),
+            )
+            instr_id, existing_pick, pick_active = cur.fetchone()
+            if existing_pick is not None and pick_active:
+                raise HTTPException(409, "already on your watchlist")
+            cur.execute("SELECT COUNT(*) FROM picks WHERE user_id = %s AND active", (uid,))
+            active_count = cur.fetchone()[0]
+            dropped = None
+            if active_count >= picks_limit:
+                cur.execute(
+                    "SELECT p.id, t.symbol FROM picks p "
+                    "JOIN instruments i ON i.id = p.instrument_id "
+                    "JOIN tickers t ON t.id = i.ticker_id "
+                    "WHERE p.user_id = %s AND p.active "
+                    "ORDER BY p.sort_order, p.pinned_at, p.id LIMIT 1",
+                    (uid,),
+                )
+                oldest = cur.fetchone()
+                if oldest:
+                    cur.execute("UPDATE picks SET active = FALSE WHERE id = %s", (oldest[0],))
+                    dropped = oldest[1]
+            if existing_pick is not None:
+                cur.execute("UPDATE picks SET active = TRUE, score_at_pin = %s WHERE id = %s",
+                            (found[0], existing_pick))
+            else:
+                cur.execute(
+                    "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM picks WHERE user_id = %s",
+                    (uid,),
+                )
+                next_order = cur.fetchone()[0]
+                cur.execute(
+                    "INSERT INTO picks (user_id, instrument_id, score_at_pin, sort_order) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (uid, instr_id, found[0], next_order),
+                )
+        conn.commit()
+        return {"added": sym, "dropped": dropped,
+                "score_at_pin": float(found[0]) if found[0] else None}
+    finally:
+        conn.close()
+
+
 @router.delete("/api/me/picks/{symbol}")
 def drop_pick(symbol: str,
               creds: HTTPAuthorizationCredentials | None = Depends(bearer)):

@@ -28,7 +28,7 @@ export default function Landing() {
       <div className="wrap" style={{ paddingLeft: 0, paddingRight: 0 }}>
         <div className="pagehead" style={{ justifyContent: "flex-start" }}>
           <a
-            className="btn btn-primary"
+            className="btn btn-primary cta"
             href="/board"
             onClick={(e) => {
               e.preventDefault();
@@ -50,6 +50,7 @@ export default function Landing() {
               <div className="name">
                 <span className="mono">{s.monogram}</span>
                 {s.label}
+                {!s.calibrated && <span className="chip">Provisional</span>}
               </div>
               <p className="desc">{s.description}</p>
               <p className="st">

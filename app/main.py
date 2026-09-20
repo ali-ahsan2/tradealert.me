@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from app import email as emailer
 from app import security
-from app import account, admin, alerts, billing, scope
+from app import account, admin, alerts, billing, lab, scope
 from app.db import _load_env, get_conn
 
 _load_env()
@@ -32,6 +32,7 @@ app.include_router(account.router)
 app.include_router(alerts.router)
 app.include_router(admin.router)
 app.include_router(billing.router)
+app.include_router(lab.router)
 bearer = HTTPBearer(auto_error=False)
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -285,7 +286,7 @@ def verify(token: str):
         'margin:4em auto;padding:0 1em;text-align:center">'
         '<h1>Email verified</h1>'
         '<p>Your tradealert.me account is active.</p>'
-        '<p><a href="/login.html">Log in now</a></p>'
+        '<p><a href="/login">Log in now</a></p>'
         '</body></html>')
 
 @app.get("/api/unsubscribe")
@@ -595,6 +596,18 @@ def search(q: str = "", creds: HTTPAuthorizationCredentials | None = Depends(bea
          "value": float(r[3]) if r[3] is not None else None,
          "band": r[4]} for r in rows
     ]}
+@app.get("/lab", include_in_schema=False)
+@app.get("/lab/", include_in_schema=False)
+def lab_page():
+    lab_html = _STATIC / "lab.html"
+    if not lab_html.is_file():
+        raise HTTPException(404, "not found")
+    resp = FileResponse(lab_html)
+    resp.headers["Cache-Control"] = "no-store"
+    resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return resp
+
+
 class SPAStaticFiles(StaticFiles):
     """Client-side routes (/, /board, /stock/SYMBOL) fall back to index.html
     like nginx's try_files; /api/ and real asset 404s are left alone."""

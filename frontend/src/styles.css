@@ -1,63 +1,6 @@
-/* tradealert.me — research desk note. Tokens from PRODUCT_DESIGN.md §1. */
-:root {
-  --bg: #f7f8fa;
-  --surface: #ffffff;
-  --surface-sunken: #eef0f4;
-  --border: #d8dce3;
-  --border-strong: #b4bac6;
-  --ink: #161a21;
-  --ink-muted: #5b6472;
-  --ink-faint: #8b93a2;
-
-  --info: #24466f;
-  --info-hover: #1a3455;
-  --info-active: #162c48;
-  --pos: #1f6b4a;
-  --neg: #9b2c2c;
-  --warn: #8a5a00;
-  --warn-fill: #fdf8ec;
-
-  --band-strong-bg: #1d3a5f;
-  --band-strong-fg: #ffffff;
-  --band-strong-bd: #162c48;
-  --band-elevated-bg: #3a6491;
-  --band-elevated-fg: #ffffff;
-  --band-elevated-bd: #2d5178;
-  --band-neutral-bg: #dfe3ea;
-  --band-neutral-fg: #2b323d;
-  --band-neutral-bd: #c3c9d4;
-  --band-weak-bg: #e8e4d8;
-  --band-weak-fg: #5b5240;
-  --band-weak-bd: #d3ccb9;
-  --band-excluded-bg: #eef0f4;
-  --band-excluded-fg: #5b6472;
-  --band-excluded-bd: #d8dce3;
-
-  --shadow: 0 1px 2px rgba(22, 26, 33, 0.06);
-
-  --s-1: 4px;
-  --s-2: 8px;
-  --s-3: 12px;
-  --s-4: 16px;
-  --s-5: 24px;
-  --s-6: 32px;
-
-  --r-sm: 3px;
-  --r-md: 6px;
-
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-    Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo,
-    Consolas, monospace;
-
-  --fs-xs: 12px;
-  --fs-sm: 13px;
-  --fs-base: 15px;
-  --fs-md: 18px;
-  --fs-lg: 24px;
-  --fs-xl: 32px;
-}
-
+/* tradealert.me — research desk note. Relies on tokens.css for all custom
+   properties; this bundle deliberately defines no tokens so theme-override.css
+   (loaded after tokens.css) wins the cascade. */
 * {
   box-sizing: border-box;
 }
@@ -102,8 +45,12 @@ a:hover {
   align-items: center;
   gap: var(--s-4);
   padding: var(--s-3) var(--s-4);
-  border-bottom: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(22, 26, 33, 0.04);
   background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 40;
 }
 
 .topbar .brand {
@@ -293,12 +240,20 @@ a:hover {
 }
 
 .form-card {
-  max-width: 360px;
+  max-width: 420px;
+  width: 100%;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   box-shadow: var(--shadow);
   padding: var(--s-5);
+}
+
+.auth-shell {
+  min-height: calc(100vh - 116px);
+  display: grid;
+  place-items: center;
+  padding: var(--s-5) var(--s-4);
 }
 
 .err {
@@ -332,39 +287,35 @@ a:hover {
   font-variant-numeric: tabular-nums;
 }
 
-.badge.thin {
-  border: 1px dashed var(--warn);
+.badge.thin .num::before {
+  content: "~ ";
 }
 
-.badge.thin .num::after {
-  content: "~";
-}
-
-.badge strong {
+.badge.strong {
   background: var(--band-strong-bg);
   color: var(--band-strong-fg);
   border-color: var(--band-strong-bd);
 }
 
-.badge elevated {
+.badge.elevated {
   background: var(--band-elevated-bg);
   color: var(--band-elevated-fg);
   border-color: var(--band-elevated-bd);
 }
 
-.badge neutral {
+.badge.neutral {
   background: var(--band-neutral-bg);
   color: var(--band-neutral-fg);
   border-color: var(--band-neutral-bd);
 }
 
-.badge weak {
+.badge.weak {
   background: var(--band-weak-bg);
   color: var(--band-weak-fg);
   border-color: var(--band-weak-bd);
 }
 
-.badge excluded {
+.badge.excluded {
   background: var(--band-excluded-bg);
   color: var(--band-excluded-fg);
   border-color: var(--band-excluded-bd);
@@ -732,7 +683,7 @@ table.board .ind {
   align-items: baseline;
   font-size: var(--fs-sm);
   padding: var(--s-1) 0;
-  border-bottom: 1px dashed var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
 .hardfilters .hf .ok {
@@ -789,7 +740,7 @@ table.board .ind {
   display: flex;
   justify-content: space-between;
   gap: var(--s-3);
-  border-bottom: 1px dashed var(--border);
+  border-bottom: 1px solid var(--border);
   padding: var(--s-2) 0;
 }
 
@@ -829,6 +780,12 @@ table.board .ind {
   max-width: 22ch;
 }
 
+@media (min-width: 720px) {
+  .hero {
+    padding: calc(var(--s-6) * 2) 0;
+  }
+}
+
 .hero h1 em {
   font-style: normal;
   color: var(--info);
@@ -843,6 +800,12 @@ table.board .ind {
 
 .hero .lede b {
   color: var(--ink);
+}
+
+.btn-primary.cta {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  padding: var(--s-3) var(--s-5);
 }
 
 .section h2 {
@@ -866,23 +829,22 @@ table.board .ind {
 .strat {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-top: 3px solid var(--ink);
   border-radius: var(--r-md);
   padding: var(--s-4);
+  box-shadow: var(--shadow);
 }
 
-.strat.provisional {
-  border-top: none;
-  border-left: none;
-  border-right: none;
-  border-bottom: 1px solid var(--border);
-  border-left: 3px solid var(--warn);
-  border-image: repeating-linear-gradient(
-      45deg,
-      var(--warn) 0 3px,
-      transparent 3px 6px
-    )
-    1;
+.strat .chip {
+  display: inline-block;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--warn);
+  background: var(--warn-fill);
+  border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent);
+  border-radius: var(--r-sm);
+  padding: 2px 8px;
 }
 
 .strat .name {
@@ -1156,4 +1118,143 @@ table.board .ind {
   .grid2 {
     grid-template-columns: 1fr;
   }
+}
+/* ---------- footer ---------- */
+
+.footer {
+  border-top: 1px solid var(--border);
+  margin-top: var(--s-6);
+  padding: var(--s-4) var(--s-4) var(--s-6);
+  color: var(--ink-faint);
+  font-size: var(--fs-sm);
+  max-width: 1080px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.footer .frow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-5);
+  align-items: center;
+}
+
+.footer .fword {
+  font-weight: 700;
+  color: var(--ink-muted);
+  letter-spacing: 0.01em;
+}
+
+.footer .fword .mark {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  border-radius: var(--r-sm);
+  margin-right: var(--s-1);
+  vertical-align: -3px;
+}
+
+.footer .fnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4);
+}
+
+.footer .fnav a {
+  color: var(--ink-faint);
+}
+
+.footer .fnav a:hover {
+  color: var(--ink-muted);
+}
+
+.footer .flegal {
+  margin-top: var(--s-2);
+  color: var(--ink-faint);
+}
+
+/* ---------- board help ---------- */
+
+.boardstrip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: var(--s-3) var(--s-4);
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+  margin-bottom: var(--s-4);
+}
+
+.btn-quiet {
+  background: none;
+  border: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  padding: 2px 6px;
+}
+
+.btn-quiet:hover {
+  color: var(--ink-muted);
+}
+
+.howto {
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface-raised);
+  margin: 0 0 var(--s-4);
+}
+
+.howto summary {
+  cursor: pointer;
+  padding: var(--s-3) var(--s-4);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.howto summary:hover {
+  color: var(--ink);
+}
+
+.howto .howbody {
+  padding: 0 var(--s-4) var(--s-3);
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+  line-height: 1.6;
+}
+
+.howto .howbody ul {
+  margin: 0;
+  padding-left: var(--s-4);
+}
+
+.thinfo {
+  display: inline-grid;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--ink-faint);
+  margin-left: var(--s-1);
+  cursor: help;
+  vertical-align: 1px;
+}
+
+thead .thinfo:hover,
+thead .thinfo:focus {
+  color: var(--info);
+  border-color: var(--info);
 }
