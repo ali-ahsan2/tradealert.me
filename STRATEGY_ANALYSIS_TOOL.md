@@ -15,7 +15,7 @@ Written for: a coding assistant implementing `BUILD_SPEC.md` section 8. This doc
 **Out of scope, explicitly:**
 
 - Any subscriber-visible surface. Nothing in the Lab is ever linked, cached, or rendered outside an admin session. See section 1.2.
-- Editing weights. The Lab is read-and-analyze. Changing a strategy's weights stays with `POST /api/admin/strategies/{key}/calibrate` (`BUILD_SPEC.md` section 4.5). The Lab's job ends at producing evidence; applying that evidence is the existing human-gated action. The one bridge between them is the "Send to calibration" handoff in section 5.6, which prefills the calibrate form but does not submit it.
+- ~~Editing weights.~~ **Superseded by section 10.** The Lab now drafts, tests, promotes and rolls back strategy versions. Section 10 replaces the read-only scope and the "Send to calibration" handoff in section 5.6.
 - Automated strategy search / hyperparameter optimization. A machine that tries ten thousand weight combinations and keeps the best one is exactly the failure mode section 6 exists to prevent, at a scale no human review can catch.
 - Trade profitability, position sizing, or direction prediction. `test_results.md` measures whether a large move happened, not its direction or P&L. The Lab inherits that limit and states it on screen rather than quietly extending past it.
 
@@ -314,7 +314,9 @@ Request:
     "industry_keys": ["defense"],
     "market_cap_band": [300000000, 3000000000],
     "instrument_group": null,
-    "theme_regex": null
+    "theme_regex": null,
+    "exchange_keys": null,
+    "region_keys": null
   },
   "window": {"from": "2024-09-01", "to": "2026-06-30"},
   "event_kinds": ["earnings"],
@@ -594,8 +596,15 @@ It updates on every selection change, **before** the run. The bar turns `--neg` 
 **Step 5 — Which stocks? (universe).** Three mutually exclusive modes as a segmented control:
 
 - `Named tickers` — a token input.
-- `By filter` — industry multi-select, market-cap band (two number inputs with a `$300M–$3B` preset button matching Fast Mover's own filter), instrument group, theme regex with a live match count.
+- `By filter` — industry multi-select, market-cap band, instrument group, theme regex with a live match count, plus two further filter dimensions (below), each independently selectable and combinable with the rest.
 - `Filter pass/fail` — passed all hard filters / failed at least one / either. This mode is what answers the section 5.7 question directly.
+
+**Market-cap band and exchange/geography are separate, independently selectable filter fields within `By filter` mode, not folded into industry.** An operator asking "how does Fast Mover perform on small-caps" and one asking "how does it perform in Defense" are asking two different questions, and the builder must let either be answered alone, together, or crossed with the other:
+
+- **Market-cap band**: two number inputs with a `$300M–$3B` preset button matching Fast Mover's own filter (unchanged from the original spec, now explicitly named as its own filter dimension rather than a sub-field of `By filter` with no standing of its own). Usable with no industry selected, to answer a pure size-based question across the whole universe.
+- **Exchange / geography**: two independent multi-selects, `Exchange` (values sourced from yfinance's `exchange` field, e.g. NYSE, NASDAQ — this is a new field, not currently ingested or named anywhere in `PROJECT_HANDOFF.md`'s Ingest layer, and must be added to `refresh.py`'s pull and to `instruments` or `backtest_events.inputs_json` before this control can do anything; until then it renders with an inline note `Exchange data not yet ingested` and is disabled, not hidden — same absent-vs-disabled principle as section 5.5's provisional-strategy empty state, so the operator knows the dimension exists and why it doesn't work yet) and `Region` (values from `PROJECT_HANDOFF.md` section 1b's existing domicile/region-risk field — company profile as the weak signal, 10-K note as the stronger one — which is already named in the architecture but not yet exposed as a queryable filter anywhere; wiring this one is a smaller lift than Exchange since the underlying data is already specified to exist).
+
+Each of the five `By filter` dimensions (industry, market-cap band, instrument group, exchange, region) narrows the same live match count independently; none is a prerequisite for using another.
 
 Under any mode, a live line: `Matches 14 instruments, 61 events in the selected window.` If it drops below 30 events, the line turns `--warn` and reads `61 events is below the 30 this tool treats as a floor for a rate comparison.`
 
@@ -732,7 +741,7 @@ Three mechanisms, in increasing strength:
 
 **A new `family_key` does not reset the count if the dependent variable and universe are unchanged.** Server-side check on `POST /api/admin/lab/regression`: if a new family's spec matches an existing family on dependent variable and universe within 30 days, the response carries `warning: FAMILY_SPLIT` and the counter shows the combined total. Without this, the friction above is defeated by typing a new family name.
 
-**"Matches" is defined precisely, not left to loose comparison, or the check above is trivially defeated.** Dependent variable matches if `dependent.key` and `dependent.hit_definition` (when present) are identical after JSON canonicalization — no tolerance, since there are only three dependent-variable choices and they are categorical. Universe matches if `universe.mode` is identical and, within that mode: for `filter`, `industry_keys` sets are identical, `instrument_group`/`theme_regex` are identical, and `market_cap_band` bounds are within 5% of each other on both ends (not exact equality, since two honestly-different questions can legitimately use $300M and $305M); for `named tickers`, the ticker sets overlap by 80% or more; for `filter pass/fail`, the mode value is identical. A universe change that trips none of these thresholds is treated as a genuinely new line of inquiry and does not need to defeat anything. The 5%/80% thresholds are stored as named constants in one place (`FAMILY_MATCH_CAP_TOLERANCE`, `FAMILY_MATCH_TICKER_OVERLAP`), not hardcoded inline, so they can be tightened later without hunting through the codebase.
+**"Matches" is defined precisely, not left to loose comparison, or the check above is trivially defeated.** Dependent variable matches if `dependent.key` and `dependent.hit_definition` (when present) are identical after JSON canonicalization — no tolerance, since there are only three dependent-variable choices and they are categorical. Universe matches if `universe.mode` is identical and, within that mode: for `filter`, `industry_keys` sets are identical, `instrument_group`/`theme_regex` are identical, `exchange_keys`/`region_keys` sets are identical, and `market_cap_band` bounds are within 5% of each other on both ends (not exact equality, since two honestly-different questions can legitimately use $300M and $305M); for `named tickers`, the ticker sets overlap by 80% or more; for `filter pass/fail`, the mode value is identical. A universe change that trips none of these thresholds is treated as a genuinely new line of inquiry and does not need to defeat anything. The 5%/80% thresholds are stored as named constants in one place (`FAMILY_MATCH_CAP_TOLERANCE`, `FAMILY_MATCH_TICKER_OVERLAP`), not hardcoded inline, so they can be tightened later without hunting through the codebase. **`exchange_keys` and `region_keys` are exact-set matches, no tolerance** — unlike market-cap band, there is no meaningful "close but different" exchange or region selection; either the same set was chosen or a genuinely different question is being asked.
 
 ### 6.4 The specific mistake, prevented specifically
 
@@ -866,3 +875,68 @@ Three things this document does not decide, because each depends on judgement th
 1. **Hit definition defaults per strategy — decided: per-strategy, not universal.** Fast Mover keeps 20% / 3x from `test_results.md`, since that is the definition its evidence was actually built on; changing it would invalidate the one real result the platform has. Each of the other four strategies gets its own hit definition matching its actual mechanic rather than inheriting Fast Mover's squeeze-shaped threshold — e.g. Monetary Shifts (rate/dollar beta, funding runway) is not a squeeze play and a 20%-in-five-days bar would likely undercount it working correctly, so its definition should be set when it has enough resolved outcomes to calibrate one, not borrowed from Fast Mover in the meantime. Until a strategy has its own definition, it ships with **no default hit definition at all** and the Backtest/Regression tabs show the same explicit empty state as the no-resolved-outcomes case (section 5's provisional-strategy empty state, Run button absent, not disabled) rather than silently reusing Fast Mover's numbers. `lab_queries.spec_json` still records whichever definition was used for the query, so a later change never silently invalidates a past finding.
 2. **Whether `random_day` baseline events are generated for all 401 instruments or only those with resolved events.** Default: only instruments that have at least one non-random event, matching `test_results.md`'s construction (same 27 tickers, excluding days within 6 of an earnings date). Generating them universe-wide is more work and changes the baseline's meaning.
 3. **Retention of `lab_queries`.** The table grows unbounded and the comparisons counter only needs a rolling window. Default: keep all rows indefinitely (it is small, and the audit value is real), count families over a rolling 90 days.
+
+---
+
+## 10. Strategy release workflow
+
+This section supersedes the read-only scope in section 0 and the "Send to calibration" handoff in section 5.6. The Lab is where strategy versions are drafted, tested, run in shadow, promoted to live, and rolled back. Where this section conflicts with earlier sections, this section wins.
+
+### 10.1 Version lifecycle
+
+| State | Meaning | Scores the live Board |
+|---|---|---|
+| Draft | Editable copy of any version. Hard filters, weights, band cutoffs and hit definition can change. | No |
+| Tested | Frozen. Backtests and regressions run against it. | No |
+| Shadow | Scores live data daily beside the live version. Outcomes recorded, nothing published. | No |
+| Live | The version subscribers see. Exactly one per strategy. | Yes |
+| Retired | Former live version. Kept for rollback and history. | No |
+
+A version is immutable once it leaves Draft (enforced by the trigger in section 4.4, extended to cover every state except Draft). Promotion and rollback move a pointer (`strategies.live_version_id`); they never modify a version row. Add `strategy_versions.state` with a CHECK over the five values above, and `strategies.live_version_id` referencing `strategy_versions(id)`.
+
+### 10.2 Promotion gates
+
+**Tested to Shadow.** The draft is compared with the live version on the same event set (matched comparison, section 5.3) and must not be worse, with the difference surviving the section 6.3 adjustment. The comparison uses the locked holdout (10.4) exactly once.
+
+**Shadow to Live.** Default shadow window is 60 days. At day 60 the Promote button is enabled with no extra step. Before day 60 any admin may still promote, but must:
+
+1. Enter a written reason (40 characters minimum, same rule as the hypothesis field).
+2. Confirm a dialog stating the shadow day count, the resolved outcome count, and the shadow vs live hit rate with confidence ranges.
+
+An early promotion is recorded as `promoted_early = true` on the version and in the audit log, and the version carries a `Provisional` label on every Lab screen until it has 30 resolved outcomes as live. This is a label, not a block.
+
+**Who can promote.** Any user with `is_admin = true`. No second approver.
+
+### 10.3 Live controls
+
+- **Promote** a Shadow version to Live. The previous Live version becomes Retired.
+- **Roll back** to any Retired version. Takes effect on the next scoring run. The rolled-back-from version becomes Retired, not deleted.
+- **Pause publishing** for a strategy. Scoring continues; nothing new reaches subscribers. The Board shows the last published run, marked paused.
+- **Audit log.** Every state change writes a row to `calibration_events` (extended `event_type` values: `promoted`, `promoted_early`, `rolled_back`, `paused`, `resumed`) with admin id, timestamp, reason, and the query ids cited as evidence.
+
+### 10.4 Locked holdout
+
+The most recent 25% of events (by date) are hidden from Draft and Tested versions. A draft sees the holdout once, when the operator requests Tested to Shadow. Repeat requests on the same draft reuse the first result instead of re-running. Stops a draft being tuned against the data used to judge it.
+
+### 10.5 Metrics per version
+
+All metrics can be sliced by industry, market-cap band, exchange, region, and catalyst type.
+
+| # | Metric | Why it matters |
+|---|---|---|
+| 1 | Lift: filter-passer hit rate minus baseline hit rate, with CI | The claim `test_results.md` verified |
+| 2 | Throughput: names passing all filters per week | Shown beside lift. Tightening filters raises hit rate by shrinking n |
+| 3 | Hit rate by band | If bands are not ordered, the score adds nothing over the filters |
+| 4 | Filter attribution: hit rate and n with each filter removed | Which filters carry the result |
+| 5 | Near misses: failed exactly one filter, and how they moved | Detects over-tight thresholds |
+| 6 | Direction split among hits | Current hit definition ignores direction |
+| 7 | Days to move, median move size among hits | What a subscriber acts on |
+| 8 | Rolling 90-day lift vs all-time lift | Decay detection |
+| 9 | Data coverage and shrinkage frequency | Explains many false alarms |
+| 10 | Concentration: share of hits from the top name | One name should not carry a version |
+| 11 | Review override rate (after the Publish layer ships) | Whether human review adds value |
+
+### 10.6 Framing rules
+
+- The matched comparison (draft vs live, same events, CI on the difference) is the primary decision tool. Regression stays available as a diagnostic under section 6 guardrails.
+- "Can't tell yet" is the expected answer for most comparisons at current sample sizes. Screens state it plainly and point to shadow mode as the way to get an answer.

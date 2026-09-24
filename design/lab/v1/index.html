@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en" data-surface="lab">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Strategies · Lab</title>
+<link rel="stylesheet" href="lab.css">
+<style>
+  .home-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--s-6); }
+  .open-items { font-size: var(--fs-sm); min-width: 360px; }
+  .open-items li { display: flex; justify-content: space-between; gap: var(--s-4); padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .open-items li:last-child { border-bottom: 0; }
+  .open-items ul { list-style: none; margin: 0; padding: 0; }
+
+  .fm { margin-top: var(--s-7); padding: var(--s-6); }
+  .fm-top { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-4); }
+  .fm-name { font-family: var(--lab-font-display); font-size: var(--fs-lg); letter-spacing: -0.01em; }
+  .fm-body { display: grid; grid-template-columns: 4fr 7fr; gap: var(--s-7); margin-top: var(--s-6); align-items: start; }
+  .fm-stats { display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; gap: var(--s-6); margin-top: var(--s-6); padding-top: var(--s-5); border-top: 1px solid var(--border); }
+  .fm-stats .fig-label { max-width: 24ch; }
+
+  .collect td { padding-top: 16px; padding-bottom: 16px; }
+  .sname { font-size: var(--fs-base); color: var(--ink); }
+  .zero-track { display: inline-block; width: 120px; height: 4px; background: var(--surface-raised); vertical-align: middle; margin-right: 12px; border-radius: 1px; }
+
+  @media (max-width: 900px) {
+    .home-head { flex-direction: column; align-items: stretch; }
+    .open-items { min-width: 0; }
+    .fm-body { grid-template-columns: 1fr; gap: var(--s-6); }
+    .fm-stats { grid-template-columns: 1fr 1fr; }
+    .fm-stats > :last-child { grid-column: 1 / -1; }
+  }
+  @media (max-width: 560px) {
+    .fm { padding: var(--s-5) var(--s-4); }
+    .fm-top > a { display: none; }
+    .fm-top .row { flex-wrap: wrap; row-gap: 6px; }
+    .collect thead { display: none; }
+    .collect tr { display: grid; grid-template-columns: 1fr auto; padding: 14px 0; border-bottom: 1px solid var(--border); }
+    .collect td { border: 0; padding: 2px 0; }
+    .collect td:nth-child(3), .collect td:nth-child(4) { grid-column: 1 / -1; }
+    .collect td:nth-child(2) { text-align: right; }
+    .zero-track { width: 80px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="mark">tradealert.me<span>Lab</span></div>
+    <nav class="nav">
+      <a href="index.html" aria-current="page">Strategies</a>
+      <a href="#">Findings</a>
+      <a href="versions.html#audit">Audit log</a>
+    </nav>
+    <div class="who">
+      <span class="internal">Internal. Subscribers never see this.</span>
+      <span>Ali</span>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <div class="home-head">
+    <div>
+      <h1>Strategies</h1>
+      <p class="lede">One strategy has outcomes to measure. Last scoring run 24 Sep 2026, 06:10 ET. All five are publishing.</p>
+    </div>
+    <div class="open-items">
+      <ul>
+        <li><span>Fast Mover v4 in shadow, day 23 of 60</span><a href="shadow.html">Review</a></li>
+        <li><span>Fast Mover v5 draft, not yet compared with live</span><a href="draft.html">Open</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <article class="panel fm" aria-labelledby="fm-name">
+    <div class="fm-top">
+      <div class="row" style="gap: var(--s-3);">
+        <a id="fm-name" class="fm-name" href="performance.html" style="color: var(--ink);">Fast Mover</a>
+        <span class="lbl lbl-live">v3 live</span>
+        <span class="small muted">since 2 Jun 2026</span>
+      </div>
+      <a class="small" href="performance.html">Performance</a>
+    </div>
+
+    <div class="fm-body">
+      <div>
+        <div class="fig">+44.6<span class="unit">pts</span></div>
+        <p class="fig-label">Lift over random days, 95% range +26.9 to +56.1</p>
+        <p class="read" style="margin-top: var(--s-4);">Events that passed all six filters moved 20% or spiked volume 3x in 81.2% of cases. The same 27 tickers on ordinary days did so 36.6% of the time.</p>
+      </div>
+
+      <div>
+        <div class="ivl" role="img" aria-label="Hit rate with 95% range: random days 36.6% (30.7 to 43.0), all earnings events 58.6% (51.6 to 65.4), filter-passing events 81.2% (64.7 to 91.1)">
+          <div class="ivl-row">
+            <div class="ivl-name">Random days</div>
+            <div class="track s-base">
+              <div class="gridlines"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i></div>
+              <div class="rng" style="left:30.7%; width:12.3%"></div>
+              <div class="dot" style="left:36.6%"></div>
+            </div>
+            <div class="ivl-val">36.6% <span class="faint">n=232</span></div>
+          </div>
+          <div class="ivl-row">
+            <div class="ivl-name">All earnings</div>
+            <div class="track s-base">
+              <div class="gridlines"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i></div>
+              <div class="rng" style="left:51.6%; width:13.8%"></div>
+              <div class="dot" style="left:58.6%"></div>
+            </div>
+            <div class="ivl-val">58.6% <span class="faint">n=191</span></div>
+          </div>
+          <div class="ivl-row">
+            <div class="ivl-name"><b>Passed filters</b></div>
+            <div class="track s-live">
+              <div class="gridlines"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i></div>
+              <div class="rng" style="left:64.7%; width:26.4%"></div>
+              <div class="dot" style="left:81.2%"></div>
+            </div>
+            <div class="ivl-val">81.2% <span class="faint">n=32</span></div>
+          </div>
+          <div class="ivl-axis">
+            <div></div>
+            <div class="axis"><span style="left:0">0%</span><span class="ax-mid" style="left:25%">25</span><span style="left:50%">50</span><span class="ax-mid" style="left:75%">75</span><span style="left:100%">100%</span></div>
+            <div></div>
+          </div>
+        </div>
+        <div class="chart-foot"><span>Hit rate with 95% range. Tight window, price 20% or volume 3x.</span><a href="#">Show as table</a></div>
+      </div>
+    </div>
+
+    <div class="fm-stats">
+      <div>
+        <div class="fig-sm">0.3<span class="unit">a week</span></div>
+        <p class="fig-label">Filter passes. 32 over 104 weeks.</p>
+      </div>
+      <div>
+        <div class="fig-sm">27%</div>
+        <p class="fig-label">Share of hits from one name, AEHR (7 of 26)</p>
+      </div>
+      <div>
+        <div class="fig-sm waiting">4<span class="unit">passes</span></div>
+        <p class="fig-label">Last 90 days. Too few to compare with the all-time rate.</p>
+      </div>
+      <div>
+        <p class="small faint">Evidence</p>
+        <p class="small" style="margin-top: 6px;">The filters were tested and held up on 32 events. The score was tested separately and showed no relationship to move size.</p>
+      </div>
+    </div>
+  </article>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Collecting outcomes</h2>
+      <p>Each needs 30 resolved outcomes before a hit rate means anything.</p>
+    </div>
+    <table class="t collect">
+      <thead>
+        <tr>
+          <th scope="col">Strategy</th>
+          <th scope="col">Live version</th>
+          <th scope="col">Resolved outcomes</th>
+          <th scope="col">Hit definition</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="sname">Market Shift</span></td>
+          <td class="muted">v1 since 18 Sep 2026</td>
+          <td><span class="zero-track" aria-hidden="true"></span><span class="num">0</span> <span class="faint">of 30</span></td>
+          <td class="muted">Not set. Chosen once outcomes exist.</td>
+        </tr>
+        <tr>
+          <td><span class="sname">GeoPolitics</span></td>
+          <td class="muted">v1 since 18 Sep 2026</td>
+          <td><span class="zero-track" aria-hidden="true"></span><span class="num">0</span> <span class="faint">of 30</span></td>
+          <td class="muted">Not set. Chosen once outcomes exist.</td>
+        </tr>
+        <tr>
+          <td><span class="sname">Industry Restructure</span></td>
+          <td class="muted">v1 since 18 Sep 2026</td>
+          <td><span class="zero-track" aria-hidden="true"></span><span class="num">0</span> <span class="faint">of 30</span></td>
+          <td class="muted">Not set. Chosen once outcomes exist.</td>
+        </tr>
+        <tr>
+          <td><span class="sname">Monetary Shifts</span></td>
+          <td class="muted">v1 since 18 Sep 2026</td>
+          <td><span class="zero-track" aria-hidden="true"></span><span class="num">0</span> <span class="faint">of 30</span></td>
+          <td class="muted">Not set. Chosen once outcomes exist.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer class="limits">
+    <p>Hit rates measure whether a move happened, not its direction and not whether a trade would have been profitable. Results describe the instruments and period tested, not future market conditions.</p>
+    <p>Mockup. Fast Mover hit rates, counts and ticker split come from the 11 Sep 2026 backtest in test_results.md. Version dates, the 90-day count and the scoring time are sample data.</p>
+  </footer>
+</main>
+</body>
+</html>

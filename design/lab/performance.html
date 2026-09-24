@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en" data-surface="lab">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Fast Mover · Lab</title>
+<link rel="stylesheet" href="lab.css">
+<style>
+  .slices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); }
+  .split { display: flex; height: 10px; border-radius: 2px; overflow: hidden; max-width: 320px; }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="mark">tradealert.me<span>Lab</span></div>
+    <nav class="nav">
+      <a href="index.html" aria-current="page">Strategies</a>
+      <a href="#">Findings</a>
+      <a href="versions.html#history">History</a>
+    </nav>
+    <div class="who"><span class="internal">Internal. Subscribers never see this.</span><span>Ali</span></div>
+  </div>
+</header>
+
+<main class="page">
+  <h1>Fast Mover</h1>
+  <nav class="views" aria-label="Fast Mover views">
+    <a href="performance.html" aria-current="page">Performance</a>
+    <a href="versions.html">Versions</a>
+    <a href="#">Inputs</a>
+    <a href="#">Regression</a>
+  </nav>
+
+  <p class="answer"><b>Working.</b> Stocks that passed all six filters moved sharply 81% of the time. On ordinary days the same stocks did so 37% of the time.</p>
+
+  <div class="bars" role="img" aria-label="Moved sharply: passed the filters 81% of 32 cases, ordinary days 37% of 232 days">
+    <div class="bar-row">
+      <div class="lab"><b>Passed the filters</b>32 cases</div>
+      <div class="bar-track"><div class="bar-fill" style="width:81.2%"></div></div>
+      <div class="val">81%</div>
+    </div>
+    <div class="bar-row">
+      <div class="lab"><b>Ordinary days</b>232 days, same stocks</div>
+      <div class="bar-track"><div class="bar-fill base" style="width:36.6%"></div></div>
+      <div class="val">37%</div>
+    </div>
+  </div>
+
+  <p class="answer-note">Two years of earnings dates on 27 stocks. Enough to trust that the filters help. The true rate is likely somewhere between 65% and 91%.</p>
+
+  <div class="more">
+    <details>
+      <summary>Show the numbers</summary>
+      <div class="detail">
+        <table class="t">
+          <thead><tr><th scope="col">Group</th><th scope="col" class="n">Cases</th><th scope="col" class="n">Moved</th><th scope="col" class="n">Hit rate</th><th scope="col" class="n">95% range</th></tr></thead>
+          <tbody>
+            <tr><td>Passed all six filters</td><td class="n">32</td><td class="n">26</td><td class="n">81.2%</td><td class="n rg">64.7 to 91.1</td></tr>
+            <tr><td>All earnings events</td><td class="n">191</td><td class="n">112</td><td class="n">58.6%</td><td class="n rg">51.6 to 65.4</td></tr>
+            <tr><td>Random days</td><td class="n">232</td><td class="n">85</td><td class="n">36.6%</td><td class="n rg">30.7 to 43.0</td></tr>
+          </tbody>
+        </table>
+        <dl class="facts">
+          <dt>Lift over random days</dt><dd>+44.6 points <span class="faint">(95% range +26.9 to +56.1)</span></dd>
+          <dt>Lift over all earnings</dt><dd>+22.6 points <span class="faint">(95% range +4.7 to +34.8)</span></dd>
+          <dt>Throughput</dt><dd>0.3 filter passes a week, 32 in 104 weeks</dd>
+          <dt>Hit definition</dt><dd>Price 20% or volume 3x the 20-day average, 2 trading days before to 5 after</dd>
+        </dl>
+      </div>
+    </details>
+  </div>
+
+  <section class="section" aria-labelledby="h-checks">
+    <h2 id="h-checks">Other checks</h2>
+
+    <details>
+      <summary><span class="q">Still working lately?</span><span class="a">Can't tell yet. 4 cases in 90 days.</span></summary>
+      <div class="detail">
+        <p class="small muted">At about one case every three weeks, a 90-day window holds too few to judge. A rate appears at 10 cases. The trial of v4 runs on the full live universe and fills faster.</p>
+        <table class="t">
+          <thead><tr><th scope="col">Window</th><th scope="col" class="n">Cases</th><th scope="col" class="n">Hit rate</th><th scope="col" class="n">95% range</th></tr></thead>
+          <tbody>
+            <tr><td>All time</td><td class="n">32</td><td class="n">81.2%</td><td class="n rg">64.7 to 91.1</td></tr>
+            <tr><td>Last 90 days</td><td class="n">4</td><td class="note" colspan="2">Too few for a rate</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="q">Does the score add anything beyond the filters?</span><span class="a">Not that we can see.</span></summary>
+      <div class="detail">
+        <p class="small muted">Strong and Elevated scores moved at almost the same rate. An earlier test found no link between score and move size either.</p>
+        <table class="t">
+          <thead><tr><th scope="col">Band</th><th scope="col" class="n">Cases</th><th scope="col" class="n">Hit rate</th><th scope="col" class="n">95% range</th></tr></thead>
+          <tbody>
+            <tr><td>Strong</td><td class="n">12</td><td class="n">83.3%</td><td class="n rg">55.2 to 95.3</td></tr>
+            <tr><td>Elevated</td><td class="n">15</td><td class="n">80.0%</td><td class="n rg">54.8 to 93.0</td></tr>
+            <tr><td>Neutral</td><td class="n">5</td><td class="note" colspan="2">Too few for a rate</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="q">Which filters matter most?</span><span class="a">Short interest and revenue growth.</span></summary>
+      <div class="detail">
+        <p class="small muted">Dropping either one lets in about 25 more cases and costs about 12 points. None of the changes is proven on its own; each sits inside the ranges.</p>
+        <table class="t">
+          <thead><tr><th scope="col">Filter removed</th><th scope="col" class="n">Cases</th><th scope="col" class="n">Hit rate</th><th scope="col" class="n">95% range</th><th scope="col" class="n">Change</th></tr></thead>
+          <tbody>
+            <tr><td>None</td><td class="n">32</td><td class="n">81.2%</td><td class="n rg">64.7 to 91.1</td><td class="n faint">base</td></tr>
+            <tr><td>Short interest</td><td class="n">58</td><td class="n">69.0%</td><td class="n rg">56.2 to 79.4</td><td class="n">−12.2</td></tr>
+            <tr><td>Revenue growth</td><td class="n">55</td><td class="n">69.1%</td><td class="n rg">56.0 to 79.7</td><td class="n">−12.1</td></tr>
+            <tr><td>Float</td><td class="n">41</td><td class="n">75.6%</td><td class="n rg">60.7 to 86.2</td><td class="n">−5.6</td></tr>
+            <tr><td>Market cap</td><td class="n">39</td><td class="n">79.5%</td><td class="n rg">64.5 to 89.2</td><td class="n">−1.7</td></tr>
+            <tr><td>Days to cover</td><td class="n">36</td><td class="n">80.6%</td><td class="n rg">65.0 to 90.2</td><td class="n">−0.6</td></tr>
+            <tr><td>Dated catalyst</td><td class="n">32</td><td class="note" colspan="3">No effect. Every case is an earnings date.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="q">Are any thresholds too tight?</span><span class="a">No sign of it.</span></summary>
+      <div class="detail">
+        <p class="small muted">Stocks that missed by exactly one filter moved about as often as any earnings day. If a threshold were too tight, they would do nearly as well as full passes.</p>
+        <table class="t">
+          <thead><tr><th scope="col">Filter failed</th><th scope="col" class="n">Cases</th><th scope="col" class="n">Hit rate</th><th scope="col" class="n">95% range</th></tr></thead>
+          <tbody>
+            <tr><td>Any one</td><td class="n">44</td><td class="n">61.4%</td><td class="n rg">46.6 to 74.3</td></tr>
+            <tr><td>Short interest</td><td class="n">18</td><td class="n">55.6%</td><td class="n rg">33.7 to 75.4</td></tr>
+            <tr><td>Revenue growth</td><td class="n">16</td><td class="n">56.2%</td><td class="n rg">33.2 to 76.9</td></tr>
+            <tr><td>Float</td><td class="n">6</td><td class="note" colspan="2">Too few for a rate</td></tr>
+            <tr><td>Market cap</td><td class="n">4</td><td class="note" colspan="2">Too few for a rate</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="q">Is one stock carrying it?</span><span class="a">No. The largest is a quarter of cases.</span></summary>
+      <div class="detail">
+        <p class="small muted">Eight stocks. INOD has the most cases (8 of 32), AEHR the most moves (7 of 26). The limit is 40% of cases from one stock.</p>
+        <table class="t">
+          <thead><tr><th scope="col">Ticker</th><th scope="col" class="n">Cases</th><th scope="col" class="n">Moved</th><th scope="col" class="n">Share of cases</th></tr></thead>
+          <tbody>
+            <tr><td class="tk">INOD</td><td class="n">8</td><td class="n">6</td><td class="n">25.0%</td></tr>
+            <tr><td class="tk">AEHR</td><td class="n">7</td><td class="n">7</td><td class="n">21.9%</td></tr>
+            <tr><td class="tk">BKSY</td><td class="n">5</td><td class="n">3</td><td class="n">15.6%</td></tr>
+            <tr><td class="tk">SEZL</td><td class="n">4</td><td class="n">4</td><td class="n">12.5%</td></tr>
+            <tr><td class="tk">TSSI</td><td class="n">3</td><td class="n">3</td><td class="n">9.4%</td></tr>
+            <tr><td class="tk">PDYN</td><td class="n">3</td><td class="n">1</td><td class="n">9.4%</td></tr>
+            <tr><td class="tk">DUOT</td><td class="n">1</td><td class="n">1</td><td class="n">3.1%</td></tr>
+            <tr><td class="tk">OUST</td><td class="n">1</td><td class="n">1</td><td class="n">3.1%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="q">Up or down?</span><span class="a">Mostly up, 21 of 26.</span></summary>
+      <div class="detail">
+        <div class="split" aria-hidden="true"><i style="width:80.8%; background: var(--pos)"></i><i style="width:19.2%; background: var(--neg)"></i></div>
+        <p class="small muted">One move in five was a drop, which a subscriber reading the name as bullish would not expect. Moves took a median of 2 trading days, and the median price change among them was 24%.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="q">Does it differ by industry?</span><span class="a">Too few cases to compare.</span></summary>
+      <div class="detail">
+        <p class="small muted">Only one industry has 10 cases, and one stock supplies most of it.</p>
+        <table class="t">
+          <thead><tr><th scope="col">Industry</th><th scope="col" class="n">Cases</th><th scope="col" class="n">Hit rate</th><th scope="col" class="n">95% range</th><th scope="col" class="n">Stocks</th></tr></thead>
+          <tbody>
+            <tr><td>AI software and data centers</td><td class="n">12</td><td class="n">83.3%</td><td class="n rg">55.2 to 95.3</td><td class="n">3</td></tr>
+            <tr><td>Semiconductors and hardware</td><td class="n">8</td><td class="note" colspan="2">Too few for a rate</td><td class="n">2</td></tr>
+            <tr><td>Defense, drones and space</td><td class="n">8</td><td class="note" colspan="2">Too few for a rate</td><td class="n">2</td></tr>
+            <tr><td>Fintech and payments</td><td class="n">4</td><td class="note" colspan="2">Too few for a rate</td><td class="n">1</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="q">Is the data complete?</span><span class="a">Yes, all 191 events used.</span></summary>
+      <div class="detail">
+        <dl class="facts">
+          <dt>Events used</dt><dd>191 of 191, none excluded</dd>
+          <dt>Score shrunk to neutral</dt><dd>11 of 191 events</dd>
+          <dt>Short interest</dt><dd>FINRA report on or before each event date</dd>
+          <dt>Share count</dt><dd>SEC filing on file at each event date</dd>
+        </dl>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="q">Do reviewers override it?</span><span class="a">Not measured yet.</span></summary>
+      <div class="detail">
+        <p class="small muted">Starts when the Publish layer ships. Until reviewers can hold back a name, there is nothing to count.</p>
+      </div>
+    </details>
+  </section>
+
+  <div class="more">
+    <details>
+      <summary>Narrow down or pick another version</summary>
+      <div class="detail">
+        <div class="slices">
+          <div class="field"><label for="f-ver">Version</label><select id="f-ver" class="input"><option>v3, live</option></select></div>
+          <div class="field"><label for="f-ind">Industry</label><select id="f-ind" class="input"><option>All industries</option></select></div>
+          <div class="field"><label for="f-cap">Company size</label><select id="f-cap" class="input"><option>All sizes</option></select></div>
+          <div class="field"><label for="f-exc">Exchange</label><select id="f-exc" class="input" disabled><option>Not collected yet</option></select></div>
+          <div class="field"><label for="f-reg">Region</label><select id="f-reg" class="input"><option>All regions</option></select></div>
+          <div class="field"><label for="f-cat">Event type</label><select id="f-cat" class="input" disabled><option>Earnings only</option></select></div>
+        </div>
+        <p class="xs faint">Every answer on this page updates to the selection.</p>
+      </div>
+    </details>
+  </div>
+
+  <footer class="foot">
+    <p>Moving sharply means a 20% price change or 3x normal volume around the event, in either direction. It says nothing about profit, and describes the stocks and period tested, not future markets.</p>
+    <p>Mockup. Group counts and the stock table come from test_results.md (run 11 Sep 2026). Band, filter, near-miss, direction, timing, shrinkage and 90-day figures are sample data. Industry assignments are illustrative.</p>
+  </footer>
+</main>
+<script>if (location.hash === "#open") document.querySelectorAll("details").forEach(function (d) { d.open = true; });</script>
+</body>
+</html>

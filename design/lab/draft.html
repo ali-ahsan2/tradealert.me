@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en" data-surface="lab">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Fast Mover v5 draft · Lab</title>
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="mark">tradealert.me<span>Lab</span></div>
+    <nav class="nav">
+      <a href="index.html" aria-current="page">Strategies</a>
+      <a href="#">Findings</a>
+      <a href="versions.html#history">History</a>
+    </nav>
+    <div class="who"><span class="internal">Internal. Subscribers never see this.</span><span>Ali</span></div>
+  </div>
+</header>
+
+<main class="page">
+  <p class="crumb"><a href="performance.html">Fast Mover</a> / <a href="versions.html">Versions</a></p>
+  <h1>v5 <span class="lbl">Draft</span></h1>
+  <p class="sub">A copy of v3 with three changes. Saved 24 Sep at 14:32.</p>
+
+  <p class="answer"><b>Can't tell yet.</b> v5 looks slightly better than live, but there isn't enough data to be sure.</p>
+
+  <div class="bars" role="img" aria-label="Moved sharply on the same past events: v3 79% of 24 cases, v5 84% of 19 cases">
+    <div class="bar-row">
+      <div class="lab"><b>v3, live now</b>24 cases</div>
+      <div class="bar-track"><div class="bar-fill" style="width:79.2%"></div></div>
+      <div class="val">79%</div>
+    </div>
+    <div class="bar-row">
+      <div class="lab"><b>v5, this draft</b>19 cases</div>
+      <div class="bar-track"><div class="bar-fill cand" style="width:84.2%"></div></div>
+      <div class="val">84%</div>
+    </div>
+  </div>
+
+  <p class="answer-note">v5 is pickier. On the same past events it would have skipped 5 stocks, and 3 of those moved sharply. A trial on live data is the way to find out more.</p>
+
+  <div class="actions">
+    <button class="btn btn-primary" type="button">Freeze v5</button>
+    <span class="small faint">Locks these settings so v5 can go on trial.</span>
+  </div>
+
+  <div class="more">
+    <details>
+      <summary>Show the numbers</summary>
+      <div class="detail">
+        <p class="small muted">Both versions scored on the same 143 earnings events. The newest 48 are held back and used once, when v5 is put on trial. Run at 14:32 on the current settings.</p>
+        <table class="t">
+          <thead><tr><th scope="col"></th><th scope="col" class="n">v3 live</th><th scope="col" class="n">v5 draft</th><th scope="col" class="n">Change</th></tr></thead>
+          <tbody>
+            <tr><td>Filter passes</td><td class="n">24</td><td class="n">19</td><td class="n">−5</td></tr>
+            <tr><td>Moved sharply</td><td class="n">19</td><td class="n">16</td><td class="n">−3</td></tr>
+            <tr><td>Hit rate</td><td class="n">79.2%</td><td class="n">84.2%</td><td class="n">+5.0</td></tr>
+            <tr><td>95% range</td><td class="n rg">59.5 to 90.8</td><td class="n rg">62.4 to 94.5</td><td class="n rg">−19.6 to +27.2</td></tr>
+            <tr><td>Passes a week</td><td class="n">0.31</td><td class="n">0.24</td><td class="n">−21%</td></tr>
+            <tr><td>Largest stock, share of passes</td><td class="n">25.0%</td><td class="n">26.3%</td><td class="n">+1.3</td></tr>
+          </tbody>
+        </table>
+        <h3 class="small">Skipped by v5</h3>
+        <table class="t">
+          <thead><tr><th scope="col">Ticker</th><th scope="col">Event</th><th scope="col" class="n">Short interest</th><th scope="col" class="n">Price move</th><th scope="col">Outcome</th></tr></thead>
+          <tbody>
+            <tr><td class="tk">AEHR</td><td class="num">2025-01-08</td><td class="n">11.4%</td><td class="n">+26.3%</td><td class="pos">Hit</td></tr>
+            <tr><td class="tk">BKSY</td><td class="num">2025-03-13</td><td class="n">10.8%</td><td class="n">+4.1%</td><td class="neg">Miss</td></tr>
+            <tr><td class="tk">TSSI</td><td class="num">2025-05-12</td><td class="n">11.9%</td><td class="n">+31.7%</td><td class="pos">Hit</td></tr>
+            <tr><td class="tk">PDYN</td><td class="num">2025-08-13</td><td class="n">10.3%</td><td class="n">−6.2%</td><td class="neg">Miss</td></tr>
+            <tr><td class="tk">SEZL</td><td class="num">2025-08-11</td><td class="n">11.1%</td><td class="n">−21.5%</td><td class="pos">Hit</td></tr>
+          </tbody>
+        </table>
+        <p class="small muted">No event passes v5 that failed v3. This is test 2 in this line of inquiry, so a difference needs p below 0.025 to count.</p>
+      </div>
+    </details>
+  </div>
+
+  <section class="section" aria-labelledby="h-changes">
+    <h2 id="h-changes">What v5 changes</h2>
+    <div class="set changed"><span>Short interest must be over</span><input class="input" value="12%" aria-label="Short interest minimum" aria-describedby="w1"><span class="was" id="w1">live: 10%</span></div>
+    <div class="set changed"><span>Weight on days to cover</span><input class="input" value="0.25" aria-label="Days to cover weight" aria-describedby="w2"><span class="was" id="w2">live: 0.20</span></div>
+    <div class="set changed"><span>Weight on estimate revisions</span><input class="input" value="0.15" aria-label="Estimate revisions weight" aria-describedby="w3"><span class="was" id="w3">live: 0.20</span></div>
+
+    <div class="more">
+      <details>
+        <summary>Show all 20 settings</summary>
+        <div class="detail">
+          <div class="set-group">
+            <h3>Filters a stock must pass</h3>
+            <div class="set"><span>Market cap at least</span><input class="input" value="$300M" aria-label="Market cap minimum"><span class="was">same as live</span></div>
+            <div class="set"><span>Market cap at most</span><input class="input" value="$3B" aria-label="Market cap maximum"><span class="was">same as live</span></div>
+            <div class="set"><span>Float under</span><input class="input" value="50M" aria-label="Float maximum"><span class="was">same as live</span></div>
+            <div class="set changed"><span>Short interest over</span><input class="input" value="12%" aria-label="Short interest minimum"><span class="was">live: 10%</span></div>
+            <div class="set"><span>Days to cover at least</span><input class="input" value="3" aria-label="Days to cover minimum"><span class="was">same as live</span></div>
+            <div class="set"><span>Revenue growth over</span><input class="input" value="40%" aria-label="Revenue growth minimum"><span class="was">same as live</span></div>
+            <div class="set"><span>Dated event within</span><input class="input" value="14 days" aria-label="Catalyst window"><span class="was">same as live</span></div>
+          </div>
+          <div class="set-group">
+            <h3>Score weights, total 1.00</h3>
+            <div class="set"><span>Float tightness</span><input class="input" value="0.20" aria-label="Float tightness weight"><span class="was">same as live</span></div>
+            <div class="set"><span>Short interest</span><input class="input" value="0.20" aria-label="Short interest weight"><span class="was">same as live</span></div>
+            <div class="set changed"><span>Days to cover</span><input class="input" value="0.25" aria-label="Days to cover weight"><span class="was">live: 0.20</span></div>
+            <div class="set"><span>Beat and raise history</span><input class="input" value="0.20" aria-label="Beat and raise weight"><span class="was">same as live</span></div>
+            <div class="set changed"><span>Estimate revisions</span><input class="input" value="0.15" aria-label="Estimate revisions weight"><span class="was">live: 0.20</span></div>
+          </div>
+          <div class="set-group">
+            <h3>Score bands start at</h3>
+            <div class="set"><span>Strong</span><input class="input" value="72" aria-label="Strong cutoff"><span class="was">same as live</span></div>
+            <div class="set"><span>Elevated</span><input class="input" value="52" aria-label="Elevated cutoff"><span class="was">same as live</span></div>
+            <div class="set"><span>Neutral</span><input class="input" value="40" aria-label="Neutral cutoff"><span class="was">same as live</span></div>
+            <div class="set"><span>Weak</span><input class="input" value="25" aria-label="Weak cutoff"><span class="was">same as live</span></div>
+          </div>
+          <div class="set-group">
+            <h3>What counts as moving sharply</h3>
+            <div class="set"><span>Price change at least</span><input class="input" value="20%" aria-label="Price move threshold"><span class="was">same as live</span></div>
+            <div class="set"><span>or volume at least</span><input class="input" value="3x" aria-label="Volume threshold"><span class="was">same as live</span></div>
+            <div class="set"><span>Trading days before the event</span><input class="input" value="2" aria-label="Days before"><span class="was">same as live</span></div>
+            <div class="set"><span>Trading days after the event</span><input class="input" value="5" aria-label="Days after"><span class="was">same as live</span></div>
+          </div>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="h-why">
+    <h2 id="h-why">Why this draft</h2>
+    <textarea class="input" rows="3" aria-label="Reason for this draft" style="margin-top: var(--s-2);">A 12% short-interest floor should drop the weakest setups without lowering the hit rate. Weights shifted toward days to cover to match.</textarea>
+    <p class="xs faint" style="margin-top: 6px;">Saved with the draft. At least 40 characters.</p>
+  </section>
+
+  <p class="small" style="margin-top: var(--s-7);"><button class="btn-text btn" type="button" style="padding:0; height:auto; color: var(--ink-muted);">Discard this draft</button></p>
+
+  <footer class="foot">
+    <p>Moving sharply means a 20% price change or 3x normal volume around the event, in either direction. It says nothing about profit.</p>
+    <p>Mockup. The v3 settings come from test_results.md and the strategy seed, except the days-to-cover threshold and the weights. Every comparison figure and event row is sample data.</p>
+  </footer>
+</main>
+<script>if (location.hash === "#open") document.querySelectorAll("details").forEach(function (d) { d.open = true; });</script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en" data-surface="lab">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Strategies · Lab</title>
+<link rel="stylesheet" href="lab.css">
+<style>
+  .list { margin-top: var(--s-7); border-top: 1px solid var(--border); }
+  .item { display: grid; grid-template-columns: 190px 1fr auto; gap: var(--s-6); padding: var(--s-5) 0; border-bottom: 1px solid var(--border); align-items: baseline; }
+  .item .name { font-size: var(--fs-md); font-weight: 500; color: var(--ink); }
+  .item .status b { font-weight: 500; }
+  .item .todo { font-size: var(--fs-sm); white-space: nowrap; }
+  .item .more { margin-top: var(--s-3); }
+  .waiting .name, .waiting .status { color: var(--ink-muted); }
+  @media (max-width: 560px) {
+    .item { grid-template-columns: 1fr; gap: 4px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="mark">tradealert.me<span>Lab</span></div>
+    <nav class="nav">
+      <a href="index.html" aria-current="page">Strategies</a>
+      <a href="#">Findings</a>
+      <a href="versions.html#history">History</a>
+    </nav>
+    <div class="who"><span class="internal">Internal. Subscribers never see this.</span><span>Ali</span></div>
+  </div>
+</header>
+
+<main class="page">
+  <h1>Strategies</h1>
+  <p class="sub">Updated 24 Sep 2026 at 06:10 ET. All five are publishing.</p>
+
+  <div class="list">
+    <div class="item">
+      <a class="name" href="performance.html">Fast Mover</a>
+      <div class="status">
+        <p><b>Working.</b> Stocks that pass its filters moved sharply about twice as often as on ordinary days.</p>
+        <div class="more">
+          <details>
+            <summary>Show the numbers</summary>
+            <div class="detail">
+              <dl class="facts">
+                <dt>Passed the filters</dt><dd>Moved in 26 of 32 cases, 81% <span class="faint">(likely 65 to 91%)</span></dd>
+                <dt>Any earnings day</dt><dd>112 of 191, 59%</dd>
+                <dt>Ordinary days</dt><dd>85 of 232, 37%</dd>
+                <dt>New cases</dt><dd>About one every three weeks</dd>
+                <dt>Last 90 days</dt><dd>4 cases, too few to judge on their own</dd>
+                <dt>Largest single stock</dt><dd>AEHR, 7 of the 26 moves</dd>
+              </dl>
+              <p class="small"><a href="performance.html">Full performance</a></p>
+            </div>
+          </details>
+        </div>
+      </div>
+      <a class="todo" href="shadow.html">Review v4 trial, day 23 of 60</a>
+    </div>
+
+    <div class="item waiting">
+      <span class="name">Market Shift</span>
+      <p class="status"><b>Collecting data.</b> 0 of 30 results so far.</p>
+      <span></span>
+    </div>
+    <div class="item waiting">
+      <span class="name">GeoPolitics</span>
+      <p class="status"><b>Collecting data.</b> 0 of 30 results so far.</p>
+      <span></span>
+    </div>
+    <div class="item waiting">
+      <span class="name">Industry Restructure</span>
+      <p class="status"><b>Collecting data.</b> 0 of 30 results so far.</p>
+      <span></span>
+    </div>
+    <div class="item waiting">
+      <span class="name">Monetary Shifts</span>
+      <p class="status"><b>Collecting data.</b> 0 of 30 results so far.</p>
+      <span></span>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <p>Moving sharply means a 20% price change or 3x normal volume around the event, in either direction. It says nothing about profit.</p>
+    <p>Mockup. Fast Mover counts come from the 11 Sep 2026 backtest in test_results.md. The trial and the 90-day count are sample data.</p>
+  </footer>
+</main>
+<script>if (location.hash === "#open") document.querySelectorAll("details").forEach(function (d) { d.open = true; });</script>
+</body>
+</html>

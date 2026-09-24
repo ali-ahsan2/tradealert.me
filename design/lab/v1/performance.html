@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en" data-surface="lab">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Fast Mover performance · Lab</title>
+<link rel="stylesheet" href="lab.css">
+<style>
+  .scope { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-5); margin-top: var(--s-6); }
+  .scope .field { width: 220px; }
+  .headline { display: grid; grid-template-columns: 5fr 4fr 3fr; gap: var(--s-7); align-items: start; }
+  .headline .read { margin-top: var(--s-4); }
+  .split { display: flex; height: 8px; border-radius: 1px; overflow: hidden; margin-top: var(--s-3); max-width: 280px; }
+  .split i { display: block; }
+  .facts3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-5); }
+  .panel .verdict-sm { margin-top: var(--s-5); }
+  .none-row .track::before { opacity: 0.5; }
+  .none-note { position: absolute; left: 0; top: 50%; transform: translateY(-50%); font-size: var(--fs-xs); color: var(--ink-faint); background: var(--surface); padding-right: 8px; }
+  @media (max-width: 900px) {
+    .headline { grid-template-columns: 1fr; gap: var(--s-6); }
+    .scope { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="mark">tradealert.me<span>Lab</span></div>
+    <nav class="nav">
+      <a href="index.html" aria-current="page">Strategies</a>
+      <a href="#">Findings</a>
+      <a href="versions.html#audit">Audit log</a>
+    </nav>
+    <div class="who">
+      <span class="internal">Internal. Subscribers never see this.</span>
+      <span>Ali</span>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <div class="shead">
+    <div>
+      <h1>Fast Mover</h1>
+      <div class="shead-meta">
+        <span><span class="lbl lbl-live">v3 live</span>&nbsp; since 2 Jun 2026</span>
+        <a href="shadow.html">v4 in shadow, day 23 of 60</a>
+        <a href="draft.html">v5 draft</a>
+      </div>
+    </div>
+  </div>
+
+  <nav class="tabs" aria-label="Fast Mover views">
+    <a href="performance.html" aria-current="page">Performance</a>
+    <a href="versions.html">Versions</a>
+    <a href="#">Inputs</a>
+    <a href="#">Regression</a>
+  </nav>
+
+  <div class="scope">
+    <p class="small muted">191 earnings events on 27 tickers, Sep 2024 to Sep 2026. None excluded. Baseline: 232 ordinary days on the same tickers.</p>
+    <div class="field">
+      <label for="ver">Version</label>
+      <select id="ver" class="input"><option>v3, live</option></select>
+    </div>
+  </div>
+
+  <div class="slices" role="group" aria-label="Slice every metric on this page">
+    <div class="field">
+      <label for="f-ind">Industry</label>
+      <select id="f-ind" class="input"><option>All industries</option></select>
+    </div>
+    <div class="field">
+      <label for="f-cap">Market cap</label>
+      <select id="f-cap" class="input"><option>All bands</option></select>
+    </div>
+    <div class="field">
+      <label for="f-exc">Exchange</label>
+      <select id="f-exc" class="input" disabled><option>Not ingested yet</option></select>
+    </div>
+    <div class="field">
+      <label for="f-reg">Region</label>
+      <select id="f-reg" class="input"><option>All regions</option></select>
+    </div>
+    <div class="field">
+      <label for="f-cat">Catalyst type</label>
+      <select id="f-cat" class="input" disabled><option>Earnings only</option></select>
+    </div>
+  </div>
+
+  <section class="section" aria-labelledby="h-lift">
+    <div class="section-head">
+      <h2 id="h-lift">Lift and throughput</h2>
+      <p>Read these together. Tighter filters raise the hit rate by passing fewer names.</p>
+    </div>
+
+    <div class="headline">
+      <div>
+        <div class="fig">+44.6<span class="unit">pts</span></div>
+        <p class="fig-label">Over random days. 95% range +26.9 to +56.1</p>
+        <p class="read">Filter-passers hit 26 of 32 times. Random days on the same tickers hit 85 of 232. The range sits well clear of zero, so the filters are doing something. The exact size is loose at n=32.</p>
+      </div>
+      <div>
+        <div class="fig-md">+22.6<span class="unit">pts</span></div>
+        <p class="fig-label">Over all earnings events. 95% range +4.7 to +34.8</p>
+        <p class="read">A harder comparison, since earnings dates move stocks on their own. Still clear of zero, by less.</p>
+      </div>
+      <div>
+        <div class="fig-md">0.3<span class="unit">a week</span></div>
+        <p class="fig-label">Names passing all six filters</p>
+        <p class="read">32 passes in 104 weeks across 27 tickers.</p>
+      </div>
+    </div>
+
+    <div class="ivl" style="margin-top: var(--s-7); --ivl-label: 170px; --ivl-val: 210px;" role="img" aria-label="Hit rate with 95% range for three groups">
+      <div class="ivl-row">
+        <div class="ivl-name">Random days</div>
+        <div class="track s-base"><div class="gridlines"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i></div><div class="rng" style="left:30.7%; width:12.3%"></div><div class="dot" style="left:36.6%"></div></div>
+        <div class="ivl-val">36.6% <span class="ci">30.7 to 43.0</span> <span class="faint">n=232</span></div>
+      </div>
+      <div class="ivl-row">
+        <div class="ivl-name">All earnings events</div>
+        <div class="track s-base"><div class="gridlines"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i></div><div class="rng" style="left:51.6%; width:13.8%"></div><div class="dot" style="left:58.6%"></div></div>
+        <div class="ivl-val">58.6% <span class="ci">51.6 to 65.4</span> <span class="faint">n=191</span></div>
+      </div>
+      <div class="ivl-row">
+        <div class="ivl-name"><b>Passed all six filters</b></div>
+        <div class="track s-live"><div class="gridlines"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i></div><div class="rng" style="left:64.7%; width:26.4%"></div><div class="dot" style="left:81.2%"></div></div>
+        <div class="ivl-val">81.2% <span class="ci">64.7 to 91.1</span> <span class="faint">n=32</span></div>
+      </div>
+      <div class="ivl-axis"><div></div><div class="axis"><span style="left:0">0%</span><span class="ax-mid" style="left:25%">25</span><span style="left:50%">50</span><span class="ax-mid" style="left:75%">75</span><span style="left:100%">100%</span></div><div></div></div>
+    </div>
+    <div class="chart-foot"><span>Hit: price moved 20% or volume reached 3x its 20-day average, from 2 trading days before to 5 after.</span><a href="#">Show as table</a></div>
+  </section>
+
+  <section class="section">
+    <div class="grid2">
+      <div class="panel">
+        <h3>Hit rate by band</h3>
+        <p class="read">If the bands are not ordered, the score adds nothing over the filters.</p>
+        <div class="ivl" style="margin-top: var(--s-5); --ivl-label: 72px; --ivl-val: 96px; --s-4: 12px;">
+          <div class="ivl-row">
+            <div class="ivl-name">Strong</div>
+            <div class="track s-live"><div class="gridlines"><i style="left:50%"></i></div><div class="rng" style="left:55.2%; width:40.1%"></div><div class="dot" style="left:83.3%"></div></div>
+            <div class="ivl-val">83.3% <span class="faint">n=12</span></div>
+          </div>
+          <div class="ivl-row">
+            <div class="ivl-name">Elevated</div>
+            <div class="track s-live"><div class="gridlines"><i style="left:50%"></i></div><div class="rng" style="left:54.8%; width:38.2%"></div><div class="dot" style="left:80.0%"></div></div>
+            <div class="ivl-val">80.0% <span class="faint">n=15</span></div>
+          </div>
+          <div class="ivl-row none-row">
+            <div class="ivl-name">Neutral</div>
+            <div class="track"><span class="none-note">5 events, too few for a rate</span></div>
+            <div class="ivl-val faint">n=5</div>
+          </div>
+          <div class="ivl-axis"><div></div><div class="axis"><span style="left:0">0%</span><span style="left:50%">50</span><span style="left:100%">100%</span></div><div></div></div>
+        </div>
+        <p class="verdict-sm">Can't tell yet.</p>
+        <p class="read" style="margin-top: 4px;">Strong and Elevated overlap almost completely. That matches the earlier test, which found no link between score and move size.</p>
+      </div>
+
+      <div class="panel">
+        <h3>Last 90 days against all time</h3>
+        <p class="read">A falling recent rate is the first sign a filter set is decaying.</p>
+        <div class="ivl" style="margin-top: var(--s-5); --ivl-label: 72px; --ivl-val: 96px; --s-4: 12px;">
+          <div class="ivl-row">
+            <div class="ivl-name">All time</div>
+            <div class="track s-live"><div class="gridlines"><i style="left:50%"></i></div><div class="rng" style="left:64.7%; width:26.4%"></div><div class="dot" style="left:81.2%"></div></div>
+            <div class="ivl-val">81.2% <span class="faint">n=32</span></div>
+          </div>
+          <div class="ivl-row none-row">
+            <div class="ivl-name">90 days</div>
+            <div class="track"><span class="none-note">4 events, too few for a rate</span></div>
+            <div class="ivl-val faint">n=4</div>
+          </div>
+          <div class="ivl-axis"><div></div><div class="axis"><span style="left:0">0%</span><span style="left:50%">50</span><span style="left:100%">100%</span></div><div></div></div>
+        </div>
+        <p class="verdict-sm">Can't tell yet.</p>
+        <p class="read" style="margin-top: 4px;">At 0.3 passes a week a 90-day window holds about 4 events. It needs 10 before a rate is shown. Shadow runs on the full live universe and fills faster.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="grid2">
+      <div>
+        <div class="section-head"><h2>Filter attribution</h2><p>Each row drops one filter</p></div>
+        <table class="t">
+          <thead><tr><th scope="col">Filter removed</th><th scope="col" class="n">Passes</th><th scope="col" class="n">Hit rate</th><th scope="col" class="n">95% range</th><th scope="col" class="n">Change</th></tr></thead>
+          <tbody>
+            <tr><td>None</td><td class="n">32</td><td class="n">81.2%</td><td class="n rg">64.7 to 91.1</td><td class="n faint">base</td></tr>
+            <tr><td>Short interest</td><td class="n">58</td><td class="n">69.0%</td><td class="n rg">56.2 to 79.4</td><td class="n">−12.2</td></tr>
+            <tr><td>Revenue growth</td><td class="n">55</td><td class="n">69.1%</td><td class="n rg">56.0 to 79.7</td><td class="n">−12.1</td></tr>
+            <tr><td>Float</td><td class="n">41</td><td class="n">75.6%</td><td class="n rg">60.7 to 86.2</td><td class="n">−5.6</td></tr>
+            <tr><td>Market cap</td><td class="n">39</td><td class="n">79.5%</td><td class="n rg">64.5 to 89.2</td><td class="n">−1.7</td></tr>
+            <tr><td>Days to cover</td><td class="n">36</td><td class="n">80.6%</td><td class="n rg">65.0 to 90.2</td><td class="n">−0.6</td></tr>
+            <tr class="muted-row"><td>Dated catalyst</td><td class="n">32</td><td class="note" colspan="3">No effect. Every event is an earnings date.</td></tr>
+          </tbody>
+        </table>
+        <p class="read" style="margin-top: var(--s-4);">Short interest and revenue growth carry most of the result. Every change here sits inside the ranges, so none is proven on its own.</p>
+      </div>
+
+      <div>
+        <div class="section-head"><h2>Near misses</h2><p>Failed exactly one filter</p></div>
+        <table class="t">
+          <thead><tr><th scope="col">Filter failed</th><th scope="col" class="n">Events</th><th scope="col" class="n">Hit rate</th><th scope="col" class="n">95% range</th></tr></thead>
+          <tbody>
+            <tr><td>Any one</td><td class="n">44</td><td class="n">61.4%</td><td class="n rg">46.6 to 74.3</td></tr>
+            <tr><td>Short interest</td><td class="n">18</td><td class="n">55.6%</td><td class="n rg">33.7 to 75.4</td></tr>
+            <tr><td>Revenue growth</td><td class="n">16</td><td class="n">56.2%</td><td class="n rg">33.2 to 76.9</td></tr>
+            <tr class="muted-row"><td>Float</td><td class="n">6</td><td class="note" colspan="2">Too few for a rate</td></tr>
+            <tr class="muted-row"><td>Market cap</td><td class="n">4</td><td class="note" colspan="2">Too few for a rate</td></tr>
+          </tbody>
+        </table>
+        <p class="read" style="margin-top: var(--s-4);">Near misses hit about as often as earnings events in general. Nothing suggests a threshold is set too tight.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="grid2">
+      <div>
+        <div class="section-head"><h2>Direction and timing of hits</h2><p>26 hits</p></div>
+        <div class="facts3">
+          <div><div class="fig-sm">21 <span class="unit">up</span> 5 <span class="unit">down</span></div><div class="split" aria-hidden="true"><i style="width:80.8%; background: var(--pos)"></i><i style="width:19.2%; background: var(--neg)"></i></div></div>
+          <div><div class="fig-sm">2<span class="unit">trading days</span></div><p class="fig-label">Median time to the move</p></div>
+          <div><div class="fig-sm">24%</div><p class="fig-label">Median price move among hits</p></div>
+        </div>
+        <p class="read" style="margin-top: var(--s-5);">The hit definition ignores direction. One in five hits was a drop, which a subscriber reading the signal as bullish would not expect.</p>
+        <div class="section-head" style="margin-top: var(--s-7);"><h2>Data coverage</h2></div>
+        <dl class="facts">
+          <dt>Events used</dt><dd>191 of 191</dd>
+          <dt>Score shrunk to neutral</dt><dd>11 of 191 events</dd>
+          <dt>Short interest</dt><dd>FINRA report on or before each event date</dd>
+          <dt>Share count</dt><dd>SEC filing on file at each event date</dd>
+        </dl>
+        <div class="section-head" style="margin-top: var(--s-7);"><h2>Review overrides</h2></div>
+        <p class="read">Starts when the Publish layer ships. Until reviewers can hold back a name, there is nothing to count.</p>
+      </div>
+
+      <div>
+        <div class="section-head"><h2>Concentration</h2><p>Largest name must stay under 40% of passes</p></div>
+        <table class="t">
+          <thead><tr><th scope="col">Ticker</th><th scope="col" class="n">Passes</th><th scope="col" class="n">Hits</th><th scope="col" class="n">Share</th><th scope="col"><span class="sr">Share bar</span></th></tr></thead>
+          <tbody>
+            <tr><td class="tk">INOD</td><td class="n">8</td><td class="n">6</td><td class="n">25.0%</td><td><span class="mini" style="margin-left:0"><i style="width:25%"></i><b style="left:40%"></b></span></td></tr>
+            <tr><td class="tk">AEHR</td><td class="n">7</td><td class="n">7</td><td class="n">21.9%</td><td><span class="mini" style="margin-left:0"><i style="width:21.9%"></i><b style="left:40%"></b></span></td></tr>
+            <tr><td class="tk">BKSY</td><td class="n">5</td><td class="n">3</td><td class="n">15.6%</td><td><span class="mini" style="margin-left:0"><i style="width:15.6%"></i><b style="left:40%"></b></span></td></tr>
+            <tr><td class="tk">SEZL</td><td class="n">4</td><td class="n">4</td><td class="n">12.5%</td><td><span class="mini" style="margin-left:0"><i style="width:12.5%"></i><b style="left:40%"></b></span></td></tr>
+            <tr><td class="tk">TSSI</td><td class="n">3</td><td class="n">3</td><td class="n">9.4%</td><td><span class="mini" style="margin-left:0"><i style="width:9.4%"></i><b style="left:40%"></b></span></td></tr>
+            <tr><td class="tk">PDYN</td><td class="n">3</td><td class="n">1</td><td class="n">9.4%</td><td><span class="mini" style="margin-left:0"><i style="width:9.4%"></i><b style="left:40%"></b></span></td></tr>
+            <tr><td class="tk">DUOT</td><td class="n">1</td><td class="n">1</td><td class="n">3.1%</td><td><span class="mini" style="margin-left:0"><i style="width:3.1%"></i><b style="left:40%"></b></span></td></tr>
+            <tr><td class="tk">OUST</td><td class="n">1</td><td class="n">1</td><td class="n">3.1%</td><td><span class="mini" style="margin-left:0"><i style="width:3.1%"></i><b style="left:40%"></b></span></td></tr>
+          </tbody>
+        </table>
+        <p class="read" style="margin-top: var(--s-4);">Eight tickers. AEHR supplies the most hits, 7 of 26. The thin mark on each bar is the 40% limit.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>By industry</h2>
+      <div class="field" style="width: 200px;"><select class="input" aria-label="Break down by"><option>Break down by industry</option></select></div>
+    </div>
+    <table class="t">
+      <thead><tr><th scope="col">Industry</th><th scope="col" class="n">Passes</th><th scope="col" class="n">Hit rate</th><th scope="col" class="n">95% range</th><th scope="col" class="n">Tickers</th><th scope="col">Reading</th></tr></thead>
+      <tbody>
+        <tr><td>AI software and data centers</td><td class="n">12</td><td class="n">83.3%</td><td class="n faint">55.2 to 95.3</td><td class="n">3</td><td class="muted">Can't tell yet. INOD is 8 of the 12.</td></tr>
+        <tr><td>Semiconductors and hardware</td><td class="n">8</td><td class="note" colspan="2">Too few for a rate</td><td class="n">2</td><td class="muted">Needs 2 more passes</td></tr>
+        <tr><td>Defense, drones and space</td><td class="n">8</td><td class="note" colspan="2">Too few for a rate</td><td class="n">2</td><td class="muted">Needs 2 more passes</td></tr>
+        <tr><td>Fintech and payments</td><td class="n">4</td><td class="note" colspan="2">Too few for a rate</td><td class="n">1</td><td class="muted">Needs 6 more passes</td></tr>
+      </tbody>
+    </table>
+    <p class="read" style="margin-top: var(--s-4);">Only one industry reaches 10 passes, and one ticker supplies most of it. Industry comparisons are not readable yet.</p>
+  </section>
+
+  <footer class="limits">
+    <p>This measures whether a move happened, not its direction and not whether a trade would have been profitable. Results describe the instruments and period selected, not future market conditions.</p>
+    <p>Mockup. Group hit rates, counts and the ticker table come from test_results.md (run 11 Sep 2026). Band, attribution, near-miss, direction, timing, shrinkage and 90-day figures are sample data. Industry assignments are illustrative.</p>
+  </footer>
+</main>
+</body>
+</html>

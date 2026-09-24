@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en" data-surface="lab">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Fast Mover versions · Lab</title>
+<link rel="stylesheet" href="lab.css">
+<style>
+  .live { display: grid; grid-template-columns: 1fr auto; gap: var(--s-6); align-items: center; margin-top: var(--s-6); padding: var(--s-5) var(--s-6); }
+  .vdesc .row { gap: var(--s-3); }
+  .vdesc p { margin-top: 6px; }
+  .vmeta { font-size: var(--fs-sm); color: var(--ink-muted); }
+  .vmeta span { display: block; color: var(--ink-faint); font-size: var(--fs-xs); }
+  .log td { font-size: var(--fs-sm); }
+  .log td:first-child { white-space: nowrap; }
+  .retired .vnum { color: var(--ink-faint); }
+  @media (max-width: 900px) { .live { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="mark">tradealert.me<span>Lab</span></div>
+    <nav class="nav">
+      <a href="index.html" aria-current="page">Strategies</a>
+      <a href="#">Findings</a>
+      <a href="versions.html#audit">Audit log</a>
+    </nav>
+    <div class="who">
+      <span class="internal">Internal. Subscribers never see this.</span>
+      <span>Ali</span>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <div class="shead">
+    <div>
+      <h1>Fast Mover</h1>
+      <div class="shead-meta">
+        <span><span class="lbl lbl-live">v3 live</span>&nbsp; since 2 Jun 2026</span>
+        <a href="shadow.html">v4 in shadow, day 23 of 60</a>
+        <a href="draft.html">v5 draft</a>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" type="button">New draft from v3</button>
+    </div>
+  </div>
+
+  <nav class="tabs" aria-label="Fast Mover views">
+    <a href="performance.html">Performance</a>
+    <a href="versions.html" aria-current="page">Versions</a>
+    <a href="#">Inputs</a>
+    <a href="#">Regression</a>
+  </nav>
+
+  <div class="panel live">
+    <div>
+      <h3>Publishing is on</h3>
+      <p class="read" style="margin-top: 4px;">Subscribers see v3. Last published run 24 Sep 2026 at 06:10 ET, 11 names on the Board. Pausing keeps scoring running and freezes the Board on the last published run.</p>
+    </div>
+    <div class="actions">
+      <button class="btn" type="button">Pause publishing</button>
+    </div>
+  </div>
+
+  <section class="section" aria-labelledby="h-ver">
+    <div class="section-head">
+      <h2 id="h-ver">Versions</h2>
+      <p>Newest first. A version cannot be edited once it leaves Draft.</p>
+    </div>
+
+    <div class="vrow">
+      <div class="vnum">v5</div>
+      <div class="vdesc">
+        <div class="row"><span class="lbl lbl-draft">Draft</span></div>
+        <p class="small">Short interest floor 10% → 12%. Days to cover weight 0.20 → 0.25. Estimate revisions weight 0.20 → 0.15.</p>
+        <p class="small faint">Compared with v3 on 143 events: can't tell yet.</p>
+      </div>
+      <div class="vmeta">Copied from v3<span>22 Sep 2026, Ali</span></div>
+      <div class="actions"><a class="btn" href="draft.html">Open</a></div>
+    </div>
+
+    <div class="vrow">
+      <div class="vnum">v4</div>
+      <div class="vdesc">
+        <div class="row"><span class="lbl lbl-shadow">Shadow</span><span class="small muted">Day 23 of 60</span></div>
+        <p class="small">Revenue growth floor 40% → 30%. Float tightness weight 0.20 → 0.25. Estimate revisions weight 0.20 → 0.15.</p>
+        <p class="small faint">14 outcomes so far. 71.4% against 75.0% for v3: can't tell yet.</p>
+      </div>
+      <div class="vmeta">In shadow since 2 Sep 2026<span>Frozen 1 Sep 2026, Ali</span></div>
+      <div class="actions"><a class="btn" href="shadow.html">Review</a></div>
+    </div>
+
+    <div class="vrow">
+      <div class="vnum">v3</div>
+      <div class="vdesc">
+        <div class="row"><span class="lbl lbl-live">Live</span></div>
+        <p class="small">Market cap ceiling $5B → $3B. Catalyst window 21 → 14 days.</p>
+        <p class="small faint">81.2% of 32 filter passes against 36.6% on random days.</p>
+      </div>
+      <div class="vmeta">Live since 2 Jun 2026<span>Promoted by Ali after 60 days in shadow</span></div>
+      <div class="actions"><a class="btn" href="performance.html">Performance</a></div>
+    </div>
+
+    <div class="vrow retired">
+      <div class="vnum">v2</div>
+      <div class="vdesc">
+        <div class="row"><span class="lbl lbl-retired">Retired</span></div>
+        <p class="small muted">Revenue growth floor 30% → 40%.</p>
+      </div>
+      <div class="vmeta">Live 11 Feb to 2 Jun 2026<span>111 days</span></div>
+      <div class="actions"><button class="btn" type="button">Roll back to v2</button></div>
+    </div>
+
+    <div class="vrow retired">
+      <div class="vnum">v1</div>
+      <div class="vdesc">
+        <div class="row"><span class="lbl lbl-retired">Retired</span></div>
+        <p class="small muted">First version, from the original screen.</p>
+      </div>
+      <div class="vmeta">Live 18 Sep 2025 to 11 Feb 2026<span>146 days</span></div>
+      <div class="actions"><button class="btn" type="button">Roll back to v1</button></div>
+    </div>
+  </section>
+
+  <section class="section" id="audit" aria-labelledby="h-audit">
+    <div class="section-head">
+      <h2 id="h-audit">Audit log</h2>
+      <p>Every state change, with who made it and why</p>
+    </div>
+    <table class="t log">
+      <thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">Change</th><th scope="col">Reason</th><th scope="col">Evidence</th></tr></thead>
+      <tbody>
+        <tr><td class="num">22 Sep 2026 11:05</td><td>Ali</td><td>v5 draft created from v3</td><td class="muted">Test a 12% short-interest floor.</td><td class="faint">None</td></tr>
+        <tr><td class="num">2 Sep 2026 09:14</td><td>Ali</td><td>v4 Tested → Shadow</td><td class="muted">Holdout check did not show v4 worse.</td><td><a href="#">Query 41</a></td></tr>
+        <tr><td class="num">1 Sep 2026 16:40</td><td>Ali</td><td>v4 Draft → Tested</td><td class="muted">A lower revenue floor may admit more names at a similar hit rate.</td><td><a href="#">Query 38</a></td></tr>
+        <tr><td class="num">15 Jul 2026 07:02</td><td>Ali</td><td>Publishing resumed</td><td class="muted">FINRA mid-July file arrived and was ingested.</td><td class="faint">None</td></tr>
+        <tr><td class="num">14 Jul 2026 18:30</td><td>Ali</td><td><span class="warn">Publishing paused</span></td><td class="muted">FINRA mid-July file late. Short interest would have been 19 days old.</td><td class="faint">None</td></tr>
+        <tr><td class="num">2 Jun 2026 06:00</td><td>Ali</td><td>v3 Shadow → Live, v2 retired</td><td class="muted">60 days in shadow, no difference against v2 and a tighter cap band.</td><td><a href="#">Query 22</a></td></tr>
+      </tbody>
+    </table>
+    <p class="small" style="margin-top: var(--s-4);"><a href="#">Show 9 older entries</a></p>
+  </section>
+
+  <footer class="limits">
+    <p>Mockup. Version history, dates, reasons and query numbers are sample data. The v3 hit rates come from test_results.md.</p>
+  </footer>
+</main>
+</body>
+</html>

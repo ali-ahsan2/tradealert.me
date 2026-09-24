@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en" data-surface="lab">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Fast Mover versions · Lab</title>
+<link rel="stylesheet" href="lab.css">
+<style>
+  .vlist { margin-top: var(--s-7); border-top: 1px solid var(--border); }
+  .v { display: grid; grid-template-columns: 56px 110px 1fr auto; gap: var(--s-5); align-items: baseline; padding: var(--s-4) 0; border-bottom: 1px solid var(--border); }
+  .v .n { font-family: var(--lab-font-display); font-size: var(--fs-lg); line-height: 1; }
+  .v .state { font-size: var(--fs-sm); color: var(--ink-muted); }
+  .v .state.live { color: var(--ink); font-weight: 500; }
+  .v .go { font-size: var(--fs-sm); white-space: nowrap; }
+  .v.old .n, .v.old p { color: var(--ink-muted); }
+  .pub { display: flex; gap: var(--s-4); align-items: baseline; margin-top: var(--s-6); font-size: var(--fs-sm); color: var(--ink-muted); }
+  @media (max-width: 560px) { .v { grid-template-columns: 44px 1fr auto; } .v .state { grid-column: 2; } .v p { grid-column: 2 / -1; } }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="mark">tradealert.me<span>Lab</span></div>
+    <nav class="nav">
+      <a href="index.html" aria-current="page">Strategies</a>
+      <a href="#">Findings</a>
+      <a href="versions.html#history">History</a>
+    </nav>
+    <div class="who"><span class="internal">Internal. Subscribers never see this.</span><span>Ali</span></div>
+  </div>
+</header>
+
+<main class="page">
+  <h1>Fast Mover</h1>
+  <nav class="views" aria-label="Fast Mover views">
+    <a href="performance.html">Performance</a>
+    <a href="versions.html" aria-current="page">Versions</a>
+    <a href="#">Inputs</a>
+    <a href="#">Regression</a>
+  </nav>
+
+  <p class="answer"><b>v3 is live.</b> v4 is on trial and v5 is a draft.</p>
+
+  <div class="pub">
+    <span>Subscribers see v3. Last published 24 Sep at 06:10 ET.</span>
+    <button class="btn btn-text" type="button" style="height:auto;">Pause publishing</button>
+  </div>
+
+  <div class="vlist">
+    <div class="v">
+      <span class="n">v5</span><span class="state">Draft</span>
+      <p>Stricter short-interest filter. Compared with live: can't tell yet.</p>
+      <a class="go" href="draft.html">Open</a>
+    </div>
+    <div class="v">
+      <span class="n">v4</span><span class="state">On trial</span>
+      <p>Lower revenue growth floor. Day 23 of 60.</p>
+      <a class="go" href="shadow.html">Review</a>
+    </div>
+    <div class="v">
+      <span class="n">v3</span><span class="state live">Live</span>
+      <p>Since 2 Jun 2026. Moves sharply 81% of the time.</p>
+      <a class="go" href="performance.html">Performance</a>
+    </div>
+    <div class="v old">
+      <span class="n">v2</span><span class="state">Retired</span>
+      <p>Live 11 Feb to 2 Jun 2026.</p>
+      <button class="btn btn-text go" type="button" style="height:auto; padding:0; font-weight:400;">Restore</button>
+    </div>
+    <div class="v old">
+      <span class="n">v1</span><span class="state">Retired</span>
+      <p>Live 18 Sep 2025 to 11 Feb 2026.</p>
+      <button class="btn btn-text go" type="button" style="height:auto; padding:0; font-weight:400;">Restore</button>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-primary" type="button">Start a new draft</button>
+    <span class="small faint">Copies the live version. You can copy any other version from its page.</span>
+  </div>
+
+  <section class="section" id="history" aria-labelledby="h-hist">
+    <h2 id="h-hist" class="sr">History</h2>
+    <details>
+      <summary><span class="q">History</span><span class="a">Last change 22 Sep: v5 draft started.</span></summary>
+      <div class="detail">
+        <table class="t">
+          <thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">Change</th><th scope="col">Reason</th><th scope="col">Evidence</th></tr></thead>
+          <tbody>
+            <tr><td class="num">2026-09-22 11:05</td><td>Ali</td><td>v5 draft started from v3</td><td class="muted">Test a 12% short-interest floor.</td><td class="faint">None</td></tr>
+            <tr><td class="num">2026-09-02 09:14</td><td>Ali</td><td>v4 trial started</td><td class="muted">Check did not show v4 worse.</td><td><a href="#">Query 41</a></td></tr>
+            <tr><td class="num">2026-09-01 16:40</td><td>Ali</td><td>v4 frozen</td><td class="muted">A lower revenue floor may admit more names at a similar rate.</td><td><a href="#">Query 38</a></td></tr>
+            <tr><td class="num">2026-07-15 07:02</td><td>Ali</td><td>Publishing resumed</td><td class="muted">FINRA mid-July file arrived.</td><td class="faint">None</td></tr>
+            <tr><td class="num">2026-07-14 18:30</td><td>Ali</td><td class="warn">Publishing paused</td><td class="muted">FINRA file late. Short interest would have been 19 days old.</td><td class="faint">None</td></tr>
+            <tr><td class="num">2026-06-02 06:00</td><td>Ali</td><td>v3 live, v2 retired</td><td class="muted">60 days on trial, no difference against v2.</td><td><a href="#">Query 22</a></td></tr>
+          </tbody>
+        </table>
+        <p class="small"><a href="#">Show 9 older changes</a></p>
+      </div>
+    </details>
+    <details>
+      <summary><span class="q">Compare two versions</span><span class="a">Setting by setting, on the same events.</span></summary>
+      <div class="detail">
+        <div class="slices" style="display:grid; grid-template-columns: 1fr 1fr auto; gap: var(--s-4); align-items: end;">
+          <div class="field"><label for="ca">From</label><select id="ca" class="input"><option>v2</option></select></div>
+          <div class="field"><label for="cb">To</label><select id="cb" class="input"><option>v3</option></select></div>
+          <button class="btn" type="button">Compare</button>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <footer class="foot">
+    <p>Mockup. Version history, dates, reasons and query numbers are sample data. The v3 rate comes from test_results.md.</p>
+  </footer>
+</main>
+<script>if (location.hash === "#open") document.querySelectorAll("details").forEach(function (d) { d.open = true; });</script>
+</body>
+</html>

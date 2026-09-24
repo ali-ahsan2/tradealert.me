@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en" data-surface="lab">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Promote v4 early · Lab</title>
+<link rel="stylesheet" href="lab.css">
+<style>
+  .prog { display: grid; grid-template-columns: 260px 1fr; gap: var(--s-7); align-items: start; margin-top: var(--s-6); }
+  .tl { height: 56px; }
+  .legend { display: flex; gap: var(--s-5); font-size: var(--fs-xs); color: var(--ink-faint); margin-top: var(--s-2); }
+  .legend i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  .changes { list-style: none; margin: 0; padding: 0; font-size: var(--fs-sm); }
+  .changes li { display: grid; grid-template-columns: 1fr auto; gap: var(--s-4); padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .changes li:last-child { border-bottom: 0; }
+  .promote { display: grid; grid-template-columns: 1fr auto; gap: var(--s-6); align-items: center; }
+  @media (max-width: 900px) { .prog, .promote { grid-template-columns: 1fr; gap: var(--s-5); } }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="mark">tradealert.me<span>Lab</span></div>
+    <nav class="nav">
+      <a href="index.html" aria-current="page">Strategies</a>
+      <a href="#">Findings</a>
+      <a href="versions.html#audit">Audit log</a>
+    </nav>
+    <div class="who">
+      <span class="internal">Internal. Subscribers never see this.</span>
+      <span>Ali</span>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <div class="shead">
+    <div>
+      <h1>Fast Mover v4 <span class="lbl lbl-shadow" style="font-family: var(--font-sans); vertical-align: 6px;">Shadow</span></h1>
+      <div class="shead-meta">
+        <span>Scoring beside v3 since 2 Sep 2026. Nothing from v4 is published.</span>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" type="button">End shadow</button>
+    </div>
+  </div>
+
+  <nav class="tabs" aria-label="Fast Mover views">
+    <a href="performance.html">Performance</a>
+    <a href="versions.html" aria-current="page">Versions</a>
+    <a href="#">Inputs</a>
+    <a href="#">Regression</a>
+  </nav>
+
+  <section class="prog" aria-labelledby="h-day">
+    <div>
+      <div class="fig" id="h-day">Day 23<span class="unit">of 60</span></div>
+      <p class="fig-label">Normal promotion opens on 31 Oct 2026. Before then it needs a written reason.</p>
+    </div>
+    <div>
+      <div class="tl" role="img" aria-label="Shadow timeline: day 23 of 60, 14 resolved outcomes, 10 hits and 4 misses">
+        <div class="tl-track"></div>
+        <div class="tl-fill" style="width: 38.33%"></div>
+        <div class="tl-tick" style="left: 100%"></div>
+        <span class="tl-o hit" style="left:5%"></span>
+        <span class="tl-o hit" style="left:6.67%"></span>
+        <span class="tl-o miss" style="left:8.33%"></span>
+        <span class="tl-o hit" style="left:10%"></span>
+        <span class="tl-o hit" style="left:13.33%"></span>
+        <span class="tl-o hit" style="left:15%"></span>
+        <span class="tl-o miss" style="left:16.67%"></span>
+        <span class="tl-o hit" style="left:18.33%"></span>
+        <span class="tl-o hit" style="left:20%"></span>
+        <span class="tl-o miss" style="left:23.33%"></span>
+        <span class="tl-o hit" style="left:25%"></span>
+        <span class="tl-o hit" style="left:26.67%"></span>
+        <span class="tl-o miss" style="left:28.33%"></span>
+        <span class="tl-o hit" style="left:30%"></span>
+        <span class="tl-lab" style="left: 0; transform: none;">2 Sep</span>
+        <span class="tl-lab" style="left: 38.33%">today</span>
+        <span class="tl-lab" style="left: 100%; transform: translateX(-100%);">31 Oct, day 60</span>
+      </div>
+      <div class="legend"><span><i style="background: var(--pos)"></i>Hit</span><span><i style="border: 1.5px solid var(--neg)"></i>Miss</span><span>Each mark is a v4 outcome on the day its window closed.</span></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>v4 against v3, same days</h2>
+      <p>6 more names are inside their 5-day window and will resolve by 1 Oct</p>
+    </div>
+    <div class="grid-7-5">
+      <div>
+        <p class="verdict">Can't tell yet.</p>
+        <p class="read" style="margin-top: var(--s-2);">v4 is 3.6 points behind v3, with a range from 34.2 behind to 29.3 ahead. Fourteen outcomes cannot separate them. At the current pace v4 reaches 30 outcomes around day 49.</p>
+
+        <div class="ivl" style="margin-top: var(--s-6); --ivl-label: 88px; --ivl-val: 200px;" role="img" aria-label="Hit rate during shadow: v3 75.0% (46.8 to 91.1), v4 71.4% (45.4 to 88.3)">
+          <div class="ivl-row">
+            <div class="ivl-name">v3 live</div>
+            <div class="track s-live"><div class="gridlines"><i style="left:50%"></i></div><div class="rng" style="left:46.8%; width:44.3%"></div><div class="dot" style="left:75%"></div></div>
+            <div class="ivl-val">75.0% <span class="ci">46.8 to 91.1</span> <span class="faint">n=12</span></div>
+          </div>
+          <div class="ivl-row">
+            <div class="ivl-name"><b>v4 shadow</b></div>
+            <div class="track s-cand"><div class="gridlines"><i style="left:50%"></i></div><div class="rng" style="left:45.4%; width:42.9%"></div><div class="dot" style="left:71.4%"></div></div>
+            <div class="ivl-val">71.4% <span class="ci">45.4 to 88.3</span> <span class="faint">n=14</span></div>
+          </div>
+          <div class="ivl-axis"><div></div><div class="axis"><span style="left:0">0%</span><span style="left:50%">50</span><span style="left:100%">100%</span></div><div></div></div>
+        </div>
+      </div>
+      <div>
+        <dl class="facts">
+          <dt>Passed both</dt><dd class="num">9</dd>
+          <dt>Passed v4 only</dt><dd><span class="num">5</span> <span class="faint">3 hits</span></dd>
+          <dt>Passed v3 only</dt><dd><span class="num">3</span> <span class="faint">2 hits</span></dd>
+          <dt>Awaiting outcome</dt><dd class="num">6</dd>
+        </dl>
+        <hr class="rule">
+        <p class="small faint">Holdout check, 2 Sep</p>
+        <p class="small" style="margin-top: 4px;">On the 48 held-back events v3 passed 8 and v4 passed 11. Too few to compare, so v4 was not shown to be worse and shadow went ahead.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="grid2">
+      <div>
+        <div class="section-head"><h2>What v4 changes</h2><p>Against v3</p></div>
+        <ul class="changes">
+          <li><span>Revenue growth floor</span><span class="num">40% → 30%</span></li>
+          <li><span>Float tightness weight</span><span class="num">0.20 → 0.25</span></li>
+          <li><span>Estimate revisions weight</span><span class="num">0.20 → 0.15</span></li>
+          <li class="faint"><span>Other fields</span><span>unchanged, 14 fields</span></li>
+        </ul>
+      </div>
+      <div>
+        <div class="section-head"><h2>Recent outcomes</h2><a class="small" href="#">All 14</a></div>
+        <table class="t">
+          <thead><tr><th scope="col">Ticker</th><th scope="col">Event</th><th scope="col">Passed</th><th scope="col" class="n">Move</th><th scope="col">Outcome</th></tr></thead>
+          <tbody>
+            <tr><td class="tk">KULR</td><td class="num small">2026-09-16</td><td>v4 only</td><td class="n">+22.4%</td><td class="pos">Hit</td></tr>
+            <tr><td class="tk">SERV</td><td class="num small">2026-09-15</td><td>Both</td><td class="n">+8.9%</td><td class="neg">Miss</td></tr>
+            <tr><td class="tk">LAES</td><td class="num small">2026-09-12</td><td>Both</td><td class="n">+34.0%</td><td class="pos">Hit</td></tr>
+            <tr><td class="tk">APLD</td><td class="num small">2026-09-11</td><td>v3 only</td><td class="n">+3.2%</td><td class="neg">Miss</td></tr>
+            <tr><td class="tk">RGTI</td><td class="num small">2026-09-10</td><td>Both</td><td class="n">−24.6%</td><td class="pos">Hit</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="panel promote">
+      <div>
+        <h3>Promotion</h3>
+        <p class="read" style="margin-top: 6px;">Promoting makes v4 live from the next scoring run. v3 becomes Retired and stays one click from rollback. An early promotion shows the numbers above in a confirmation and marks v4 Provisional until it has 30 live outcomes.</p>
+      </div>
+      <div class="actions">
+        <button class="btn" type="button" disabled>Promote on day 60</button>
+        <a class="btn btn-primary" href="shadow-promote.html">Promote early</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="limits">
+    <p>This measures whether a move happened, not its direction and not whether a trade would have been profitable. Results describe the instruments and period selected, not future market conditions.</p>
+    <p>Mockup. Every figure on this page is sample data for layout.</p>
+  </footer>
+</main>
+
+<div class="scrim">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-h">
+    <h2 id="dlg-h">Promote v4 on day 23 of 60</h2>
+    <p class="read" style="margin-top: var(--s-2);">This is an early promotion. It is recorded in the audit log with your reason, and v4 carries a Provisional label in the Lab until it has 30 resolved outcomes as live.</p>
+
+    <table class="t" style="margin-top: var(--s-5);">
+      <thead><tr><th scope="col">During shadow</th><th scope="col" class="n">Outcomes</th><th scope="col" class="n">Hit rate</th><th scope="col" class="n">95% range</th></tr></thead>
+      <tbody>
+        <tr><td>v3 live</td><td class="n">12</td><td class="n">75.0%</td><td class="n rg">46.8 to 91.1</td></tr>
+        <tr><td>v4 shadow</td><td class="n">14</td><td class="n">71.4%</td><td class="n rg">45.4 to 88.3</td></tr>
+        <tr><td>Difference</td><td class="n"></td><td class="n">−3.6</td><td class="n rg">−34.2 to +29.3</td></tr>
+      </tbody>
+    </table>
+
+    <div class="ivl" style="margin-top: var(--s-4); --ivl-label: 80px; --ivl-val: 0px;" aria-hidden="true">
+      <div class="ivl-row" style="height: 30px;">
+        <div class="ivl-name">v3</div>
+        <div class="track s-live" style="height: 30px;"><div class="rng" style="left:46.8%; width:44.3%"></div><div class="dot" style="left:75%"></div></div>
+        <div></div>
+      </div>
+      <div class="ivl-row" style="height: 30px;">
+        <div class="ivl-name">v4</div>
+        <div class="track s-cand" style="height: 30px;"><div class="rng" style="left:45.4%; width:42.9%"></div><div class="dot" style="left:71.4%"></div></div>
+        <div></div>
+      </div>
+      <div class="ivl-axis"><div></div><div class="axis"><span style="left:0">0%</span><span style="left:50%">50</span><span style="left:100%">100%</span></div><div></div></div>
+    </div>
+
+    <p class="verdict-sm" style="margin-top: var(--s-5);">Can't tell yet.</p>
+    <p class="read" style="margin-top: 4px;">The ranges overlap almost entirely. Shadow has not shown v4 to be better or worse than v3.</p>
+
+    <div class="field" style="margin-top: var(--s-5);">
+      <label for="why">Why promote before day 60</label>
+      <textarea id="why" class="input" rows="3">v4 lowers the revenue growth floor to 30%, which admits the AI infrastructure names reporting in early October. Waiting for day 60 misses that season.</textarea>
+      <span class="xs faint">150 characters. 40 minimum.</span>
+    </div>
+
+    <dl class="facts" style="margin-top: var(--s-5);">
+      <dt>Takes effect</dt><dd>Next scoring run, 25 Sep 2026 at 06:10 ET</dd>
+      <dt>v3</dt><dd>Becomes Retired. Rollback stays available.</dd>
+    </dl>
+
+    <div class="dialog-foot">
+      <button class="btn btn-text" type="button">Keep in shadow</button>
+      <button class="btn btn-primary" type="button">Promote v4 early</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
