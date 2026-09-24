@@ -1,44 +1,49 @@
 /*
- * Lab surface: dark ops room, same token mechanism as the public product.
- * Only palette tokens are redefined here, scoped to the Lab <html>; the
- * structural tokens (spacing, radii, type scale, one-shadow/no-pill rules)
- * are inherited unchanged from the product so the identity holds.
+ * Lab surface: warm graphite research-notebook palette (v1 design,
+ * approved). Only palette + heading-font tokens are redefined here,
+ * scoped to the Lab <html>; structural tokens (spacing, radii, type
+ * scale, one-shadow/no-pill rules) are inherited unchanged from the
+ * product. Scoped to [data-surface="lab"] only -- does not affect the
+ * subscriber app.
  */
+@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&display=swap");
+
 html[data-surface="lab"] {
-  --bg: #0d1017;
-  --surface: #151a24;
-  --surface-raised: #1a2130;
-  --surface-sunken: #0b0e14;
-  --border: #252c3a;
-  --border-strong: #343d4f;
-  --ink: #e7ebf2;
-  --ink-muted: #9aa4b7;
-  --ink-faint: #6b768a;
+  --bg: #151513;
+  --surface: #1c1c19;
+  --surface-raised: #23231f;
+  --surface-sunken: #101010;
+  --border: #2c2c28;
+  --border-strong: #3b3b36;
+  --ink: #ebe9e2;
+  --ink-muted: #a4a197;
+  --ink-faint: #8b887f;
 
-  --info: #5b8fc7;
-  --info-hover: #6fa0d6;
-  --info-active: #4a78a8;
-  --pos: #4fbb88;
-  --neg: #e07070;
-  --warn: #d8a654;
-  --warn-fill: #231d12;
+  --info: #9fb6d0;
+  --info-hover: #b0c4dc;
+  --info-active: #8ba5c0;
+  --pos: #93c19e;
+  --neg: #e39a88;
+  --warn: #d9b46e;
+  --warn-fill: #2a2418;
 
-  --band-strong-bg: #26436e;
+  --band-strong-bg: #3a5a80;
   --band-strong-fg: #ffffff;
-  --band-strong-bd: #1b3052;
-  --band-elevated-bg: #35597f;
+  --band-strong-bd: #2c4666;
+  --band-elevated-bg: #4a6d8f;
   --band-elevated-fg: #ffffff;
-  --band-elevated-bd: #2a4766;
-  --band-neutral-bg: #3a4254;
-  --band-neutral-fg: #dfe5ee;
-  --band-neutral-bd: #2f3746;
+  --band-elevated-bd: #3a5773;
+  --band-neutral-bg: #3a3a35;
+  --band-neutral-fg: #dedad0;
+  --band-neutral-bd: #2f2f2a;
   --band-weak-bg: #4a4030;
   --band-weak-fg: #ecd9a8;
   --band-weak-bd: #3a3226;
-  --band-excluded-bg: #1e2532;
-  --band-excluded-fg: #8b96a8;
-  --band-excluded-bd: #141a24;
+  --band-excluded-bg: #232320;
+  --band-excluded-fg: #8b887f;
+  --band-excluded-bd: #181815;
 
+  --lab-font-display: "Source Serif 4", Georgia, "Times New Roman", serif;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
@@ -46,6 +51,13 @@ html[data-surface="lab"] body {
   background: var(--bg);
   color: var(--ink);
   font-size: var(--fs-base);
+}
+
+html[data-surface="lab"] h1,
+html[data-surface="lab"] h2,
+html[data-surface="lab"] .rate-headline {
+  font-family: var(--lab-font-display);
+  font-weight: 500;
 }
 
 .labbar {
