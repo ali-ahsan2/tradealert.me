@@ -385,20 +385,17 @@ def runs_latest():
 def board(band: str = "", creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
     conn = get_conn()
     try:
+        row = _user_from_token(creds)
+        user_id = row[0]
         run = _latest_run(conn)
         if not run:
             raise HTTPException(404, "not found")
         run_id = run[0]
-        user_id = None
-        industries_limit = 999
-        names_shown_limit = 100
-        if creds is not None:
-            row = _user_from_token(creds)
-            user_id = row[0]
-            _provision_free(conn, user_id)
-            tier = _tier_for_user(conn, user_id)
-            if tier:
-                industries_limit, names_shown_limit = tier[3], tier[4]
+        industries_limit, names_shown_limit = 1, 5
+        _provision_free(conn, user_id)
+        tier = _tier_for_user(conn, user_id)
+        if tier:
+            industries_limit, names_shown_limit = tier[3], tier[4]
         allowed_keys, scope_label, picks = scope.user_scope(
             conn, user_id, industries_limit)
         vis, vis_params = scope.visible_sql_and_params(allowed_keys, picks, "i")
@@ -468,17 +465,13 @@ def stock(symbol: str, creds: HTTPAuthorizationCredentials | None = Depends(bear
         if not run:
             raise HTTPException(404, "not found")
         run_id = run[0]
-        user_id = None
-        if creds is not None:
-            user_row = _user_from_token(creds)
-            user_id = user_row[0]
-            _provision_free(conn, user_id)
-            tier = _tier_for_user(conn, user_id)
-            industries_limit = tier[3] if tier else 999
-            keys, _scope_label, picks = scope.user_scope(conn, user_id, industries_limit)
-            vis, vis_params = scope.visible_sql_and_params(keys, picks, "i")
-        else:
-            vis, vis_params = "TRUE", []
+        user_row = _user_from_token(creds)
+        user_id = user_row[0]
+        _provision_free(conn, user_id)
+        tier = _tier_for_user(conn, user_id)
+        industries_limit = tier[3] if tier else 1
+        keys, _scope_label, picks = scope.user_scope(conn, user_id, industries_limit)
+        vis, vis_params = scope.visible_sql_and_params(keys, picks, "i")
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT s.id, i.id, i.theme, i.lane, i.instrument_group, i.hook, "
@@ -563,16 +556,12 @@ def search(q: str = "", creds: HTTPAuthorizationCredentials | None = Depends(bea
         run = _latest_run(conn)
         if not run:
             return {"results": []}
-        user_id = None
-        if creds is not None:
-            user_row = _user_from_token(creds)
-            user_id = user_row[0]
-            _provision_free(conn, user_id)
-            tier = _tier_for_user(conn, user_id)
-            keys, _scope_label, picks = scope.user_scope(conn, user_id, tier[3] if tier else 999)
-            vis, vis_params = scope.visible_sql_and_params(keys, picks, "i")
-        else:
-            vis, vis_params = "TRUE", []
+        user_row = _user_from_token(creds)
+        user_id = user_row[0]
+        _provision_free(conn, user_id)
+        tier = _tier_for_user(conn, user_id)
+        keys, _scope_label, picks = scope.user_scope(conn, user_id, tier[3] if tier else 1)
+        vis, vis_params = scope.visible_sql_and_params(keys, picks, "i")
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT s.symbol, i.theme, ind.key, sc.value, sc.band "
@@ -582,7 +571,7 @@ def search(q: str = "", creds: HTTPAuthorizationCredentials | None = Depends(bea
                 "LEFT JOIN scores sc ON sc.instrument_id = i.id "
                 "  AND sc.run_id = %s "
                 f"WHERE (s.symbol ILIKE %s OR i.theme ILIKE %s "
-                "OR ind.label ILIKE %s) AND {vis} "
+                f"OR ind.label ILIKE %s) AND {vis} "
                 "ORDER BY (s.symbol = %s) DESC, sc.value DESC NULLS LAST "
                 "LIMIT 12",
                 tuple([run[0], q + "%", "%" + q + "%", "%" + q + "%"] +

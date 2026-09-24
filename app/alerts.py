@@ -145,15 +145,12 @@ def alert_events(limit: int = 50,
     authenticated (same scope helpers as board/stock)."""
     conn = get_conn()
     try:
-        user = context.user_from_creds(creds, required=False)
-        if user is not None:
-            uid = context.user_id(user)
-            scope.provision_free(conn, uid)
-            tier = scope.tier_for_user(conn, uid)
-            keys, _scope, picks = scope.user_scope(conn, uid, tier[3] if tier else 999)
-            vis, params = scope.visible_sql_and_params(keys, picks, "i")
-        else:
-            vis, params = "TRUE", []
+        user = context.user_from_creds(creds, required=True)
+        uid = context.user_id(user)
+        scope.provision_free(conn, uid)
+        tier = scope.tier_for_user(conn, uid)
+        keys, _scope, picks = scope.user_scope(conn, uid, tier[3] if tier else 1)
+        vis, params = scope.visible_sql_and_params(keys, picks, "i")
         q = (
             "SELECT t.symbol, i.theme, tr.key, tr.label, ae.detail, ae.fired_at, "
             "(SELECT COUNT(*) FROM alert_deliveries ad "

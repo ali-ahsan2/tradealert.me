@@ -23,8 +23,8 @@ export default function Alerts() {
   const [msg, setMsg] = useState("");
 
   const load = () => {
-    api("/alert-events").then(setEvents).catch(() => setEvents([]));
-    if (getToken()) api("/me/alerts/rules").then(setRules).catch(() => setRules([]));
+    api("/alert-events").then((d) => setEvents(d.events)).catch(() => setEvents([]));
+    if (getToken()) api("/me/alerts/rules").then((d) => setRules(d.rules)).catch(() => setRules([]));
   };
   useEffect(load, []);
 

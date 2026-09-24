@@ -320,47 +320,50 @@ def add_pick(body: PickIn,
         scope.provision_free(conn, uid)
         tier = scope.tier_for_user(conn, uid)
         picks_limit = tier[5] if tier else 1
+        industries_limit = tier[3] if tier else 1
         run_id = _latest_run_id(conn)
+        keys, _scope_label, existing_pick_ids = scope.user_scope(conn, uid, industries_limit)
+        vis, vis_params = scope.visible_sql_and_params(keys, existing_pick_ids, "i")
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT s.value FROM tickers t "
+                "SELECT i.id, s.value FROM tickers t "
                 "JOIN instruments i ON i.ticker_id = t.id "
                 "LEFT JOIN scores s ON s.instrument_id = i.id AND s.run_id = %s "
-                "WHERE t.symbol = %s AND i.active "
+                f"WHERE t.symbol = %s AND i.active AND {vis} "
                 "ORDER BY i.active DESC, s.value DESC NULLS LAST LIMIT 1",
-                (run_id, sym),
+                tuple([run_id, sym] + vis_params),
             )
             found = cur.fetchone()
             if not found:
                 raise HTTPException(404, "not found")
+            instr_id, score_val = found
             cur.execute(
-                "SELECT i.id, p.id, p.active FROM instruments i "
-                "JOIN tickers t ON t.id = i.ticker_id "
-                "LEFT JOIN picks p ON p.instrument_id = i.id AND p.user_id = %s "
-                "WHERE t.symbol = %s AND i.active LIMIT 1",
-                (uid, sym),
+                "SELECT p.id, p.active FROM picks p "
+                "WHERE p.instrument_id = %s AND p.user_id = %s LIMIT 1",
+                (instr_id, uid),
             )
-            instr_id, existing_pick, pick_active = cur.fetchone()
+            existing = cur.fetchone()
+            existing_pick, pick_active = existing if existing else (None, None)
             if existing_pick is not None and pick_active:
                 raise HTTPException(409, "already on your watchlist")
-            if existing_pick is not None and not pick_active:
-                cur.execute("UPDATE picks SET active = TRUE, score_at_pin = %s WHERE id = %s",
-                            (found[0], existing_pick))
-                conn.commit()
-                return {"added": sym, "score_at_pin": float(found[0]) if found[0] else None}
             cur.execute("SELECT COUNT(*) FROM picks WHERE user_id = %s AND active", (uid,))
             if cur.fetchone()[0] >= picks_limit:
                 raise HTTPException(
                     403, f"your plan pins {picks_limit} name{'s' if picks_limit == 1 else ''}; upgrade to pin more")
+            if existing_pick is not None and not pick_active:
+                cur.execute("UPDATE picks SET active = TRUE, score_at_pin = %s WHERE id = %s",
+                            (score_val, existing_pick))
+                conn.commit()
+                return {"added": sym, "score_at_pin": float(score_val) if score_val else None}
             cur.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM picks WHERE user_id = %s", (uid,))
             next_order = cur.fetchone()[0]
             cur.execute(
                 "INSERT INTO picks (user_id, instrument_id, score_at_pin, sort_order) "
                 "VALUES (%s, %s, %s, %s)",
-                (uid, instr_id, found[0], next_order),
+                (uid, instr_id, score_val, next_order),
             )
         conn.commit()
-        return {"added": sym, "score_at_pin": float(found[0]) if found[0] else None}
+        return {"added": sym, "score_at_pin": float(score_val) if score_val else None}
     finally:
         conn.close()
 

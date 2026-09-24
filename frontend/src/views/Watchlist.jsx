@@ -15,7 +15,7 @@ export default function Watchlist() {
       return;
     }
     setErr(null);
-    api("/me/picks").then(setPicks).catch((e) => { setErr(e.detail); setPicks([]); });
+    api("/me/picks").then((d) => setPicks(d.picks)).catch((e) => { setErr(e.detail); setPicks([]); });
   };
   useEffect(load, []);
 

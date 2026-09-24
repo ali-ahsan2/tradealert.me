@@ -81,14 +81,14 @@ def two_prop_p(p1, n1, p2, n2):
     return round(2 * (1 - 0.5 * (1 + math.erf(z / math.sqrt(2)))), 6)
 
 
-def holm_adjust(p_target, family_p_values):
-    """Holm-Bonferroni adjusted p over the whole family (spec 6.3)."""
-    if not family_p_values:
-        return p_target
-    full = sorted(family_p_values + [p_target])
+def holm_adjust(p_target, prior_family_p_values):
+    """Holm-Bonferroni adjusted p over the family (spec 6.3). prior_family_p_values
+    holds every OTHER completed test in the same family; p_target is the test
+    being adjusted right now and must not already be present in that list."""
+    full = sorted(prior_family_p_values + [p_target])
     m = len(full)
     rank = full.index(p_target) + 1
-    best = 1.0
+    best = 0.0
     for i in range(rank):
         best = max(best, full[i] * (m - i))
     return round(min(1.0, best), 6)
@@ -460,7 +460,7 @@ def _evaluate_filters(version_row, inputs_json):
     return True, None
 
 
-def _run_backtest(body: BacktestIn, version_row, cur):
+def _run_backtest(body: BacktestIn, version_row, cur, strategy_id):
     spec = _normalize_spec(body)
     hit_price = body.hit_definition.price_move_pct
     hit_vol = body.hit_definition.volume_spike_x
@@ -600,13 +600,14 @@ def _run_backtest(body: BacktestIn, version_row, cur):
         p1 = pg["hits"] / pg["n"]
         p2 = (all_k / all_n) if all_n else None
         pval = two_prop_p(p1, pg["n"], p2, all_n)
-        family_p = [pval]
+        family_p = []
         if body.family_key:
             cur.execute(
                 "SELECT result_json FROM lab_queries WHERE family_key = %s "
+                "AND strategy_id = %s "
                 "AND query_type = 'backtest' AND status = 'completed' "
                 "AND created_at > now() - interval '90 days'",
-                (body.family_key,),
+                (body.family_key, strategy_id),
             )
             for (res,) in cur.fetchall():
                 if res and res.get("comparison", {}).get("p_value") is not None:
@@ -681,7 +682,7 @@ def lab_backtest(body: BacktestIn,
                  json.dumps(spec), spec_hash, body.hypothesis, body.family_key))
             query_id = cur.fetchone()[0]
             if fresh:
-                _spec, result = _run_backtest(body, ver, cur)
+                _spec, result = _run_backtest(body, ver, cur, strat["id"])
                 result["events_max_id"] = events_max_id
             else:
                 result = dict(cached[1])
