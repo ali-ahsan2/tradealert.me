@@ -74,9 +74,14 @@ html[data-surface="lab"] .rate-headline {
 }
 
 .labwrap {
-  max-width: 1080px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: var(--s-5);
+  display: grid;
+  gap: var(--s-4);
+}
+
+.labstack {
   display: grid;
   gap: var(--s-4);
 }
@@ -98,6 +103,136 @@ html[data-surface="lab"] .rate-headline {
 .card h3 {
   margin: 0 0 var(--s-2);
   font-size: var(--fs-md);
+}
+
+.lab-picker {
+  display: flex;
+  align-items: end;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+  padding: var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+}
+
+.lab-picker .labfield {
+  flex: 1 1 320px;
+  max-width: 520px;
+}
+
+.picker-hint {
+  flex: 2 1 320px;
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: var(--fs-sm);
+}
+
+.labmeta {
+  display: grid;
+  gap: var(--s-1);
+  font-size: var(--fs-sm);
+  color: var(--ink-faint);
+}
+
+.subgrid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+  gap: var(--s-3);
+  align-items: start;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.labtable td {
+  overflow-wrap: anywhere;
+}
+
+.lab-step {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: var(--s-4);
+  display: grid;
+  gap: var(--s-3);
+}
+
+.lab-step > h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: var(--fs-md);
+}
+
+.stepnum {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 100%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+
+.chiprow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 99px;
+  padding: 6px 13px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--info);
+}
+
+.chip.on {
+  background: var(--info);
+  border-color: var(--info);
+  color: #fff;
+}
+
+.labfield-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+}
+
+.runbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+  padding: var(--s-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+
+.run-hint {
+  flex: 1 1 320px;
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: var(--fs-sm);
 }
 
 .card-stack {

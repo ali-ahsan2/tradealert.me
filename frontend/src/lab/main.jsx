@@ -144,16 +144,27 @@ function Denied({ retry }) {
   );
 }
 
-function StratPicker({ value, options, onChange }) {
+function StratPicker({ value, options, onChange, hint }) {
   return (
-    <label className="labfield">
-      Strategy
-      <select value={value} aria-label="Strategy" onChange={(e) => onChange(e.target.value)}>
-        {options.map((o) => (
-          <option key={o.key} value={o.key}>{o.label}</option>
-        ))}
-      </select>
-    </label>
+    <div className="lab-picker">
+      <label className="labfield">
+        Strategy
+        <select value={value} aria-label="Strategy" onChange={(e) => onChange(e.target.value)}>
+          {options.map((o) => (
+            <option key={o.key} value={o.key}>{o.label}</option>
+          ))}
+        </select>
+      </label>
+      {hint && <p className="picker-hint">{hint}</p>}
+    </div>
+  );
+}
+
+function Chip({ label, on, onClick }) {
+  return (
+    <button type="button" aria-pressed={on} className={`chip${on ? " on" : ""}`} onClick={onClick}>
+      {label}
+    </button>
   );
 }
 
@@ -290,10 +301,13 @@ function InputsScreen({ strat, strategies, setStrat }) {
   const coverage = useFetch([strat], () =>
     api(`/admin/lab/strategies/${strat}/coverage`));
   return (
-    <div className="labgrid">
-      <div className="card">
-        <StratPicker value={strat} options={strategies} onChange={setStrat} />
-      </div>
+    <div className="labstack">
+      <StratPicker
+        value={strat}
+        options={strategies}
+        onChange={setStrat}
+        hint="Read-mostly: what the strategy says it does, plus what the ledger has compared it against."
+      />
       <Load data={data} err={err}>
         {(data) => (
           <>
@@ -309,7 +323,7 @@ function InputsScreen({ strat, strategies, setStrat }) {
           {data.score_evidence_note && (
             <div className="banner" style={{ marginTop: 12 }}>{data.score_evidence_note}</div>
           )}
-          <div className="labgrid" style={{ marginTop: 12 }}>
+          <div className="subgrid-2" style={{ marginTop: 12 }}>
             <div className="card-stack">
               <FiltersTable filters={data.hard_filters} />
             </div>
@@ -348,6 +362,7 @@ function InputsScreen({ strat, strategies, setStrat }) {
             <dt>events</dt><dd>{coverage.data.events} ({coverage.data.events_complete} complete)</dd>
             <dt>kinds available</dt><dd>{coverage.data.events_kinds ? coverage.data.events_kinds.join(", ") : "earnings"}</dd>
           </dl>
+          <div className="table-scroll">
           <table className="labtable" style={{ marginTop: 8 }}>
             <caption className="mono">by industry</caption>
             <thead>
@@ -364,6 +379,7 @@ function InputsScreen({ strat, strategies, setStrat }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
         )}
       </Load>
@@ -483,10 +499,13 @@ function VersionsScreen({ strat, strategies, setStrat }) {
       </div>
     );
   return (
-    <div className="labgrid">
-      <div className="card">
-        <StratPicker value={strat} options={strategies} onChange={setStrat} />
-      </div>
+    <div className="labstack">
+      <StratPicker
+        value={strat}
+        options={strategies}
+        onChange={setStrat}
+        hint="Version history is a ledger: each version is a recorded decision, not something you can quietly undo."
+      />
       <Load data={data} err={err}>
         {(data) => (
           <>
@@ -532,7 +551,7 @@ function VersionsScreen({ strat, strategies, setStrat }) {
           </div>
           {diffErr && <div className="errorbox" style={{ marginTop: 8 }}>{diffErr}</div>}
           {diff && (
-            <div className="labgrid" style={{ marginTop: 12 }}>
+            <div className="subgrid-2" style={{ marginTop: 12 }}>
               <p className="muted">v{diff.earlier} → v{diff.later}</p>
               <DiffList title="Hard filters" items={diff.hard_filters} />
               <DiffList title="Component weights" items={diff.component_weights} />
@@ -683,10 +702,16 @@ function BacktestScreen({ strat, strategies, setStrat }) {
   );
 
   return (
-    <div className="labgrid">
-      <div className="card">
-        <StratPicker value={strat} options={strategies} onChange={setStrat} />
-        <form onSubmit={run} style={{ display: "grid", gap: 14, marginTop: 12 }}>
+    <>
+      <StratPicker
+        value={strat}
+        options={strategies}
+        onChange={setStrat}
+        hint="A backtest is one audited query: universe → event kinds → hit rule → baselines. The strategy and version decide which recorded inputs it runs on."
+      />
+      <form onSubmit={run} className="labstack">
+        <section className="lab-step">
+          <h3><span className="stepnum">1</span> Strategy and version</h3>
           <div className="formrow">
             <label className="labfield">
               Version
@@ -697,22 +722,13 @@ function BacktestScreen({ strat, strategies, setStrat }) {
                 ))}
               </select>
             </label>
-            <label className="labfield">
-              Hit: price move ≥ %
-              <input type="number" step="any" value={price} onChange={(e) => setPrice(e.target.value)} />
-            </label>
-            <label className="labfield">
-              Hit: volume spike ≥ ×
-              <input type="number" step="any" value={vol} onChange={(e) => setVol(e.target.value)} />
-            </label>
-            <label className="labfield">
-              Combine
-              <select value={combine} onChange={(e) => setCombine(e.target.value)}>
-                <option value="or">OR</option>
-                <option value="and">AND</option>
-              </select>
-            </label>
+            <p className="labmeta" style={{ margin: 0 }}>
+              Pick a version to run the filters, weights, and band cutoffs recorded for that point in time. Leave on current to run the live definition.
+            </p>
           </div>
+        </section>
+        <section className="lab-step">
+          <h3><span className="stepnum">2</span> Universe</h3>
           <div className="formrow">
             <label className="labfield">
               Tickers (comma-separated)
@@ -744,57 +760,75 @@ function BacktestScreen({ strat, strategies, setStrat }) {
               <input value={theme} onChange={(e) => setTheme(e.target.value)} placeholder="uranium|nuclear" />
             </label>
           </div>
+          <div>
+            <span className="labfield-label">Industries <span className="muted">({indKeys.length} selected)</span></span>
+            <div className="chiprow">
+              {(industries.data?.industries || []).map((i) => (
+                <Chip key={i.key} label={i.label} on={indKeys.includes(i.key)} onClick={() => toggle(indKeys, setIndKeys, i.key)} />
+              ))}
+            </div>
+          </div>
+        </section>
+        <section className="lab-step">
+          <h3><span className="stepnum">3</span> Event kinds and hit rule</h3>
           <div className="formrow">
-            <fieldset className="labfield" style={{ border: "1px solid var(--border-strong)", borderRadius: "var(--r-sm)", padding: 8 }}>
-              <legend>Event kinds</legend>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
-                {KINDS.map((k) => (
-                  <label key={k} style={{ fontSize: "var(--fs-sm)" }}>
-                    <input type="checkbox" checked={kinds.includes(k)} onChange={() => toggle(kinds, setKinds, k)} /> {k}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <fieldset className="labfield" style={{ border: "1px solid var(--border-strong)", borderRadius: "var(--r-sm)", padding: 8 }}>
-              <legend>Baselines</legend>
-              <label style={{ display: "block", fontSize: "var(--fs-sm)" }}>
-                <input type="checkbox" checked={baselines.includes("all_events")} onChange={() => toggle(baselines, setBaselines, "all_events")} /> All selected events
-              </label>
-              <label style={{ display: "block", fontSize: "var(--fs-sm)" }}>
-                <input type="checkbox" checked={baselines.includes("random_day")} onChange={() => toggle(baselines, setBaselines, "random_day")} /> Random trading days
-              </label>
-            </fieldset>
             <label className="labfield">
-              Industries
-              <select
-                multiple
-                value={indKeys}
-                onChange={(e) => setIndKeys([...e.target.selectedOptions].map((o) => o.value))}
-              >
-                {(industries.data?.industries || []).map((i) => (
-                  <option key={i.key} value={i.key}>{i.label}</option>
-                ))}
+              Hit: price move ≥ %
+              <input type="number" step="any" value={price} onChange={(e) => setPrice(e.target.value)} />
+            </label>
+            <label className="labfield">
+              Hit: volume spike ≥ ×
+              <input type="number" step="any" value={vol} onChange={(e) => setVol(e.target.value)} />
+            </label>
+            <label className="labfield">
+              Combine
+              <select value={combine} onChange={(e) => setCombine(e.target.value)}>
+                <option value="or">OR</option>
+                <option value="and">AND</option>
               </select>
             </label>
           </div>
-          <label className="labfield">
-            Hypothesis (recorded with the run)
-            <input value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} />
-          </label>
-          <label className="labfield">
-            Family key (for Holm multiple-comparison adjustment)
-            <input value={family} onChange={(e) => setFamily(e.target.value)} placeholder="e.g. si-growth-2026" />
-          </label>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <button className="btn btn-primary" disabled={running} style={{ padding: "10px 18px" }}>
-              {running ? "Running…" : "Run backtest"}
-            </button>
-            <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
-              Results are auditable: every run is recorded as a query and each hit is a comparison against its baselines.
-            </p>
+          <div>
+            <span className="labfield-label">Event kinds</span>
+            <div className="chiprow">
+              {KINDS.map((k) => (
+                <Chip key={k} label={k} on={kinds.includes(k)} onClick={() => toggle(kinds, setKinds, k)} />
+              ))}
+            </div>
           </div>
-        </form>
-      </div>
+        </section>
+        <section className="lab-step">
+          <h3><span className="stepnum">4</span> Baselines</h3>
+          <p className="labmeta" style={{ margin: 0 }}>
+            Every hit rate is compared against these. A result only becomes citable by a finding when it clears its baselines.
+          </p>
+          <div className="chiprow">
+            <Chip label="All selected events" on={baselines.includes("all_events")} onClick={() => toggle(baselines, setBaselines, "all_events")} />
+            <Chip label="Random trading days" on={baselines.includes("random_day")} onClick={() => toggle(baselines, setBaselines, "random_day")} />
+          </div>
+        </section>
+        <section className="lab-step">
+          <h3><span className="stepnum">5</span> Hypothesis</h3>
+          <div className="formrow">
+            <label className="labfield">
+              Hypothesis (recorded with the run)
+              <input value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} placeholder="e.g. filtered beats small-beat names in a three-day window" />
+            </label>
+            <label className="labfield">
+              Family key (Holm multiple-comparison adjustment)
+              <input value={family} onChange={(e) => setFamily(e.target.value)} placeholder="e.g. si-growth-2026" />
+            </label>
+          </div>
+        </section>
+        <div className="runbar">
+          <button className="btn btn-primary" disabled={running} style={{ padding: "10px 20px" }}>
+            {running ? "Running backtest…" : "Run backtest"}
+          </button>
+          <p className="run-hint">
+            Every run is recorded as a query and stays auditable. Results that clear their baselines are what a finding may cite.
+          </p>
+        </div>
+      </form>
       <div aria-live="polite">
         {runErr && <div className="errorbox">{runErr}</div>}
         {result && (
@@ -861,7 +895,7 @@ function BacktestScreen({ strat, strategies, setStrat }) {
           </>
         )}
       </div>
-    </div>
+    </>
   );
 }
 
