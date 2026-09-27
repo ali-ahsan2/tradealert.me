@@ -12,7 +12,7 @@ const BAND_LABEL = {
   elevated: "above the strategy's typical range",
   neutral: "within the typical range; no signal",
   weak: "below typical range",
-  excluded: "failed a hard filter or carries a disqualifying haircut",
+  excluded: "carries a disqualifying penalty",
 };
 
 export default function StockReport({ symbol }) {
@@ -94,7 +94,6 @@ export default function StockReport({ symbol }) {
   const s = d.score;
   const thin = s && s.components_present < s.components_total * 0.5;
   const snaps = Object.entries(d.snapshot || {});
-  const hf = (s && s.hard_filters) || [];
   const pinned = cap && cap.pinned.includes(d.symbol);
   const atCap = cap && cap.used >= cap.limit && !pinned;
 
@@ -108,7 +107,7 @@ export default function StockReport({ symbol }) {
         </h1>
         <div className="meta">
           {d.industry.label} · benchmark {d.industry.benchmark_etf} · group{" "}
-          {d.group} · lane {d.lane || "—"}
+          {d.group}
         </div>
         {atCap && (
           <p className="meta" style={{ marginTop: "var(--s-2)", marginBottom: 0 }}>
@@ -138,8 +137,7 @@ export default function StockReport({ symbol }) {
               />
               <div>
                 <div className="strat">
-                  Fast Mover · calibrated · cutoffs strong 72 · elevated 52 ·
-                  neutral 40
+                  Fast Mover · calibrated on cleared events
                 </div>
               </div>
             </div>
@@ -158,34 +156,9 @@ export default function StockReport({ symbol }) {
                         ).toFixed(1)} from ${s.shrinkage_from?.toFixed(0)}`
                       : ""
                   } · ${BAND_LABEL[s.band] || ""}`
-                : "No scored run for this name yet."}
+                : "No scored run for this ticker yet."}
             </div>
             <div className="rule" />
-            {s && (
-              <div className="complist">
-                {s.components.map((c) => (
-                  <div className="comp" key={c.key}>
-                    <div className="lbl">
-                      {c.label}
-                      {c.val ? (
-                        <span className="val"> · {c.val}</span>
-                      ) : null}
-                    </div>
-                    <div className="track">
-                      <div
-                        className={`fill ${
-                          c.score >= 0.65 ? "hi" : c.score < 0.35 ? "lo" : ""
-                        }`}
-                        style={{ width: `${Math.round(c.score * 100)}%` }}
-                      />
-                    </div>
-                    <div className="w">
-                      {c.score.toFixed(2)} ×{c.weight}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
             {s && s.haircuts.length > 0 && (
               <section className="haircuts">
                 <h3>Haircuts and penalties</h3>
@@ -198,27 +171,6 @@ export default function StockReport({ symbol }) {
                 </ul>
               </section>
             )}
-            {hf.length > 0 && (
-              <section className="hardfilters">
-                <h3>Hard filters (Fast Mover)</h3>
-                {hf.map((h) => (
-                  <div className="hf" key={h.key}>
-                    <span className={h.pass ? "ok" : "fail"}>
-                      {h.pass ? "PASS" : "FAIL"}
-                    </span>
-                    <span>
-                      {h.label}: <span className="mono">{h.value}</span>
-                    </span>
-                  </div>
-                ))}
-              </section>
-            )}
-            {d.thesis && (
-              <section className="opnote">
-                <div className="lab">Operator note</div>
-                <p>{d.thesis}</p>
-              </section>
-            )}
           </section>
         </div>
 
@@ -226,7 +178,7 @@ export default function StockReport({ symbol }) {
           <h3>Data</h3>
           {snaps.length === 0 ? (
             <div className="aside-note">
-              No market snapshot on file for this name in the sandbox seed.
+              No market snapshot on file for this ticker in the sandbox seed.
               Figures above come from the operator&rsquo;s research pass.
             </div>
           ) : (
@@ -243,27 +195,11 @@ export default function StockReport({ symbol }) {
               </div>
             ))
           )}
-          <div className="kv">
-            <span className="k">hook</span>
-            <span className="v" style={{ textAlign: "right", fontSize: "var(--fs-xs)" }}>
-              {d.hook || "—"}
-            </span>
-          </div>
-          {s && (
-            <>
-              <div className="kv">
-                <span className="k">components</span>
-                <span className="v">
-                  {s.components_present}/{s.components_total}
-                </span>
-              </div>
-              {s.delta_1d != null && (
-                <div className="kv">
-                  <span className="k">Δ vs prior run</span>
-                  <span className="v">{s.delta_1d.toFixed(1)}</span>
-                </div>
-              )}
-            </>
+          {s && s.delta_1d != null && (
+            <div className="kv">
+              <span className="k">Δ vs prior run</span>
+              <span className="v">{s.delta_1d.toFixed(1)}</span>
+            </div>
           )}
           <div className="aside-note">
             Machine scores rank; the operator decides. Nothing here is a

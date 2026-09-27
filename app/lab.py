@@ -127,25 +127,33 @@ def _strategy_key(cur, key):
             "score_evidence_note": row[6]}
 
 
+_VERSION_COLS = ("id, version_number, band_cutoffs_json, component_weights_json, "
+                 "hard_filters_json, effective_from, effective_to, created_by_admin_id, "
+                 "change_reason, state, hit_definition_json, shadow_started_at, "
+                 "shadow_ends_at, promoted_early, live_outcomes_count, holdout_cutoff, "
+                 "holdout_check_json")
+
+
 def _current_version(cur, strategy_id):
-    cur.execute(
-        "SELECT id, version_number, band_cutoffs_json, component_weights_json, "
-        "hard_filters_json, effective_from, effective_to, created_by_admin_id, "
-        "change_reason FROM strategy_versions "
-        "WHERE strategy_id = %s ORDER BY version_number DESC LIMIT 1",
-        (strategy_id,),
-    )
+    """The version in effect today: the live version when the operator pointed
+    strategies.live_version_id at one, otherwise the highest version_number
+    (pre-release strategies have no live pointer yet, spec 5.3)."""
+    cur.execute("SELECT live_version_id FROM strategies WHERE id = %s", (strategy_id,))
+    live = cur.fetchone()
+    if live and live[0]:
+        cur.execute(f"SELECT {_VERSION_COLS} FROM strategy_versions WHERE id = %s",
+                    (live[0],))
+    else:
+        cur.execute(f"SELECT {_VERSION_COLS} FROM strategy_versions "
+                    "WHERE strategy_id = %s ORDER BY version_number DESC LIMIT 1",
+                    (strategy_id,))
     return cur.fetchone()
 
 
 def _version_row(cur, strategy_id, version_number):
-    cur.execute(
-        "SELECT id, version_number, band_cutoffs_json, component_weights_json, "
-        "hard_filters_json, effective_from, effective_to, created_by_admin_id, "
-        "change_reason FROM strategy_versions "
-        "WHERE strategy_id = %s AND version_number = %s ORDER BY id DESC LIMIT 1",
-        (strategy_id, version_number),
-    )
+    cur.execute(f"SELECT {_VERSION_COLS} FROM strategy_versions "
+                "WHERE strategy_id = %s AND version_number = %s ORDER BY id DESC LIMIT 1",
+                (strategy_id, version_number))
     return cur.fetchone()
 
 
@@ -154,9 +162,16 @@ def _serialize_version(row):
         "id": row[0], "version_number": row[1],
         "band_cutoffs": row[2], "component_weights": row[3],
         "hard_filters": row[4],
-        "effective_from": row[5].isoformat(),
+        "effective_from": row[5].isoformat() if row[5] else None,
         "effective_to": row[6].isoformat() if row[6] else None,
         "created_by_admin_id": row[7], "change_reason": row[8],
+        "state": row[9], "hit_definition": row[10],
+        "shadow_started_at": row[11].isoformat() if row[11] else None,
+        "shadow_ends_at": row[12].isoformat() if row[12] else None,
+        "promoted_early": bool(row[13]),
+        "live_outcomes_count": row[14],
+        "holdout_cutoff": row[15].isoformat() if row[15] else None,
+        "holdout_check": row[16],
     }
 
 
@@ -188,6 +203,7 @@ def lab_strategies(creds: HTTPAuthorizationCredentials | None = Depends(bearer))
                 out.append({
                     "key": key, "label": label, "calibrated": bool(r[3]),
                     "version_number": ver[1] if ver else None,
+                    "version_state": ver[9] if ver else None,
                     "effective_from": ver[5].isoformat() if ver and ver[5] else None,
                     "last_query_at": last[0].isoformat() if last else None,
                     "last_query_by": last[1] if last else None,
@@ -197,6 +213,96 @@ def lab_strategies(creds: HTTPAuthorizationCredentials | None = Depends(bearer))
                     "events_complete": events_complete}
     finally:
         conn.close()
+
+
+_INPUT_SOURCE = {
+    "si": {"name": "FINRA biweekly", "field": "currentShortPosition",
+           "refresh": "biweekly", "vintage_lag_days": 11},
+    "cap": {"name": "yfinance", "field": "marketCap", "refresh": "daily",
+            "vintage_lag_days": 0},
+}
+
+_GRADE_ORDER = {"none": 0, "weak": 1, "moderate": 2, "strong": 3}
+
+
+def _source_for(key):
+    """Input provenance for the map (spec 5.2). Every row needs a vintage-lag
+    column, so untagged keys surface as null rather than a made-up number."""
+    return dict(_INPUT_SOURCE[key]) if key in _INPUT_SOURCE else {
+        "name": None, "field": None, "refresh": None, "vintage_lag_days": None}
+
+
+def _median(xs):
+    if not xs:
+        return None
+    x = sorted(xs)
+    m = len(x) // 2
+    return x[m] if len(x) % 2 else (x[m - 1] + x[m]) / 2
+
+
+def _input_metrics(cur):
+    """Per-input presence and renormalized component weights across all
+    complete events. A few hundred rows, scanned in Python; honest numbers
+    from the store, not a declarative registry."""
+    total = 0
+    filter_present = {}
+    comp_present = {}
+    comp_labels = {}
+    comp_shares = {}
+    cur.execute("SELECT inputs_json FROM backtest_events WHERE data_complete")
+    for (inp,) in cur.fetchall():
+        total += 1
+        for h in (inp.get("hard_filters") or []):
+            if isinstance(h, dict) and h.get("key"):
+                filter_present[h["key"]] = filter_present.get(h["key"], 0) + 1
+        ws = {}
+        for c in (inp.get("components") or []):
+            if not isinstance(c, dict) or not c.get("k"):
+                continue
+            k = c["k"]
+            comp_present[k] = comp_present.get(k, 0) + 1
+            if isinstance(c.get("label"), str) and c["label"]:
+                comp_labels.setdefault(k, c["label"])
+            if isinstance(c.get("weight"), (int, float)):
+                ws[k] = float(c["weight"])
+        tot = sum(ws.values())
+        for k, w in ws.items():
+            if tot > 0:
+                comp_shares.setdefault(k, []).append(w / tot)
+
+    def pct(n):
+        return round(100.0 * n / total, 1) if total else 0.0
+
+    def cov(n):
+        c = pct(n)
+        return c, round(100.0 - c, 1)
+
+    return {
+        "total_n": total,
+        "filter": {k: dict(zip(("coverage_pct", "null_pct"), cov(n)))
+                   for k, n in filter_present.items()},
+        "component": {k: dict(zip(("coverage_pct", "null_pct"), cov(comp_present.get(k, 0))))
+                      for k in set(comp_present)},
+        "comp_labels": comp_labels,
+        "comp_medians": {k: round(_median(xs), 2) for k, xs in comp_shares.items()},
+    }
+
+
+def _evidence_grade(findings, claim_kind, key, label):
+    """Highest grade among non-superseded findings whose claim_kind matches
+    the row and whose claim names the input (its key or label). 'none' means
+    never tested, rendered as such (spec 4.1)."""
+    best = "none"
+    for f in findings:
+        if f["status"] == "superseded" or f["claim_kind"] != claim_kind:
+            continue
+        claim = (f["claim"] or "").lower()
+        if key.lower() not in claim and (label and label.lower() not in claim):
+            continue
+        g = f["evidence_grade"] or "none"
+        if _GRADE_ORDER.get(g, 0) > _GRADE_ORDER.get(best, 0):
+            best = g
+    return best
 
 
 @router.get("/api/admin/lab/strategies/{key}/inputs",
@@ -220,9 +326,40 @@ def lab_inputs(key: str, version: str | None = None,
             findings = [{"id": f[4], "claim": f[0], "status": f[1],
                          "evidence_grade": f[2], "claim_kind": f[3]}
                         for f in cur.fetchall()]
+            metrics = _input_metrics(cur) if row else None
+            hard_filters = []
+            if row and metrics:
+                for f in (row[4] or []):
+                    if not isinstance(f, dict) or "key" not in f:
+                        continue
+                    k = f["key"]
+                    cov = metrics["filter"].get(k, {"coverage_pct": 0.0, "null_pct": 100.0})
+                    hard_filters.append({
+                        "key": k, "label": f.get("label") or k,
+                        "op": f.get("op"), "value": f.get("value"),
+                        "unit": f.get("unit"), "source": _source_for(k),
+                        **cov,
+                        "evidence_grade": _evidence_grade(findings, "filter", k,
+                                                          f.get("label")),
+                    })
+            components = []
+            if row and metrics:
+                declared = dict(row[3] or {})
+                for k in sorted(set(declared) | set(metrics["component"])):
+                    cov = metrics["component"].get(k, {"coverage_pct": 0.0,
+                                                       "null_pct": 100.0})
+                    label = metrics["comp_labels"].get(k, k.upper())
+                    components.append({
+                        "key": k, "label": label, "weight": declared.get(k),
+                        "weight_renormalized_median": metrics["comp_medians"].get(k),
+                        "source": _source_for(k), **cov,
+                        "evidence_grade": _evidence_grade(findings, "component", k, label),
+                    })
             return {"strategy": {"key": strat["key"], "label": strat["label"],
                                  "calibrated": strat["calibrated"]},
                     "version": _serialize_version(row) if row else None,
+                    "hard_filters": hard_filters, "components": components,
+                    "band_cutoffs": row[2] if row else None,
                     "score_evidence_note": strat["score_evidence_note"],
                     "findings": findings}
     finally:
@@ -237,19 +374,19 @@ def lab_versions(key: str, creds: HTTPAuthorizationCredentials | None = Depends(
     try:
         with conn.cursor() as cur:
             strat = _strategy_key(cur, key)
+            versions = []
             cur.execute(
-                "SELECT sv.id, sv.version_number, sv.band_cutoffs_json, "
-                "sv.component_weights_json, sv.hard_filters_json, sv.effective_from, "
-                "sv.effective_to, sv.created_by_admin_id, sv.change_reason, u.email "
-                "FROM strategy_versions sv JOIN users u ON u.id = sv.created_by_admin_id "
-                "WHERE sv.strategy_id = %s ORDER BY sv.version_number DESC",
-                (strat["id"],),
-            )
-            versions = [{"id": r[0], "version_number": r[1], "band_cutoffs": r[2],
-                         "component_weights": r[3], "hard_filters": r[4],
-                         "effective_from": r[5].isoformat(),
-                         "effective_to": r[6].isoformat() if r[6] else None,
-                         "created_by": r[9], "change_reason": r[8]} for r in cur.fetchall()]
+                "SELECT version_number FROM strategy_versions "
+                "WHERE strategy_id = %s ORDER BY version_number DESC",
+                (strat["id"],))
+            for (vnum,) in cur.fetchall():
+                row = _version_row(cur, strat["id"], vnum)
+                v = _serialize_version(row)
+                cur.execute(
+                    "SELECT email FROM users WHERE id = %s", (v["created_by_admin_id"],))
+                email = cur.fetchone()
+                v["created_by"] = email[0] if email else None
+                versions.append(v)
             return {"strategy": key, "versions": versions}
     finally:
         conn.close()
@@ -262,6 +399,90 @@ def _diff_sets(a, b):
         if a.get(k) != b.get(k):
             changed.append({"key": k, "before": a.get(k), "after": b.get(k)})
     return changed
+
+
+def _diff_match_key(spec):
+    """The part of a backtest spec that must be identical before two versions
+    may be compared on the same events (spec 5.3: version itself excluded)."""
+    if not spec:
+        return None
+    return json.dumps({k: spec.get(k)
+                       for k in ("universe", "window", "event_kinds", "hit",
+                                 "baselines")},
+                      sort_keys=True)
+
+
+def _pass_group(result):
+    for g in (result.get("groups") or []):
+        if g.get("key") == "pass":
+            return g
+    return None
+
+
+def _matched_comparison(a_res, b_res):
+    """Side-by-side hit-rate comparison for identical specs run on two
+    versions, with the difference CI and a Ross-Okun-style verdict floor
+    (spec 6.4: 30 events per group; below it the verdict stays a hint)."""
+    ga, gb = _pass_group(a_res), _pass_group(b_res)
+    if not (ga and gb):
+        return None
+    k_a, n_a = ga["hits"], ga["n"]
+    k_b, n_b = gb["hits"], gb["n"]
+    if n_a == 0 or n_b == 0:
+        return None
+    rate_a, rate_b = k_a / n_a, k_b / n_b
+    diff = rate_a - rate_b
+    se = math.sqrt(rate_a * (1 - rate_a) / n_a + rate_b * (1 - rate_b) / n_b)
+    ci = [round(diff - 1.96 * se, 4), round(diff + 1.96 * se, 4)] if se else [round(diff, 4), round(diff, 4)]
+    p = two_prop_p(rate_a, n_a, rate_b, n_b)
+    warnings = []
+    if n_a < SMALL_SAMPLE or n_b < SMALL_SAMPLE:
+        warnings.append({
+            "code": "SMALL_SAMPLE", "severity": "warn",
+            "text": (f"{min(n_a, n_b)} events in the smaller group is below the "
+                     f"{SMALL_SAMPLE}-event floor; the difference is shown but is "
+                     "not evidence.")})
+    if a_res.get("synthetic_data_used") or b_res.get("synthetic_data_used"):
+        warnings.append({
+            "code": "SYNTHETIC_DATA", "severity": "warn",
+            "text": "Both results rest on synthetic sandbox data. Not eligible to "
+                    "support a finding."})
+    if (a_res.get("provenance") or {}).get("version_confidence_assumed_count") \
+            or (b_res.get("provenance") or {}).get("version_confidence_assumed_count"):
+        warnings.append({
+            "code": "ASSUMED_VERSION", "severity": "warn",
+            "text": "At least one result rests on an assumed, not recorded, version. "
+                    "The exact filter/weight set in effect cannot be confirmed."})
+    floor_met = n_a >= SMALL_SAMPLE and n_b >= SMALL_SAMPLE
+    if not floor_met:
+        state = "too_few"
+    elif p < 0.05 and diff > 0:
+        state = "better"
+    elif p < 0.05 and diff < 0:
+        state = "worse"
+    else:
+        state = "no_signal"
+    return {
+        "a": {"version_number": None, "hit_rate": round(rate_a, 4),
+              "hits": k_a, "n": n_a, "ci95": wilson_ci(k_a, n_a)},
+        "b": {"version_number": None, "hit_rate": round(rate_b, 4),
+              "hits": k_b, "n": n_b, "ci95": wilson_ci(k_b, n_b)},
+        "difference": round(diff, 4),
+        "difference_ci95": ci,
+        "p_value": p,
+        "events_in_scope": (a_res.get("provenance") or {}).get("events_in_scope"),
+        "warnings": warnings,
+        "verdict": {"state": state,
+                    "text": _DIFF_VERDICT[state]},
+    }
+
+
+_DIFF_VERDICT = {
+    "too_few": ("Below the 30-event floor. Difference shown, counted as nothing."),
+    "better": "Later version looks better on the same events, within chance.",
+    "worse": "Later version looks worse on the same events, within chance.",
+    "no_signal": "No signal in the difference on the same events.",
+}
 
 
 @router.get("/api/admin/lab/strategies/{key}/versions/diff",
@@ -283,6 +504,33 @@ def lab_diff(key: str, a: int, b: int,
             hf = _diff_sets(e_f, l_f)
             e_w, l_w = dict(earlier[3] or {}), dict(later[3] or {})
             e_b, l_b = dict(earlier[2] or {}), dict(later[2] or {})
+            cur.execute(
+                "SELECT spec_json, result_json, strategy_version_id FROM lab_queries "
+                "WHERE strategy_id = %s AND query_type = 'backtest' "
+                "AND status = 'completed' AND strategy_version_id IN (%s, %s) "
+                "ORDER BY id DESC",
+                (strat["id"], ra[0], rb[0]))
+            latest_by = {}
+            for spec, result, vid in cur.fetchall():
+                mk = _diff_match_key(spec)
+                if mk is None or not result:
+                    continue
+                latest_by.setdefault(vid, {}).setdefault(mk, result)
+            performance = {"matched": False, "action": "run_matched"}
+            for mk in latest_by.get(ra[0], {}):
+                rb_result = latest_by.get(rb[0], {}).get(mk)
+                if not rb_result:
+                    continue
+                scope_a = (latest_by[ra[0]][mk].get("provenance") or {}).get("events_in_scope")
+                scope_b = (rb_result.get("provenance") or {}).get("events_in_scope")
+                if scope_a is None or scope_b is None or scope_a != scope_b:
+                    continue
+                cmp = _matched_comparison(latest_by[ra[0]][mk], rb_result)
+                if cmp:
+                    cmp["a"]["version_number"] = ra[1]
+                    cmp["b"]["version_number"] = rb[1]
+                    performance = {"matched": True, **cmp}
+                break
             return {
                 "strategy": key,
                 "earlier": earlier[1], "later": later[1],
@@ -298,6 +546,7 @@ def lab_diff(key: str, a: int, b: int,
                                   "after": l_b.get(k)}
                                  for k in sorted(set(e_b) | set(l_b))
                                  if e_b.get(k) != l_b.get(k)],
+                "performance": performance,
             }
     finally:
         conn.close()

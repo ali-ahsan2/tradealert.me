@@ -1,7 +1,8 @@
 """Shared auth helpers for the product routers (account, alerts, billing,
 admin, channels). Kept out of main.py so routers never import the app
 entrypoint; the row shape is the users table:
-  (id, email, password_hash, verified, is_admin, created_at)
+  (id, email, password_hash, verified, is_admin, created_at,
+   name, provider, provider_id)
 """
 import jwt
 from fastapi.exceptions import HTTPException
@@ -9,7 +10,8 @@ from fastapi.exceptions import HTTPException
 from app import security
 from app.db import get_conn
 
-_USER_COLS = "id, email, password_hash, verified, is_admin, created_at"
+_USER_COLS = ("id, email, password_hash, verified, is_admin, created_at, "
+              "name, provider, provider_id")
 
 
 def user_id(row):

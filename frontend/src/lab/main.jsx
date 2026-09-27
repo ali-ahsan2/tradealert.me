@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./lab.css";
 import { api, login, getToken, logout } from "../api.js";
+import ThemeSwitcher from "../components/ThemeSwitcher.jsx";
 
 const ADMIN_CHECK = "/admin/_check";
 
@@ -188,6 +189,13 @@ function StrategiesScreen({ strategies, onPick }) {
   );
 }
 
+function GradeBadge({ grade }) {
+  if (!grade || grade === "none") {
+    return <span className="muted">never tested</span>;
+  }
+  return <span className={`badge ${grade === "strong" ? "ok" : grade === "weak" ? "warn" : ""}`}>{grade}</span>;
+}
+
 function FiltersTable({ filters }) {
   if (!filters || filters.length === 0) {
     return <p className="muted">No hard filters declared for this version.</p>;
@@ -196,15 +204,28 @@ function FiltersTable({ filters }) {
     <table className="labtable">
       <caption className="mono">hard filters</caption>
       <thead>
-        <tr><th>Key</th><th>Label</th><th>Rule</th><th>Unit</th></tr>
+        <tr><th>Rule</th><th>Source</th><th>Cov.</th><th>Evidence</th></tr>
       </thead>
       <tbody>
         {filters.map((f, i) => (
           <tr key={i}>
-            <td className="mono">{f.key}</td>
-            <td>{f.label}</td>
-            <td className="mono">{JSON.stringify(f.op ? [f.op, f.value] : f.value)}</td>
-            <td>{f.unit || ""}</td>
+            <td>
+              <span className="mono">{f.label}</span>
+              <span className="mono muted"> {f.op} {JSON.stringify(f.value)}{f.unit ? ` ${f.unit}` : ""}</span>
+            </td>
+            <td>
+              {f.source && f.source.name ? (
+                <>
+                  {f.source.name}
+                  {f.source.vintage_lag_days != null &&
+                    ` · ${f.source.vintage_lag_days}d vintage lag`}
+                </>
+              ) : (
+                <span className="muted">untagged at ingest</span>
+              )}
+            </td>
+            <td className="mono">{pct((f.coverage_pct ?? 0) / 100)}</td>
+            <td><GradeBadge grade={f.evidence_grade} /></td>
           </tr>
         ))}
       </tbody>
@@ -212,22 +233,27 @@ function FiltersTable({ filters }) {
   );
 }
 
-function WeightsTable({ weights }) {
-  const entries = Object.entries(weights || {});
-  if (entries.length === 0) return <p className="muted">No weights recorded for this version.</p>;
-  const total = entries.reduce((a, [, w]) => a + w, 0);
+function ComponentsTable({ components }) {
+  if (!components || components.length === 0) {
+    return <p className="muted">No component weights recorded for this version.</p>;
+  }
   return (
     <table className="labtable">
-      <caption className="mono">component weights · total {total.toFixed(1)}</caption>
+      <caption className="mono">components · declared → median effective</caption>
       <thead>
-        <tr><th>Component</th><th>Weight</th><th>Share</th></tr>
+        <tr><th>Component</th><th>Declared</th><th>Median eff.</th><th>Cov.</th><th>Evidence</th></tr>
       </thead>
       <tbody>
-        {entries.map(([k, w]) => (
-          <tr key={k}>
-            <td className="mono">{k}</td>
-            <td>{w}</td>
-            <td>{pct(w / total)}</td>
+        {components.map((c, i) => (
+          <tr key={i}>
+            <td>
+              <span className="mono">{c.key}</span>
+              <span className="muted"> · {c.label}</span>
+            </td>
+            <td className="mono">{c.weight == null ? "—" : c.weight}</td>
+            <td className="mono">{c.weight_renormalized_median == null ? "—" : c.weight_renormalized_median}</td>
+            <td className="mono">{pct((c.coverage_pct ?? 0) / 100)}</td>
+            <td><GradeBadge grade={c.evidence_grade} /></td>
           </tr>
         ))}
       </tbody>
@@ -273,18 +299,21 @@ function InputsScreen({ strat, strategies, setStrat }) {
           {data.version && data.version.change_reason && (
             <p className="muted">{data.version.change_reason}</p>
           )}
-          <div className="labgrid" style={{ marginTop: 12 }}>
-            <div className="card-stack">
-              <WeightsTable weights={data.version ? data.version.component_weights : {}} />
-            </div>
-            <div className="card-stack">
-              <BandsTable bands={data.version ? data.version.band_cutoffs : {}} />
-              {data.version && <FiltersTable filters={data.version.hard_filters} />}
-            </div>
+          <div className="banner" style={{ marginTop: 12 }}>
+            This screen describes what the strategy does. It says nothing about whether any of it works. Evidence grades come from the Findings ledger.
           </div>
           {data.score_evidence_note && (
-            <p className="muted" style={{ marginTop: 12 }}>Score evidence: {data.score_evidence_note}</p>
+            <div className="banner" style={{ marginTop: 12 }}>{data.score_evidence_note}</div>
           )}
+          <div className="labgrid" style={{ marginTop: 12 }}>
+            <div className="card-stack">
+              <FiltersTable filters={data.hard_filters} />
+            </div>
+            <div className="card-stack">
+              <ComponentsTable components={data.components} />
+              <BandsTable bands={data.band_cutoffs} />
+            </div>
+          </div>
         </div>
         <div className="card">
           <h3>Related findings</h3>
@@ -357,6 +386,74 @@ function VersionsScreen({ strat, strategies, setStrat }) {
       setDiffErr(e.message);
     }
   };
+  const [matching, setMatching] = useState(false);
+  const [matchErr, setMatchErr] = useState("");
+  const runMatched = async () => {
+    setMatching(true);
+    setMatchErr("");
+    try {
+      const base = {
+        strategy_key: strat,
+        window: { from: null, to: null },
+        event_kinds: ["earnings"],
+        hit_definition: { price_move_pct: 20, volume_spike_x: 3, combine: "or", window: "tight" },
+        baselines: ["all_events"],
+        hypothesis: `Same-events comparison of v${a} and v${b} on the fixture earnings set.`,
+      };
+      for (const vn of [Number(a), Number(b)]) {
+        await api("/admin/lab/backtest", { method: "POST", json: { ...base, version_number: vn } });
+      }
+      const d = await api(`/admin/lab/strategies/${strat}/versions/diff?a=${a}&b=${b}`);
+      setDiff(d);
+    } catch (e) {
+      setMatchErr(e.message);
+    } finally {
+      setMatching(false);
+    }
+  };
+  const PerformanceStrip = ({ p }) => (
+    <div className="card">
+      <h3>Performance on the same events</h3>
+      <table className="labtable">
+        <thead>
+          <tr><th>Version</th><th>Hit rate</th><th>Hits</th><th>n</th><th>95% CI</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>v{p.a.version_number}</td>
+            <td className="rate">{pct(p.a.hit_rate)}</td>
+            <td>{p.a.hits}</td>
+            <td>{p.a.n}</td>
+            <td className="mono">{p.a.ci95 ? `${pct(p.a.ci95[0])}–${pct(p.a.ci95[1])}` : "—"}</td>
+          </tr>
+          <tr>
+            <td>v{p.b.version_number}</td>
+            <td className="rate">{pct(p.b.hit_rate)}</td>
+            <td>{p.b.hits}</td>
+            <td>{p.b.n}</td>
+            <td className="mono">{p.b.ci95 ? `${pct(p.b.ci95[0])}–${pct(p.b.ci95[1])}` : "—"}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="muted">
+        difference {p.difference == null ? "—" : pct(p.difference)}
+        {p.difference_ci95 && p.difference_ci95[0] != null && (
+          <> (95% {pct(p.difference_ci95[0])} to {pct(p.difference_ci95[1])})</>
+        )}
+        {p.p_value != null && <> · p {p.p_value}</>}
+      </p>
+      <p className={p.verdict.state === "better" ? "notice" : p.verdict.state === "worse" ? "errorbox" : "muted"} style={p.verdict.state === "better" || p.verdict.state === "worse" ? undefined : { margin: 0 }}>
+        {p.verdict.text}
+      </p>
+      {p.warnings.length > 0 && (
+        <div className="rel" style={{ marginTop: 8 }}>
+          {p.warnings.map((w, i) => (
+            <span className="badge warn" key={i} title={w.text}>{w.code}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
   const DiffList = ({ title, items }) =>
     items.length === 0 ? null : (
       <div className="card">
@@ -430,6 +527,23 @@ function VersionsScreen({ strat, strategies, setStrat }) {
               <DiffList title="Hard filters" items={diff.hard_filters} />
               <DiffList title="Component weights" items={diff.component_weights} />
               <DiffList title="Band cutoffs" items={diff.band_cutoffs} />
+              {diff.performance && diff.performance.matched ? (
+                <PerformanceStrip p={diff.performance} />
+              ) : (
+                <div className="card">
+                  <h3>Performance on the same events</h3>
+                  <p className="muted">
+                    No cached backtest pair covers both versions with an identical
+                    spec. Comparing two versions on different event sets is how a
+                    meaningless improvement number gets made, so the tool will not
+                    offer that comparison.
+                  </p>
+                  <button className="btn btn-primary" onClick={runMatched} disabled={matching}>
+                    {matching ? "Running…" : "Run both versions on the same events"}
+                  </button>
+                  {matchErr && <div className="errorbox" style={{ marginTop: 8 }}>{matchErr}</div>}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1030,6 +1144,7 @@ function LabApp() {
         </nav>
         <span style={{ flex: 1 }} />
         <span className="muted mono">{strategies ? `${strategies.events_total} fixture events` : ""}</span>
+        <ThemeSwitcher />
         <button
           className="btn"
           onClick={() => {

@@ -9,5 +9,6 @@ db/*
 !db/migrate.py
 !db/migrations/
 !db/seed_lab.py
+!db/seed_oauth_test.py
 tests
 .vscode

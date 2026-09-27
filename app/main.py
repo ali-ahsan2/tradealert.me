@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from app import email as emailer
 from app import security
-from app import account, admin, alerts, billing, lab, scope
+from app import account, admin, alerts, billing, lab, lab_regression, lab_release, oauth, scope
 from app.db import _load_env, get_conn
 
 _load_env()
@@ -33,6 +33,9 @@ app.include_router(alerts.router)
 app.include_router(admin.router)
 app.include_router(billing.router)
 app.include_router(lab.router)
+app.include_router(lab_regression.router)
+app.include_router(lab_release.router)
+app.include_router(oauth.router)
 bearer = HTTPBearer(auto_error=False)
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -85,9 +88,12 @@ class LoginIn(BaseModel):
 
 
 def _user_payload(row):
-    uid, email, _h, verified, is_admin, created_at = row
+    uid, email, _h, verified, is_admin, created_at, name, provider, provider_id = row
     return {"email": email, "verified": bool(verified),
-            "is_admin": bool(is_admin), "created_at": created_at.isoformat()}
+            "is_admin": bool(is_admin), "name": name,
+            "provider": provider, "provider_id": provider_id,
+            "username": provider_id if provider else None,
+            "created_at": created_at.isoformat()}
 
 
 def _user_from_token(creds):
@@ -143,7 +149,7 @@ def _tier_for_user(conn, user_id):
 
 
 def _account_payload(row, conn):
-    uid, email, _h, verified, is_admin, created_at = row
+    uid, email, _h, verified, is_admin, created_at, name, provider, provider_id = row
     payload = _user_payload(row)
     _provision_free(conn, uid)
     tier = _tier_for_user(conn, uid)
@@ -168,7 +174,8 @@ def _get_by(conn, column, value):
     if column not in {"email", "id"}:
         raise ValueError(f"unexpected column {column!r}")
     cur = conn.cursor()
-    cur.execute(f"SELECT id, email, password_hash, verified, is_admin, created_at "
+    cur.execute(f"SELECT id, email, password_hash, verified, is_admin, "
+                f"created_at, name, provider, provider_id "
                 f"FROM users WHERE {column} = %s", (value,))
     return cur.fetchone()
 
@@ -307,12 +314,15 @@ def unsubscribe(token: str, channel: str = "email"):
 
 @app.get("/api/strategies")
 def strategies():
+    """Public list: what the screen is called and whether it is calibrated.
+    Only the name and track record leave the server; the inputs and cutoffs
+    stay internal."""
     conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT key, label, monogram, calibrated, calibrated_at, "
-                "resolved_outcomes_count, description, band_cutoffs_json "
+                "resolved_outcomes_count "
                 "FROM strategies ORDER BY sort_order",
             )
             rows = cur.fetchall()
@@ -321,8 +331,7 @@ def strategies():
     return {"strategies": [
         {"key": r[0], "label": r[1], "monogram": r[2], "calibrated": bool(r[3]),
          "calibrated_at": r[4].isoformat() if r[4] else None,
-         "resolved_outcomes_count": r[5], "description": r[6],
-         "band_cutoffs": r[7]} for r in rows
+         "resolved_outcomes_count": r[5]} for r in rows
     ]}
 
 
@@ -402,7 +411,7 @@ def board(band: str = "", creds: HTTPAuthorizationCredentials | None = Depends(b
         with conn.cursor() as cur:
             params = [run_id]
             sql = (
-                "SELECT s.symbol, i.theme, i.lane, i.instrument_group, i.hook, "
+                "SELECT s.symbol, i.theme, i.instrument_group, "
                 "ind.key, ind.label, ind.benchmark_etf, sc.value, sc.band, "
                 "sc.components_present, sc.components_total, sc.delta_1d "
                 "FROM scores sc "
@@ -431,12 +440,11 @@ def board(band: str = "", creds: HTTPAuthorizationCredentials | None = Depends(b
         "as_of": run[1].isoformat(),
         "run_id": run_id,
         "rows": [
-            {"rank": i + 1, "symbol": r[0], "theme": r[1], "lane": r[2],
-             "group": r[3], "hook": r[4],
-             "industry": {"key": r[5], "label": r[6], "benchmark_etf": r[7]},
-             "value": float(r[8]), "band": r[9],
-             "components_present": r[10], "components_total": r[11],
-             "delta_1d": float(r[12]) if r[12] is not None else None}
+            {"rank": i + 1, "symbol": r[0], "theme": r[1], "group": r[2],
+             "industry": {"key": r[3], "label": r[4], "benchmark_etf": r[5]},
+             "value": float(r[6]), "band": r[7],
+             "components_present": r[8], "components_total": r[9],
+             "delta_1d": float(r[10]) if r[10] is not None else None}
             for i, r in enumerate(rows)
         ],
         "meta": {"shown": len(rows), "truncated": truncated,
@@ -446,10 +454,9 @@ def board(band: str = "", creds: HTTPAuthorizationCredentials | None = Depends(b
 
 
 _SNAPSHOT_FIELDS = {
-    "px": "px", "cap_usd_m": "cap_usd_m", "float_m": "float_m", "so_m": "so_m",
-    "si_pct_float": "si_pct_float", "si_shares_m": "si_shares_m", "dtc": "dtc",
-    "fee_pct": "fee_pct", "growth_pct": "growth_pct", "run3m_pct": "run3m_pct",
-    "off_high_pct": "off_high_pct", "volx20d": "volx20d", "day_pct": "day_pct",
+    "px": "px", "cap_usd_m": "cap_usd_m", "so_m": "so_m",
+    "run3m_pct": "run3m_pct", "off_high_pct": "off_high_pct",
+    "volx20d": "volx20d", "day_pct": "day_pct",
     "earnings": "earnings",
 }
 
@@ -474,8 +481,8 @@ def stock(symbol: str, creds: HTTPAuthorizationCredentials | None = Depends(bear
         vis, vis_params = scope.visible_sql_and_params(keys, picks, "i")
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT s.id, i.id, i.theme, i.lane, i.instrument_group, i.hook, "
-                "i.thesis, ind.key, ind.label, ind.benchmark_etf "
+                "SELECT s.id, i.id, i.theme, i.instrument_group, "
+                "ind.key, ind.label, ind.benchmark_etf "
                 "FROM tickers s JOIN instruments i ON i.ticker_id = s.id "
                 "JOIN industries ind ON ind.id = i.industry_id "
                 f"WHERE s.symbol = %s AND {vis} "
@@ -490,7 +497,7 @@ def stock(symbol: str, creds: HTTPAuthorizationCredentials | None = Depends(bear
             cur.execute(
                 "SELECT value, band, components_present, components_total, "
                 "shrinkage_applied, shrinkage_from, component_json, haircut_json, "
-                "hard_filter_json, delta_1d "
+                "delta_1d "
                 "FROM scores WHERE run_id = %s AND instrument_id = %s "
                 "AND strategy_id = 1",
                 (run_id, instrument_id),
@@ -507,9 +514,8 @@ def stock(symbol: str, creds: HTTPAuthorizationCredentials | None = Depends(bear
     finally:
         conn.close()
     out = {
-        "symbol": sym, "theme": row[2], "lane": row[3], "group": row[4],
-        "hook": row[5], "thesis": row[6],
-        "industry": {"key": row[7], "label": row[8], "benchmark_etf": row[9]},
+        "symbol": sym, "theme": row[2], "group": row[3],
+        "industry": {"key": row[4], "label": row[5], "benchmark_etf": row[6]},
         "snapshot": snaps,
     }
     if score:
@@ -519,22 +525,12 @@ def stock(symbol: str, creds: HTTPAuthorizationCredentials | None = Depends(bear
             "components_present": score[2], "components_total": score[3],
             "shrinkage_applied": shrink,
             "shrinkage_from": float(score[5]) if score[5] is not None else None,
-            "components": [
-                {"key": c["k"], "label": c["label"], "weight": c["weight"],
-                 "score": c["score"], "val": c.get("val"), "backed": c["backed"]}
-                for c in score[6]
-            ],
             "haircuts": [
                 {"label": h.get("label"), "points": h.get("points"),
                  "evidence_url": h.get("evidence_url")}
                 for h in score[7]
             ],
-            "hard_filters": [
-                {"key": h.get("key"), "label": h.get("label"),
-                 "value": h.get("value"), "pass": h.get("pass")}
-                for h in (score[8] or [])
-            ],
-            "delta_1d": float(score[9]) if score[9] is not None else None,
+            "delta_1d": float(score[8]) if score[8] is not None else None,
         }
     return out
 

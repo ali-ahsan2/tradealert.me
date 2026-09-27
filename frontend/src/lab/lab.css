@@ -1,50 +1,17 @@
 /*
- * Lab surface: warm graphite research-notebook palette (v1 design,
- * approved). Only palette + heading-font tokens are redefined here,
- * scoped to the Lab <html>; structural tokens (spacing, radii, type
- * scale, one-shadow/no-pill rules) are inherited unchanged from the
- * product. Scoped to [data-surface="lab"] only -- does not affect the
- * subscriber app.
+ * Lab surface (LAB_DASHBOARD_DESIGN.md section 10). The palette and the
+ * self-hosted font faces live in theme-override.css, which every page loads;
+ * this file adds only the Lab's structural tokens and surface rules. Fonts
+ * come from /lab-fonts/, so the admin page never makes an external request.
  */
-@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&display=swap");
-
 html[data-surface="lab"] {
-  --bg: #151513;
-  --surface: #1c1c19;
-  --surface-raised: #23231f;
-  --surface-sunken: #101010;
-  --border: #2c2c28;
-  --border-strong: #3b3b36;
-  --ink: #ebe9e2;
-  --ink-muted: #a4a197;
-  --ink-faint: #8b887f;
-
-  --info: #9fb6d0;
-  --info-hover: #b0c4dc;
-  --info-active: #8ba5c0;
-  --pos: #93c19e;
-  --neg: #e39a88;
-  --warn: #d9b46e;
-  --warn-fill: #2a2418;
-
-  --band-strong-bg: #3a5a80;
-  --band-strong-fg: #ffffff;
-  --band-strong-bd: #2c4666;
-  --band-elevated-bg: #4a6d8f;
-  --band-elevated-fg: #ffffff;
-  --band-elevated-bd: #3a5773;
-  --band-neutral-bg: #3a3a35;
-  --band-neutral-fg: #dedad0;
-  --band-neutral-bd: #2f2f2a;
-  --band-weak-bg: #4a4030;
-  --band-weak-fg: #ecd9a8;
-  --band-weak-bd: #3a3226;
-  --band-excluded-bg: #232320;
-  --band-excluded-fg: #8b887f;
-  --band-excluded-bd: #181815;
-
+  --lab-fs-answer: 30px;
+  --lab-measure: 880px;
   --lab-font-display: "Source Serif 4", Georgia, "Times New Roman", serif;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas,
+    monospace;
 }
 
 html[data-surface="lab"] body {
@@ -68,9 +35,8 @@ html[data-surface="lab"] .rate-headline {
   align-items: center;
   gap: var(--s-3);
   padding: var(--s-3) var(--s-5);
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
   border-bottom: 1px solid var(--border);
-  backdrop-filter: blur(4px);
 }
 
 .labbar .mark {
@@ -81,7 +47,7 @@ html[data-surface="lab"] .rate-headline {
   line-height: 26px;
   text-align: center;
   background: var(--info);
-  color: #fff;
+  color: #06120d;
 }
 
 .labnav {

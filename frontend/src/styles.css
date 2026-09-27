@@ -9,6 +9,8 @@ html,
 body {
   margin: 0;
   padding: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -35,7 +37,8 @@ a:hover {
 }
 
 ::selection {
-  background: #d6e0f0;
+  background: var(--selection-bg);
+  color: var(--selection-fg);
 }
 
 /* ---------- shell ---------- */
@@ -192,7 +195,7 @@ a:hover {
 
 .btn-primary {
   background: var(--info);
-  color: #fff;
+  color: #06120d;
 }
 
 .btn-primary:hover {
@@ -213,6 +216,24 @@ a:hover {
 .btn-secondary:hover {
   background: var(--surface-sunken);
   text-decoration: none;
+}
+
+.btn-google {
+  width: 100%;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.btn-google:hover {
+  background: var(--surface-sunken);
+  border-color: var(--border);
+  text-decoration: none;
+}
+
+.btn-google:active {
+  box-shadow: none;
 }
 
 .field {
@@ -456,7 +477,7 @@ table.board tr:last-child td {
 }
 
 table.board tr:nth-child(even) td {
-  background: #fbfcfd;
+  background: var(--surface-sunken);
 }
 
 table.board .rank {
@@ -511,15 +532,16 @@ table.board .ind {
 
 /* sandbox notice */
 .bar {
-  background: #10233d;
-  color: #cdd9e8;
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  border-bottom: 1px solid var(--border);
   font-size: var(--fs-sm);
   padding: var(--s-1) var(--s-4);
   text-align: center;
 }
 
 .bar b {
-  color: #ffffff;
+  color: var(--ink);
 }
 
 /* ---------- stock report ---------- */
@@ -647,7 +669,7 @@ table.board .ind {
 .haircuts {
   margin-top: var(--s-5);
   border-left: 3px solid var(--neg);
-  background: #fdf5f5;
+  background: var(--surface-sunken);
   border-radius: 0 var(--r-md) var(--r-md) 0;
   padding: var(--s-3) var(--s-4);
 }
@@ -915,13 +937,29 @@ table.board .ind {
 }
 
 .navlink:hover {
-  color: var(--fg);
+  color: var(--ink);
   background: var(--surface-raised);
 }
 
 .navlink.active {
-  color: var(--fg);
+  color: var(--ink);
   font-weight: 600;
+}
+
+.navlink,
+.topbar .btn {
+  white-space: nowrap;
+}
+
+/* Board and Plans stay reachable from the landing CTAs and the footer. */
+@media (max-width: 480px) {
+  .topbar {
+    gap: var(--s-2);
+  }
+
+  .navlinks {
+    display: none;
+  }
 }
 
 .pin {
@@ -1012,7 +1050,7 @@ table.board .ind {
   padding: var(--s-3);
   cursor: pointer;
   font: inherit;
-  color: var(--fg);
+  color: var(--ink);
 }
 
 .indchip.on {

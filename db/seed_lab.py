@@ -78,6 +78,30 @@ def _seed_version_one(cur, admin_id):
         )
 
 
+def _backfill_lifecycle(cur, admin_id):
+    """Bring the seeded versions into the section-10 lifecycle. fast_mover v1
+    is live and points the live_version_id pointer; the provisional strategies
+    keep their single version in tested state. Idempotent: state/live pointers
+    are only ever set when a live pointer is absent, so a box that already ran
+    the workflow is left alone."""
+    cur.execute(
+        "SELECT s.id, s.key, sv.id FROM strategies s "
+        "JOIN LATERAL (SELECT id FROM strategy_versions sv "
+        "               WHERE sv.strategy_id = s.id ORDER BY sv.version_number ASC "
+        "               LIMIT 1) sv ON TRUE "
+        "WHERE s.live_version_id IS NULL ORDER BY s.id")
+    rows = cur.fetchall()
+    for strat_id, key, v1_id in rows:
+        if key == "fast_mover":
+            cur.execute(
+                "UPDATE strategy_versions SET state = 'live' WHERE id = %s", (v1_id,))
+            cur.execute("UPDATE strategies SET live_version_id = %s WHERE id = %s",
+                        (v1_id, strat_id))
+        else:
+            cur.execute(
+                "UPDATE strategy_versions SET state = 'tested' WHERE id = %s", (v1_id,))
+
+
 def _backfill_version_confidence(cur):
     cur.execute(
         "SELECT sv.id FROM strategy_versions sv "
@@ -154,6 +178,7 @@ def _fixture_events(cur):
         all_pass = all(h["pass"] for h in hf)
         max_move = round(min(4 + roll * 46 + (18 if all_pass else 0), 74), 2)
         vol_spike = round(1.5 + roll * 4.5 + (1.2 if all_pass else 0), 2)
+        days_to_move = 1 + int(roll * 6) if (max_move >= 20.0 or vol_spike >= 3.0) else None
         inputs = {
             "hard_filters": hf,
             "components": comp_json or [],
@@ -168,11 +193,11 @@ def _fixture_events(cur):
         cur.execute(
             "INSERT INTO backtest_events (instrument_id, event_date, event_kind, "
             " inputs_json, provenance_json, fwd_max_move_pct, fwd_close_move_pct, "
-            " fwd_vol_spike_x, hit, resolved_at, data_complete, synthetic_data_used) "
-            "VALUES (%s, %s, 'earnings', %s, %s, %s, %s, %s, %s, now(), TRUE, TRUE)",
+            " fwd_vol_spike_x, days_to_move, hit, resolved_at, data_complete, synthetic_data_used) "
+            "VALUES (%s, %s, 'earnings', %s, %s, %s, %s, %s, %s, %s, now(), TRUE, TRUE)",
             (instrument_id, date_, json.dumps(inputs),
              json.dumps(provenance), max_move,
-             round(max_move * (0.4 + roll * 0.5), 2), vol_spike,
+             round(max_move * (0.4 + roll * 0.5), 2), vol_spike, days_to_move,
              max_move >= 20.0 or vol_spike >= 3.0),
         )
         n_events += 1

@@ -320,18 +320,15 @@ def add_pick(body: PickIn,
         scope.provision_free(conn, uid)
         tier = scope.tier_for_user(conn, uid)
         picks_limit = tier[5] if tier else 1
-        industries_limit = tier[3] if tier else 1
         run_id = _latest_run_id(conn)
-        keys, _scope_label, existing_pick_ids = scope.user_scope(conn, uid, industries_limit)
-        vis, vis_params = scope.visible_sql_and_params(keys, existing_pick_ids, "i")
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT i.id, s.value FROM tickers t "
                 "JOIN instruments i ON i.ticker_id = t.id "
                 "LEFT JOIN scores s ON s.instrument_id = i.id AND s.run_id = %s "
-                f"WHERE t.symbol = %s AND i.active AND {vis} "
+                "WHERE t.symbol = %s AND i.active "
                 "ORDER BY i.active DESC, s.value DESC NULLS LAST LIMIT 1",
-                tuple([run_id, sym] + vis_params),
+                (run_id, sym),
             )
             found = cur.fetchone()
             if not found:
@@ -349,7 +346,7 @@ def add_pick(body: PickIn,
             cur.execute("SELECT COUNT(*) FROM picks WHERE user_id = %s AND active", (uid,))
             if cur.fetchone()[0] >= picks_limit:
                 raise HTTPException(
-                    403, f"your plan pins {picks_limit} name{'s' if picks_limit == 1 else ''}; upgrade to pin more")
+                    403, f"your plan pins {picks_limit} ticker{'s' if picks_limit != 1 else ''}; upgrade to pin more")
             if existing_pick is not None and not pick_active:
                 cur.execute("UPDATE picks SET active = TRUE, score_at_pin = %s WHERE id = %s",
                             (score_val, existing_pick))

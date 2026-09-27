@@ -19,6 +19,7 @@ COPY app/ app/
 COPY db/migrate.py db/migrate.py
 COPY db/migrations/ db/migrations/
 COPY db/seed_lab.py db/seed_lab.py
+COPY db/seed_oauth_test.py db/seed_oauth_test.py
 COPY refresh.py ingest.py ./
 COPY static/ static/
 RUN python -c "from app.main import app"

@@ -23,7 +23,7 @@ export default function Pin({ symbol }) {
 
   const toggle = async () => {
     if (!getToken()) {
-      toast("Sign in to pin names to your watchlist.");
+      toast("Sign in to pin tickers to your watchlist.");
       return;
     }
     setBusy(true);

@@ -4,10 +4,10 @@ import { navigate } from "../main.jsx";
 
 const TRIGGERS = [
   ["volume_3x", "Volume 3x+"],
-  ["catalyst_dated", "Catalyst dated"],
+  ["catalyst_dated", "Dated catalyst ahead"],
   ["band_change", "Band change"],
-  ["si_cross", "SI crosses 10/15/20%"],
-  ["borrow_fee_2x", "Borrow fee 2x+"],
+  ["si_cross", "Short interest print"],
+  ["borrow_fee_2x", "Borrow rate spike"],
   ["insider_buying", "Insider buying"],
   ["s3_424b", "S-3 / 424B filing"],
   ["social_surge", "Social surge"],

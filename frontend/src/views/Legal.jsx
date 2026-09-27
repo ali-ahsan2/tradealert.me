@@ -23,7 +23,7 @@ export default function Legal({ page }) {
           <LawRow h="What this site is">
             <p className="st">
               tradealert.me publishes machine-scored research notes on small-cap
-              names. Scores, bands, and theses are produced by automated
+              tickers. Scores, bands, and theses are produced by automated
               filters from public filings and quote data. Nothing on this site
               is a recommendation to buy or sell any security.
             </p>

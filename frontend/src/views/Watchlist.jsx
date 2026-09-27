@@ -51,7 +51,7 @@ export default function Watchlist() {
       </div>
       {picks.length === 0 ? (
         <div className="table-card empty">
-          <p>Nothing pinned yet. Pin names from the board or any stock page.</p>
+          <p>Nothing pinned yet. Pin tickers from the board or any stock page.</p>
           <p style={{ marginTop: "var(--s-3)" }}>
             <a className="btn btn-primary" href="/board"
                onClick={(e) => { e.preventDefault(); navigate("/board"); }}>

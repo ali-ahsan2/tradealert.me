@@ -1,56 +1,19 @@
 /*
  * tradealert.me design tokens.
  *
- * This file is the single supported theming mechanism. To rebrand, never
- * edit colors inline in the stylesheet: redefine the tokens below in
- * theme-override.css (loaded after this file on every page) and leave the
- * component styles alone. Palette swaps must not touch the structural rules
- * (spacing, radii, type scale, shadows, and the one-shadow/no-pill identity
- * rules), which are brand decisions only in the sense that the palette is.
+ * Structural tokens (spacing, radii, type scale) are brand decisions made once
+ * and never restyled through the palette. Color lives entirely behind three
+ * switchable themes below, and a runtime accent color that every hue derives
+ * from. To rebrand, change the theme blocks, not the component styles.
  *
- * Example rebrand — dark desk:
- *
- *   :root[data-theme="dark"] {
- *     --bg: #101318; ... --info: #7fa3cc; ... band tokens ...;
- *   }
- *   <html data-theme="dark">
+ * The accent is a variable, so a user-chosen color propagates immediately:
+ * --info / --pos and every derived hover, selection, and band tint are
+ * color-mix() results of --accent. Dark = default (data-theme attribute set
+ * by the boot script in index.html / lab.html).
  */
+
 :root {
-  --bg: #f7f8fa;
-  --surface: #ffffff;
-  --surface-raised: #fbfcfe;
-  --surface-sunken: #eef0f4;
-  --border: #d8dce3;
-  --border-strong: #b4bac6;
-  --ink: #161a21;
-  --ink-muted: #5b6472;
-  --ink-faint: #8b93a2;
-
-  --info: #24466f;
-  --info-hover: #1a3455;
-  --info-active: #162c48;
-  --pos: #1f6b4a;
-  --neg: #9b2c2c;
-  --warn: #8a5a00;
-  --warn-fill: #fdf8ec;
-
-  --band-strong-bg: #1d3a5f;
-  --band-strong-fg: #ffffff;
-  --band-strong-bd: #162c48;
-  --band-elevated-bg: #3a6491;
-  --band-elevated-fg: #ffffff;
-  --band-elevated-bd: #2d5178;
-  --band-neutral-bg: #dfe3ea;
-  --band-neutral-fg: #2b323d;
-  --band-neutral-bd: #c3c9d4;
-  --band-weak-bg: #e8e4d8;
-  --band-weak-fg: #5b5240;
-  --band-weak-bd: #d3ccb9;
-  --band-excluded-bg: #eef0f4;
-  --band-excluded-fg: #5b6472;
-  --band-excluded-bd: #d8dce3;
-
-  --shadow: 0 1px 2px rgba(22, 26, 33, 0.06);
+  font-size: calc(16px * var(--fs-scale, 1));
 
   --s-1: 4px;
   --s-2: 8px;
@@ -58,15 +21,17 @@
   --s-4: 16px;
   --s-5: 24px;
   --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 64px;
 
   --r-sm: 3px;
   --r-md: 6px;
   --r: 8px;
 
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-    Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo,
-    Consolas, monospace;
+  --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas,
+    monospace;
 
   --fs-xs: 12px;
   --fs-sm: 13px;
@@ -74,4 +39,190 @@
   --fs-md: 18px;
   --fs-lg: 24px;
   --fs-xl: 32px;
+}
+
+/* ---------- dark desk (default) ---------- */
+
+:root[data-theme="dark"],
+:root[data-theme=""] {
+  --bg: #0b0f15;
+  --bg-bleed: #090d12;
+  --surface: #11161f;
+  --surface-raised: #161d29;
+  --surface-sunken: #0d1219;
+
+  --border: #202a3a;
+  --border-strong: #33415a;
+
+  --ink: #e6ebf2;
+  --ink-muted: #9aa7ba;
+  --ink-faint: #5f6d80;
+
+  --accent: #31c48d;
+  --neg: #e05656;
+  --warn: #d9a441;
+  --warn-fill: #2c2513;
+
+  --stack: 0 1px 1px rgba(0, 0, 0, 0.35), 0 10px 28px -14px rgba(0, 0, 0, 0.6);
+  --stack-lift: 0 2px 2px rgba(0, 0, 0, 0.42), 0 26px 60px -18px rgba(0, 0, 0, 0.72);
+  --tile-hi: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
+/* ---------- paper (warm light) ---------- */
+
+:root[data-theme="paper"] {
+  --bg: #f2efe7;
+  --bg-bleed: #ece8dd;
+  --surface: #faf8f2;
+  --surface-raised: #ffffff;
+  --surface-sunken: #ebe7dc;
+
+  --border: #e0dacb;
+  --border-strong: #c7bfab;
+
+  --ink: #23201a;
+  --ink-muted: #6d675a;
+  --ink-faint: #938c7d;
+
+  --accent: #1f6f45;
+  --neg: #b3382e;
+  --warn: #96701c;
+  --warn-fill: #f3e9cd;
+
+  --stack: 0 1px 1px rgba(30, 28, 20, 0.06), 0 8px 22px -10px rgba(30, 28, 20, 0.22);
+  --stack-lift: 0 2px 2px rgba(30, 28, 20, 0.07), 0 26px 56px -18px rgba(30, 28, 20, 0.32);
+  --tile-hi: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+/* ---------- mist (cool light) ---------- */
+
+:root[data-theme="mist"] {
+  --bg: #eef1f6;
+  --bg-bleed: #e8ecf2;
+  --surface: #f6f8fb;
+  --surface-raised: #ffffff;
+  --surface-sunken: #e5eaf1;
+
+  --border: #d4dbe5;
+  --border-strong: #bcc7d6;
+
+  --ink: #1b2230;
+  --ink-muted: #5d6a7e;
+  --ink-faint: #8d98ab;
+
+  --accent: #3357c4;
+  --neg: #ba352b;
+  --warn: #8a6616;
+  --warn-fill: #f2ead0;
+
+  --stack: 0 1px 1px rgba(20, 30, 45, 0.07), 0 8px 22px -10px rgba(20, 30, 45, 0.2);
+  --stack-lift: 0 2px 2px rgba(20, 30, 45, 0.08), 0 26px 56px -18px rgba(20, 30, 45, 0.3);
+  --tile-hi: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+/* ---------- terminal (phosphor green dark) ---------- */
+
+:root[data-theme="terminal"] {
+  --bg: #0a0f0b;
+  --bg-bleed: #060a07;
+  --surface: #0f1611;
+  --surface-raised: #141d16;
+  --surface-sunken: #070c08;
+
+  --border: #1e2d22;
+  --border-strong: #2c4533;
+
+  --ink: #d8f2e0;
+  --ink-muted: #8fb39a;
+  --ink-faint: #55705e;
+
+  --accent: #39e075;
+  --neg: #ff7e5f;
+  --warn: #cfe35a;
+  --warn-fill: #202a12;
+
+  --stack: 0 1px 1px rgba(0, 0, 0, 0.4), 0 10px 28px -14px rgba(0, 0, 0, 0.6);
+  --stack-lift: 0 2px 2px rgba(0, 0, 0, 0.46), 0 26px 60px -18px rgba(0, 0, 0, 0.72);
+  --tile-hi: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* ---------- midnight (deep navy dark) ---------- */
+
+:root[data-theme="midnight"] {
+  --bg: #0b1220;
+  --bg-bleed: #070c16;
+  --surface: #111a30;
+  --surface-raised: #17223c;
+  --surface-sunken: #080e1a;
+
+  --border: #20304d;
+  --border-strong: #324975;
+
+  --ink: #dfe7f8;
+  --ink-muted: #93a3c6;
+  --ink-faint: #5a6b90;
+
+  --accent: #41c6d8;
+  --neg: #e05656;
+  --warn: #d9a441;
+  --warn-fill: #262716;
+
+  --stack: 0 1px 1px rgba(0, 0, 0, 0.4), 0 10px 28px -14px rgba(0, 0, 0, 0.65);
+  --stack-lift: 0 2px 2px rgba(0, 0, 0, 0.46), 0 26px 60px -18px rgba(0, 0, 0, 0.78);
+  --tile-hi: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ---------- semantic derivations (accent-driven, theme-independent) ---------- */
+
+:root[data-theme="dark"],
+:root[data-theme=""],
+:root[data-theme="paper"],
+:root[data-theme="mist"],
+:root[data-theme="terminal"],
+:root[data-theme="midnight"] {
+  --info: var(--accent);
+  --pos: var(--accent);
+  --info-hover: color-mix(in srgb, var(--accent) 88%, #000);
+  --info-active: color-mix(in srgb, var(--accent) 76%, #000);
+
+  --selection-bg: color-mix(in srgb, var(--accent) 18%, transparent);
+  --selection-fg: var(--ink);
+
+  --band-strong-bg: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  --band-strong-fg: var(--ink);
+  --band-strong-bd: color-mix(in srgb, var(--accent) 46%, var(--surface));
+
+  --band-elevated-bg: color-mix(in srgb, var(--accent) 11%, var(--surface));
+  --band-elevated-fg: var(--ink);
+  --band-elevated-bd: color-mix(in srgb, var(--accent) 34%, var(--surface));
+
+  --band-neutral-bg: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  --band-neutral-fg: var(--ink);
+  --band-neutral-bd: color-mix(in srgb, var(--accent) 22%, var(--surface));
+
+  --band-weak-bg: color-mix(in srgb, var(--warn) 12%, var(--surface));
+  --band-weak-fg: var(--ink);
+  --band-weak-bd: color-mix(in srgb, var(--warn) 40%, var(--surface));
+
+  --band-excluded-bg: color-mix(in srgb, var(--ink-faint) 10%, var(--surface));
+  --band-excluded-fg: var(--ink-faint);
+  --band-excluded-bd: color-mix(in srgb, var(--ink-faint) 30%, var(--surface));
+}
+
+/* ---------- shared card shadow alias ---------- */
+
+:root[data-theme="dark"],
+:root[data-theme=""],
+:root[data-theme="paper"],
+:root[data-theme="mist"],
+:root[data-theme="terminal"],
+:root[data-theme="midnight"] {
+  --shadow: var(--stack);
+  --shadow-lift: var(--stack-lift);
+}
+
+/* ---------- shape presets (radius system) ---------- */
+
+:root {
+  --r-pill: 999px;
 }

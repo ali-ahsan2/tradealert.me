@@ -75,7 +75,7 @@ export default function Pricing({ notice }) {
               </div>
               <ul className="tfeats">
                 <li>{t.industries_limit >= 999 ? "All industries" : `${t.industries_limit} industr${t.industries_limit === 1 ? "y" : "ies"}`}</li>
-                <li>{t.names_shown_limit} names on the board</li>
+                <li>{t.names_shown_limit} tickers on the board</li>
                 <li>{t.picks_limit} pinned</li>
                 <li>{t.alerts_limit === 0 ? "No alerts" : t.alerts_limit == null ? "Unlimited alerts" : `${t.alerts_limit} alerts`}</li>
                 <li>Channels {t.channels.map((c) => CHANNEL_LABEL[c] || c).join(" · ")}</li>

@@ -77,7 +77,7 @@ export default function Onboarding() {
               >
                 <b>{i.label}</b>
                 <span className="st" style={{ display: "block", color: "var(--ink-faint)", fontSize: "var(--fs-xs)" }}>
-                  {i.universe_count} names · {i.benchmark_etf}
+                  {i.universe_count} tickers · {i.benchmark_etf}
                 </span>
               </button>
             );

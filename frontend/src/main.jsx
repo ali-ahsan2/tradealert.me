@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { getToken, logout } from "./api.js";
+import ThemeSwitcher from "./components/ThemeSwitcher.jsx";
 import Board from "./views/Board.jsx";
 import StockReport from "./views/StockReport.jsx";
 import Landing from "./views/Landing.jsx";
@@ -80,7 +81,7 @@ function Shell({ children }) {
     return () => window.removeEventListener("toast", onToast);
   }, []);
   const acct = me
-    ? `${me.email} · ${me.tier ? me.tier.label : "Free"}`
+    ? `${me.name || me.email} · ${me.tier ? me.tier.label : "Free"}`
     : "";
   const nav = (label, to, active) => (
     <a
@@ -111,8 +112,8 @@ function Shell({ children }) {
   return (
     <>
       <div className="bar">
-        <b>Sandbox preview</b> — seeded from the operator&rsquo;s workbench, not live
-        market data. Every figure is a claim to re-verify.
+        <b>Sandbox preview.</b> Seeded from the operator&rsquo;s workbench, not live
+        market data. Re-verify every figure.
       </div>
       <nav className="topbar">
         <a
@@ -128,6 +129,7 @@ function Shell({ children }) {
         </a>
         <span className="navlinks">{links}</span>
         <div className="spacer" />
+        <ThemeSwitcher />
         {me ? (
           <>
             <span className="acct mono">{checked ? acct : "…"}</span>

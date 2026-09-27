@@ -36,7 +36,7 @@ export default function Board() {
         if (alive) setData(d);
       } catch (e) {
         if (alive) {
-          setErr(e.detail || "failed to load the board");
+          setErr(e.status === 401 ? "signin" : e.detail || "failed to load the board");
           setData(null);
         }
       }
@@ -81,7 +81,7 @@ export default function Board() {
       </div>
       {me && (
         <p className="truncated-note" style={{ marginTop: 0, marginBottom: "var(--s-4)" }}>
-          {me.tier.label} plan: {me.tier.names_shown_limit} names across{" "}
+          {me.tier.label} plan: {me.tier.names_shown_limit} tickers across{" "}
           {me.tier.industries_limit >= 999
             ? "all industries"
             : `${me.tier.industries_limit} industr${
@@ -104,9 +104,8 @@ export default function Board() {
         <div className="howbody">
           <ul>
             <li>
-              <b>Band</b> — the score's bracket. Strong and elevated are the
-              actionable brackets; neutral and weak names scored below both
-              cutoffs.
+              <b>Band</b> — the score's bracket. Strong is the actionable
+              bracket; the bands below it rank lower on the same scale.
             </li>
             <li>
               <b>Coverage</b> — how many scoring inputs had data. Thin coverage
@@ -115,17 +114,42 @@ export default function Board() {
               color regardless.
             </li>
             <li>
-              <b>Lane</b> — which angle of the thesis drove the score, e.g.
-              float, borrow, or supply.
-            </li>
-            <li>
               <b>Provisional strategies</b> — marked with a label chip; their
               weights still wait on resolved outcomes.
             </li>
           </ul>
         </div>
       </details>
-      {err && <p className="empty">{err}</p>}
+      {err === "signin" ? (
+        <div className="table-card empty">
+          <p>Sign in to see the board.</p>
+          <p className="st" style={{ marginTop: "var(--s-2)" }}>
+            Boards are sized and gated by plan.{" "}
+            <a
+              href="/login"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate("/login");
+              }}
+            >
+              Log in
+            </a>{" "}
+            or{" "}
+            <a
+              href="/signup"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate("/signup");
+              }}
+            >
+              sign up
+            </a>{" "}
+            to pick your industries.
+          </p>
+        </div>
+      ) : err ? (
+        <p className="empty">{err}</p>
+      ) : null}
       {!data && !err && (
         <div className="table-card empty">
           <p>Loading the latest run…</p>
@@ -136,7 +160,7 @@ export default function Board() {
         </div>
       )}
       {data && rows.length === 0 && (
-        <div className="table-card empty">No names in this band on the latest run.</div>
+        <div className="table-card empty">No tickers in this band on the latest run.</div>
       )}
       {data && rows.length > 0 && (
         <>
@@ -148,11 +172,10 @@ export default function Board() {
                   <th>Ticker</th>
                   <th>Theme</th>
                   <th>Industry</th>
-                  <th>Lane<span className="thinfo" title="Lane: the angle of the thesis that drove the score, e.g. float, borrow, or supply." aria-label="Lane. The angle of the thesis that drove the score.">?</span></th>
                   <th style={{ textAlign: "right" }}>
                     Score<span className="thinfo" title="Score: 0-100 composite of present inputs. Thin coverage shrinks it toward neutral and marks the number with ~." aria-label="Score. A 0 to 100 composite; thin coverage shrinks it toward neutral.">?</span>
                   </th>
-                  <th>Band<span className="thinfo" title="Band: strong, elevated, neutral, or weak, by the calibrated cutoffs." aria-label="Band. Strong, elevated, neutral, or weak by the calibrated cutoffs.">?</span></th>
+                  <th>Band<span className="thinfo" title="Band: strong, elevated, neutral, or weak, by the calibrated bands." aria-label="Band. Strong, elevated, neutral, or weak.">?</span></th>
                   <th style={{ textAlign: "right" }}>
                     Coverage<span className="thinfo" title="Coverage 2 of 3: some inputs missing, score shrunk toward neutral." aria-label="Coverage 2 of 3: some inputs missing, score shrunk toward neutral.">?</span>
                   </th>
@@ -175,16 +198,13 @@ export default function Board() {
                       </a>
                       <Pin symbol={r.symbol} />
                     </td>
-                    <td className="theme" title={r.hook || r.theme}>
+                    <td className="theme" title={r.theme}>
                       {r.theme}
                     </td>
                     <td>
                       <span className="ind">
                         {r.industry.label} ({r.industry.benchmark_etf})
                       </span>
-                    </td>
-                    <td>
-                      <span className="ind">{r.lane || "—"}</span>
                     </td>
                     <td className="numcell">{r.value.toFixed(1)}</td>
                     <td>
@@ -216,7 +236,7 @@ export default function Board() {
           </div>
           {data.meta.truncated && (
             <p className="truncated-note">
-              Showing {data.meta.shown} names, capped by this plan. Raise your
+              Showing {data.meta.shown} tickers, capped by this plan. Raise your
               plan to see the full board.
             </p>
           )}

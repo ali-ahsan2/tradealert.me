@@ -123,12 +123,16 @@ def test_lab_versions_and_diff():
     token = admin_token()
     status, body, _ = get("/admin/lab/strategies/fast_mover/versions", token=token)
     assert status == 200, body
-    assert body["versions"][0]["version_number"] == 1
+    numbers = [v["version_number"] for v in body["versions"]]
+    assert 1 in numbers, "seeded v1 must always be on record"
+    assert numbers == sorted(numbers, reverse=True), "timeline must be newest first"
+    assert all("state" in v and "created_by" in v for v in body["versions"]), body["versions"]
 
     status, body, _ = get("/admin/lab/strategies/fast_mover/versions/diff?a=1&b=1",
                           token=token)
     assert status == 200, body
     assert body["hard_filters"] == [] and body["component_weights"] == [], body
+    assert "performance" in body, "diff must carry the performance strip"
 
     status, _, _ = get("/admin/lab/strategies/fast_mover/versions/diff?a=1&b=99",
                        token=token)

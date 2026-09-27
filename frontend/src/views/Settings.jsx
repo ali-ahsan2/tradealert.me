@@ -90,7 +90,7 @@ function Settings() {
             <div className="row1">
               <span className="tag">{me.tier ? me.tier.label : "Free"}</span>
               <span className="st" style={{ marginLeft: "auto" }}>
-                {me.tier ? `${me.tier.names_shown_limit} names · ${me.tier.industries_limit >= 999 ? "all" : me.tier.industries_limit} industries · ${me.tier.picks_limit} pinned` : ""}
+                {me.tier ? `${me.tier.names_shown_limit} tickers · ${me.tier.industries_limit >= 999 ? "all" : me.tier.industries_limit} industries · ${me.tier.picks_limit} pinned` : ""}
               </span>
             </div>
             <p style={{ fontSize: "var(--fs-sm)", color: "var(--ink-muted)" }}>
@@ -115,7 +115,7 @@ function Settings() {
                     <span>
                       <b>{i.label}</b>
                       <span className="st" style={{ color: "var(--ink-faint)", fontSize: "var(--fs-xs)" }}>
-                        {" "}{i.universe_count} names · {i.benchmark_etf}
+                        {" "}{i.universe_count} tickers · {i.benchmark_etf}
                       </span>
                     </span>
                     {isOn ? (
