@@ -720,9 +720,9 @@ function BacktestScreen({ strat, strategies, setStrat }) {
             </label>
             <label className="labfield">
               Market cap band (USD)
-              <span style={{ display: "flex", gap: 6 }}>
-                <input type="number" placeholder="lo" value={capLo} onChange={(e) => setCapLo(e.target.value)} />
-                <input type="number" placeholder="hi" value={capHi} onChange={(e) => setCapHi(e.target.value)} />
+              <span style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 6, minWidth: 0 }}>
+                <input type="number" placeholder="lo (USD)" value={capLo} onChange={(e) => setCapLo(e.target.value)} />
+                <input type="number" placeholder="hi (USD)" value={capHi} onChange={(e) => setCapHi(e.target.value)} />
               </span>
             </label>
             <label className="labfield">
@@ -785,9 +785,14 @@ function BacktestScreen({ strat, strategies, setStrat }) {
             Family key (for Holm multiple-comparison adjustment)
             <input value={family} onChange={(e) => setFamily(e.target.value)} placeholder="e.g. si-growth-2026" />
           </label>
-          <button className="btn btn-primary" disabled={running}>
-            {running ? "Running…" : "Run backtest"}
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <button className="btn btn-primary" disabled={running} style={{ padding: "10px 18px" }}>
+              {running ? "Running…" : "Run backtest"}
+            </button>
+            <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
+              Results are auditable: every run is recorded as a query and each hit is a comparison against its baselines.
+            </p>
+          </div>
         </form>
       </div>
       <div aria-live="polite">

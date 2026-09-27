@@ -165,6 +165,28 @@ label.labfield {
   min-width: 0;
 }
 
+.labfield input:not([type="checkbox"]):not([type="radio"]),
+.labfield select,
+.labfield textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.labfield fieldset {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.labfield legend {
+  padding: 0 6px;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+
 .labfield input:focus,
 .labfield select:focus,
 .labfield textarea:focus {
