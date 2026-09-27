@@ -42,8 +42,10 @@ function useFetch(deps, loader) {
 
 function Load({ data, err, children }) {
   if (err) return <div className="errorbox" role="alert">{err}</div>;
-  if (data === null) return <p className="muted">Loading…</p>;
-  return children;
+  if (data === null || data === undefined) {
+    return <p className="muted">Loading…</p>;
+  }
+  return children(data);
 }
 
 function useGate() {
@@ -293,6 +295,8 @@ function InputsScreen({ strat, strategies, setStrat }) {
         <StratPicker value={strat} options={strategies} onChange={setStrat} />
       </div>
       <Load data={data} err={err}>
+        {(data) => (
+          <>
         <div className="card">
           <h3>{data.strategy.label} — inputs</h3>
           <p className="muted">Version {data.version ? data.version.version_number : "?"} since {data.version ? data.version.effective_from : "—"}</p>
@@ -332,8 +336,11 @@ function InputsScreen({ strat, strategies, setStrat }) {
             ))
           )}
         </div>
+          </>
+        )}
       </Load>
       <Load data={coverage.data} err={coverage.err}>
+        {(data) => (
         <div className="card">
           <h3>Event coverage</h3>
           <dl className="kv">
@@ -358,6 +365,7 @@ function InputsScreen({ strat, strategies, setStrat }) {
             </tbody>
           </table>
         </div>
+        )}
       </Load>
     </div>
   );
@@ -480,6 +488,8 @@ function VersionsScreen({ strat, strategies, setStrat }) {
         <StratPicker value={strat} options={strategies} onChange={setStrat} />
       </div>
       <Load data={data} err={err}>
+        {(data) => (
+          <>
         <div className="card">
           <h3>Versions</h3>
           {data.versions.length === 0 ? (
@@ -547,6 +557,8 @@ function VersionsScreen({ strat, strategies, setStrat }) {
             </div>
           )}
         </div>
+          </>
+        )}
       </Load>
     </div>
   );
@@ -948,7 +960,8 @@ function FindingsScreen() {
             </label>
           </div>
           <Load data={data} err={err}>
-            {list.length === 0 ? (
+{(data) => (
+          list.length === 0 ? (
               <p className="muted">No findings.</p>
             ) : (
               list.map((f) => (
@@ -969,9 +982,8 @@ function FindingsScreen() {
                     <FindingDetail fid={f.id} grade={f.evidence_grade} />
                   )}
                 </div>
-              ))
-            )}
-          </Load>
+))))}
+            </Load>
         </div>
       </div>
     </div>
@@ -1022,6 +1034,8 @@ function FindingDetail({ fid, grade }) {
   return (
     <div className="card" style={{ marginTop: 6 }}>
       <Load data={data} err={err}>
+        {(data) => (
+          <>
         <p style={{ marginTop: 0 }}>{data.claim}</p>
         <div className="formrow">
           <label className="labfield">
@@ -1065,6 +1079,8 @@ function FindingDetail({ fid, grade }) {
           <button className="btn btn-primary" onClick={add}>Link query</button>
         </div>
         {msg && <p className="notice">{msg}</p>}
+          </>
+        )}
       </Load>
     </div>
   );
@@ -1076,7 +1092,8 @@ function LogScreen() {
     <div className="card">
       <h3>Query audit log</h3>
       <Load data={data} err={err}>
-        {data.queries.length === 0 ? (
+        {(data) => (
+        data.queries.length === 0 ? (
           <p className="muted">No queries recorded.</p>
         ) : (
           <table className="labtable">
@@ -1100,9 +1117,9 @@ function LogScreen() {
                 </tr>
               ))}
             </tbody>
-          </table>
-        )}
-      </Load>
+</table>
+          ))}
+        </Load>
     </div>
   );
 }
