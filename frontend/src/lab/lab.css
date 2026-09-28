@@ -352,7 +352,8 @@ label.labfield {
 .btn-primary {
   border-color: var(--info);
   background: var(--info);
-  color: #fff;
+  color: #06120d;
+  font-weight: 600;
 }
 
 .btn-primary:hover {
@@ -525,8 +526,8 @@ label.labfield {
 
 .labwalk h2 {
   margin: 0;
-  font-family: var(--lab-font-display);
-  font-weight: 500;
+  font-family: var(--font-sans);
+  font-weight: 600;
 }
 
 .labwalk-actions {
