@@ -160,6 +160,79 @@ function StratPicker({ value, options, onChange, hint }) {
   );
 }
 
+function Help({ text }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="labhelp">
+      <button
+        type="button"
+        className="labhelp-btn"
+        aria-label="What does this mean?"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        ?
+      </button>
+      {open && <span className="labhelp-pop" role="tooltip">{text}</span>}
+    </span>
+  );
+}
+
+const SCREEN_INTROS = {
+  strategies: "Every strategy the site can score with. Start here, then open a card to inspect it or test it.",
+  inputs: "What this strategy currently claims to do, filter by filter and weight by weight, and what evidence backs each claim.",
+  versions: "The change history for a strategy. Compare two versions on the same events to see whether a change actually helped.",
+  backtest: "Run one strategy version against a chosen set of past events and see how often it would have called a real move.",
+  findings: "The written record of what backtests have actually shown. A finding is only as strong as the runs linked to it.",
+  log: "Every backtest ever run, in order, so any result can be traced back to the exact query that produced it.",
+};
+
+const WALKTHROUGH_STEPS = [
+  {
+    title: "What the Lab is for",
+    body: "The Lab is where a strategy's rules get inspected, changed, and tested against real history before anything reaches subscribers. Nothing you do here is visible outside this tool.",
+  },
+  {
+    title: "1. Strategies",
+    body: "The list of every scoring strategy. Open one to see its current rules (Inputs), its history (Versions), or to test it (Backtest).",
+  },
+  {
+    title: "2. Inputs",
+    body: "Shows what a strategy currently does: its filters, its component weights, its band cutoffs, and the evidence grade behind each one. This is a description, not a verdict.",
+  },
+  {
+    title: "3. Backtest",
+    body: "The core tool. Pick a strategy version, define a universe of stocks and a time window, choose what counts as a \"hit,\" and run it. Every run is recorded, so results can always be traced back later.",
+  },
+  {
+    title: "4. Versions and Findings",
+    body: "Versions lets you compare two points in a strategy's history on the exact same events, so a change is judged fairly. Findings is where a conclusion worth keeping gets written down and linked to the runs that support it.",
+  },
+];
+
+function Walkthrough({ onClose }) {
+  const [step, setStep] = useState(0);
+  const last = step === WALKTHROUGH_STEPS.length - 1;
+  const s = WALKTHROUGH_STEPS[step];
+  return (
+    <div className="labwalk-backdrop" role="dialog" aria-modal="true" aria-label="Lab walkthrough">
+      <div className="labwalk">
+        <p className="labwalk-step">{step + 1} / {WALKTHROUGH_STEPS.length}</p>
+        <h2>{s.title}</h2>
+        <p>{s.body}</p>
+        <div className="labwalk-actions">
+          <button className="btn" onClick={onClose}>Skip</button>
+          <span style={{ flex: 1 }} />
+          {step > 0 && <button className="btn" onClick={() => setStep((n) => n - 1)}>Back</button>}
+          <button className="btn btn-primary" onClick={() => (last ? onClose() : setStep((n) => n + 1))}>
+            {last ? "Start" : "Next"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Chip({ label, on, onClick }) {
   return (
     <button type="button" aria-pressed={on} className={`chip${on ? " on" : ""}`} onClick={onClick}>
@@ -798,7 +871,10 @@ function BacktestScreen({ strat, strategies, setStrat }) {
           </div>
         </section>
         <section className="lab-step">
-          <h3><span className="stepnum">4</span> Baselines</h3>
+          <h3>
+            <span className="stepnum">4</span> Baselines
+            <Help text="A baseline is what the strategy's hit rate gets measured against. If a strategy hits 30% of the time but random days also hit 28% of the time, the strategy isn't actually adding much." />
+          </h3>
           <p className="labmeta" style={{ margin: 0 }}>
             Every hit rate is compared against these. A result only becomes citable by a finding when it clears its baselines.
           </p>
@@ -815,7 +891,10 @@ function BacktestScreen({ strat, strategies, setStrat }) {
               <input value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} placeholder="e.g. filtered beats small-beat names in a three-day window" />
             </label>
             <label className="labfield">
-              Family key (Holm multiple-comparison adjustment)
+              Family key
+              <span className="labfield-inline-help">
+                <Help text="Group repeated tests of the same idea under one family key. Test the same hypothesis five times and one of those runs will look good by chance alone; the family key applies a statistical correction (Holm-Bonferroni) so a lucky run doesn't get mistaken for a real result." />
+              </span>
               <input value={family} onChange={(e) => setFamily(e.target.value)} placeholder="e.g. si-growth-2026" />
             </label>
           </div>
@@ -1163,10 +1242,27 @@ function LogScreen() {
   );
 }
 
+const WALKTHROUGH_SEEN_KEY = "lab_walkthrough_seen";
+
 function LabApp() {
   const { data: strategies, err } = useFetch([], () => api("/admin/lab/strategies"));
   const [screen, setScreen] = useState("inputs");
   const [strat, setStrat] = useState("");
+  const [showWalk, setShowWalk] = useState(() => {
+    try {
+      return !localStorage.getItem(WALKTHROUGH_SEEN_KEY);
+    } catch {
+      return false;
+    }
+  });
+  const closeWalk = () => {
+    setShowWalk(false);
+    try {
+      localStorage.setItem(WALKTHROUGH_SEEN_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+  };
   useEffect(() => {
     if (!strat && strategies) {
       const first = strategies.strategies[0];
@@ -1200,6 +1296,7 @@ function LabApp() {
         </nav>
         <span style={{ flex: 1 }} />
         <span className="muted mono">{strategies ? `${strategies.events_total} fixture events` : ""}</span>
+        <button className="btn" onClick={() => setShowWalk(true)}>Guide</button>
         <ThemeSwitcher />
         <button
           className="btn"
@@ -1211,8 +1308,10 @@ function LabApp() {
           Sign out
         </button>
       </div>
+      {showWalk && <Walkthrough onClose={closeWalk} />}
       <div className="labwrap">
         {err && <div className="errorbox">{err}</div>}
+        <p className="labscreen-intro">{SCREEN_INTROS[screen]}</p>
         {screen === "strategies" && (
           <StrategiesScreen strategies={strategies} onPick={go} />
         )}

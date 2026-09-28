@@ -443,6 +443,99 @@ label.labfield {
   align-items: center;
 }
 
+.labscreen-intro {
+  margin: calc(-1 * var(--s-2)) 0 0;
+  color: var(--ink-faint);
+  font-size: var(--fs-sm);
+}
+
+.labhelp {
+  position: relative;
+  display: inline-block;
+}
+
+.labhelp-btn {
+  width: 18px;
+  height: 18px;
+  line-height: 16px;
+  margin-left: 6px;
+  border-radius: 100%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--ink-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.labhelp-btn:hover {
+  border-color: var(--info);
+  color: var(--info);
+}
+
+.labhelp-pop {
+  position: absolute;
+  z-index: 10;
+  top: 24px;
+  left: 0;
+  width: 280px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow);
+  padding: var(--s-3);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.labfield-inline-help {
+  display: inline-flex;
+}
+
+.labwalk-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--bg) 70%, black 20%);
+  padding: var(--s-4);
+}
+
+.labwalk {
+  width: 100%;
+  max-width: 440px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: var(--s-5);
+  display: grid;
+  gap: var(--s-2);
+}
+
+.labwalk-step {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.labwalk h2 {
+  margin: 0;
+  font-family: var(--lab-font-display);
+  font-weight: 500;
+}
+
+.labwalk-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+
 .gate {
   max-width: 380px;
   margin: 12vh auto 0;
