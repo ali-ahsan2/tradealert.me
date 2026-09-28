@@ -178,6 +178,25 @@ function Help({ text }) {
   );
 }
 
+function Collapsible({ title, subtitle, defaultOpen, children }) {
+  const [open, setOpen] = useState(!!defaultOpen);
+  return (
+    <div className="labcollapse">
+      <button
+        type="button"
+        className="labcollapse-head"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="labcollapse-chevron">{open ? "▾" : "▸"}</span>
+        <span className="labcollapse-title">{title}</span>
+        {!open && subtitle && <span className="labcollapse-subtitle">{subtitle}</span>}
+      </button>
+      {open && <div className="labcollapse-body">{children}</div>}
+    </div>
+  );
+}
+
 const SCREEN_INTROS = {
   strategies: "Every strategy the site can score with. Start here, then open a card to inspect it or test it.",
   inputs: "What this strategy currently claims to do, filter by filter and weight by weight, and what evidence backs each claim.",
@@ -684,6 +703,18 @@ function BacktestScreen({ strat, strategies, setStrat }) {
   const toggle = (arr, setArr, v) =>
     setArr(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
+  const universeIsSet = !!(tickers || (capLo && capHi) || group || theme || from || to || indKeys.length);
+  const universeSummary = [
+    tickers && "tickers set",
+    capLo && capHi && "cap band set",
+    group && "group set",
+    theme && "theme regex set",
+    (from || to) && "date range set",
+    indKeys.length ? `${indKeys.length} industr${indKeys.length === 1 ? "y" : "ies"}` : null,
+  ].filter(Boolean).join(" · ");
+  const advancedIsSet = !!(hypothesis || family);
+  const advancedSummary = [hypothesis && "hypothesis recorded", family && "family key set"].filter(Boolean).join(" · ");
+
   const run = async (e) => {
     e.preventDefault();
     setRunning(true);
@@ -802,6 +833,14 @@ function BacktestScreen({ strat, strategies, setStrat }) {
         </section>
         <section className="lab-step">
           <h3><span className="stepnum">2</span> Universe</h3>
+          <p className="labmeta" style={{ margin: 0 }}>
+            Leave everything below empty to run on every stock the strategy is allowed to see. Narrow it down only if you want to test a specific slice.
+          </p>
+          <Collapsible
+            title="Narrow the universe"
+            subtitle={universeIsSet ? universeSummary : "using the full universe"}
+            defaultOpen={universeIsSet}
+          >
           <div className="formrow">
             <label className="labfield">
               Tickers (comma-separated)
@@ -841,6 +880,7 @@ function BacktestScreen({ strat, strategies, setStrat }) {
               ))}
             </div>
           </div>
+          </Collapsible>
         </section>
         <section className="lab-step">
           <h3><span className="stepnum">3</span> Event kinds and hit rule</h3>
@@ -884,7 +924,15 @@ function BacktestScreen({ strat, strategies, setStrat }) {
           </div>
         </section>
         <section className="lab-step">
-          <h3><span className="stepnum">5</span> Hypothesis</h3>
+          <h3><span className="stepnum">5</span> Hypothesis <span className="muted">(optional)</span></h3>
+          <p className="labmeta" style={{ margin: 0 }}>
+            Skip this for a quick look. Fill it in when a result might become a finding you cite later.
+          </p>
+          <Collapsible
+            title="Record a hypothesis"
+            subtitle={advancedIsSet ? advancedSummary : "not recorded"}
+            defaultOpen={advancedIsSet}
+          >
           <div className="formrow">
             <label className="labfield">
               Hypothesis (recorded with the run)
@@ -898,6 +946,7 @@ function BacktestScreen({ strat, strategies, setStrat }) {
               <input value={family} onChange={(e) => setFamily(e.target.value)} placeholder="e.g. si-growth-2026" />
             </label>
           </div>
+          </Collapsible>
         </section>
         <div className="runbar">
           <button className="btn btn-primary" disabled={running} style={{ padding: "10px 20px" }}>
