@@ -18,8 +18,8 @@ from pydantic import BaseModel, Field
 
 from app import email as emailer
 from app import security
-from app import (account, admin, alerts, billing, lab, lab_regression, lab_release,
-                 oauth, reporting, scope)
+from app import (account, admin, alerts, billing, dossier, lab, lab_regression,
+                 lab_release, oauth, product, reporting, scope)
 from app.db import _load_env, get_conn
 
 _load_env()
@@ -37,6 +37,7 @@ app.include_router(lab.router)
 app.include_router(lab_regression.router)
 app.include_router(lab_release.router)
 app.include_router(oauth.router)
+app.include_router(product.router)
 app.include_router(reporting.router)
 bearer = HTTPBearer(auto_error=False)
 
@@ -508,10 +509,12 @@ def stock(symbol: str, strategy: str = "fast_mover",
         strat = _strategy_by_key(conn, (strategy or "fast_mover").strip().lower())
         if not strat:
             raise HTTPException(404, "not found")
+        names_shown_limit = tier[4] if tier else 5
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT s.id, i.id, i.theme, i.instrument_group, "
-                "ind.key, ind.label, ind.benchmark_etf, i.lane, i.hook, i.thesis "
+                "ind.key, ind.label, ind.benchmark_etf, i.lane, i.hook, i.thesis, "
+                "i.industry_id "
                 "FROM tickers s JOIN instruments i ON i.ticker_id = s.id "
                 "JOIN industries ind ON ind.id = i.industry_id "
                 f"WHERE s.symbol = %s AND {vis} "
@@ -521,7 +524,7 @@ def stock(symbol: str, strategy: str = "fast_mover",
             row = cur.fetchone()
             if not row:
                 raise HTTPException(404, "not found")
-        ticker_id, instrument_id = row[0], row[1]
+        ticker_id, instrument_id, industry_id = row[0], row[1], row[10]
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT value, band, components_present, components_total, "
@@ -540,30 +543,24 @@ def stock(symbol: str, strategy: str = "fast_mover",
             )
             snaps = {f: {"value": _as_num(v), "as_of": a.isoformat()}
                      for f, v, a in cur.fetchall() if f in _SNAPSHOT_FIELDS}
-            # every strategy, with this run's score where one exists, so the
-            # report can show the other lenses as chips without a second call
+            # every strategy, with this run's score and breakdown where one
+            # exists, so the dossier shows all five lenses from one call
+            lenses = dossier.lenses(cur, run_id, instrument_id)
+            components = dossier.components_of(score[6]) if score else []
+            extras = {
+                "changes": dossier.changes(cur, run_id, instrument_id, strat[0], components),
+                "history": dossier.history(cur, instrument_id, strat[0]),
+                "peers": dossier.peers(cur, run_id, strat[0], industry_id, instrument_id,
+                                       vis, vis_params, names_shown_limit),
+                "events": dossier.events(cur, instrument_id, user_id),
+                "past_reactions": dossier.past_reactions(cur, instrument_id),
+            }
             cur.execute(
-                "SELECT st.key, st.label, st.monogram, st.calibrated, "
-                "sc.value, sc.band "
-                "FROM strategies st "
-                "LEFT JOIN scores sc ON sc.strategy_id = st.id "
-                "  AND sc.run_id = %s AND sc.instrument_id = %s "
-                "ORDER BY st.sort_order",
-                (run_id, instrument_id),
-            )
-            lenses = [
-                {"key": r[0], "label": r[1], "monogram": r[2],
-                 "calibrated": bool(r[3]),
-                 "value": float(r[4]) if r[4] is not None else None,
-                 "band": r[5]}
-                for r in cur.fetchall()
-            ]
-            cur.execute(
-                "SELECT 1 FROM picks WHERE user_id = %s AND instrument_id = %s "
+                "SELECT note FROM picks WHERE user_id = %s AND instrument_id = %s "
                 "AND active",
                 (user_id, instrument_id),
             )
-            pinned = cur.fetchone() is not None
+            pick = cur.fetchone()
     finally:
         conn.close()
     out = {
@@ -573,8 +570,10 @@ def stock(symbol: str, strategy: str = "fast_mover",
         "strategy": _strategy_payload(strat),
         "strategies": lenses,
         "run": {"id": run_id, "as_of": run[1].isoformat()},
-        "pinned": pinned,
+        "pinned": pick is not None,
+        "note": (pick[0] if pick else "") or "",
         "snapshot": snaps,
+        **extras,
     }
     if score:
         shrink = float(score[4]) if score[4] is not None else None
@@ -583,12 +582,7 @@ def stock(symbol: str, strategy: str = "fast_mover",
             "components_present": score[2], "components_total": score[3],
             "shrinkage_applied": shrink,
             "shrinkage_from": float(score[5]) if score[5] is not None else None,
-            "components": [
-                {"key": c.get("k"), "label": c.get("label"),
-                 "weight": c.get("weight"), "score": c.get("score"),
-                 "value": c.get("val"), "backed": bool(c.get("backed", True))}
-                for c in (score[6] or [])
-            ],
+            "components": components,
             "haircuts": [
                 {"label": h.get("label"), "points": h.get("points"),
                  "evidence_url": h.get("evidence_url")}

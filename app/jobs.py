@@ -184,17 +184,14 @@ def _board_rows_for(conn, user_id, tier_row, limit=None):
 
 
 def _send_digest(conn, uid, run_id, email_addr):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT t.key, t.label, t.industries_limit, t.names_shown_limit "
-            "FROM tiers t JOIN subscriptions s ON s.tier_id = t.id "
-            "WHERE s.user_id = %s",
-            (uid,),
-        )
-        tier = cur.fetchone()
-        if not tier:
-            return
-    rows, truncated = _board_rows_for(conn, uid, tier, limit=tier[3])
+    # The full tier row in scope.TIER_COLS order: _board_rows_for reads
+    # index 3 as the industries limit and index 4 as names shown. A shorter
+    # tuple here once put names_shown_limit in the industries slot, which
+    # widened a Free digest to five industries instead of one.
+    tier = scope.tier_for_user(conn, uid)
+    if not tier:
+        return
+    rows, truncated = _board_rows_for(conn, uid, tier, limit=tier[4])
     frozen = {"run_id": run_id, "tier_key": tier[0],
               "generated_at": _now().isoformat(), "rows": rows,
               "truncated": truncated}

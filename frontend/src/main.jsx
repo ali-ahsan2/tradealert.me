@@ -15,6 +15,10 @@ import Settings from "./views/Settings.jsx";
 import Onboarding from "./views/Onboarding.jsx";
 import Reset from "./views/Reset.jsx";
 import Legal from "./views/Legal.jsx";
+import Compare from "./views/Compare.jsx";
+import Strategies, { StrategyDetail } from "./views/Strategies.jsx";
+import Digests, { DigestView } from "./views/Digests.jsx";
+import Industry from "./views/Industry.jsx";
 
 function NotFound() {
   return (
@@ -30,55 +34,30 @@ function NotFound() {
   );
 }
 
+const authed = (el) => <RequireAuth>{el}</RequireAuth>;
+
 function Route({ path }) {
   const [pathname] = path.split("?");
   if (pathname === "/") return <Landing />;
-  if (pathname === "/board" || pathname.startsWith("/board/")) {
-    return (
-      <RequireAuth>
-        <Board />
-      </RequireAuth>
-    );
-  }
+  if (pathname === "/board" || pathname.startsWith("/board/")) return authed(<Board />);
   const stockMatch = pathname.match(/^\/stock\/([^/?#]+)/);
-  if (stockMatch) {
-    return (
-      <RequireAuth>
-        <StockReport symbol={decodeURIComponent(stockMatch[1])} />
-      </RequireAuth>
-    );
-  }
+  if (stockMatch) return authed(<StockReport symbol={decodeURIComponent(stockMatch[1])} />);
   if (pathname === "/login") return <Auth mode="login" />;
   if (pathname === "/signup") return <Auth mode="signup" />;
-  if (pathname === "/watchlist") {
-    return (
-      <RequireAuth>
-        <Watchlist />
-      </RequireAuth>
-    );
-  }
-  if (pathname === "/alerts") {
-    return (
-      <RequireAuth>
-        <Alerts />
-      </RequireAuth>
-    );
-  }
+  if (pathname === "/watchlist") return authed(<Watchlist />);
+  if (pathname === "/alerts") return authed(<Alerts />);
+  if (pathname === "/compare") return authed(<Compare />);
+  if (pathname === "/digests") return authed(<Digests />);
+  const digestMatch = pathname.match(/^\/digests\/(\d+)$/);
+  if (digestMatch) return authed(<DigestView id={Number(digestMatch[1])} />);
+  if (pathname === "/strategies") return <Strategies />;
+  const stratMatch = pathname.match(/^\/strategies\/([a-z0-9_]+)$/);
+  if (stratMatch) return <StrategyDetail strategyKey={stratMatch[1]} />;
+  const indMatch = pathname.match(/^\/industries\/([a-z0-9_]+)$/);
+  if (indMatch) return <Industry industryKey={indMatch[1]} />;
   if (pathname === "/pricing") return <Pricing />;
-  if (pathname === "/settings") {
-    return (
-      <RequireAuth>
-        <Settings />
-      </RequireAuth>
-    );
-  }
-  if (pathname === "/onboarding") {
-    return (
-      <RequireAuth>
-        <Onboarding />
-      </RequireAuth>
-    );
-  }
+  if (pathname === "/settings") return authed(<Settings />);
+  if (pathname === "/onboarding") return authed(<Onboarding />);
   if (pathname === "/reset") return <Reset />;
   const legalMatch = pathname.match(/^\/legal\/(terms|privacy|disclaimer)$/);
   if (legalMatch) return <Legal page={legalMatch[1]} />;
