@@ -285,7 +285,7 @@ def get_picks(creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
             cur.execute(
                 "SELECT p.id, t.symbol, i.theme, i.lane, ind.key, ind.label, "
                 "ind.benchmark_etf, p.score_at_pin, p.pinned_at, "
-                "sc.value, sc.band, sc.delta_1d "
+                "sc.value, sc.band, sc.delta_1d, p.note "
                 "FROM picks p "
                 "JOIN instruments i ON i.id = p.instrument_id "
                 "JOIN tickers t ON t.id = i.ticker_id "
@@ -304,7 +304,8 @@ def get_picks(creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
          "score_at_pin": float(r[7]) if r[7] is not None else None,
          "pinned_at": r[8].isoformat(),
          "value": float(r[9]) if r[9] is not None else None,
-         "band": r[10], "delta_1d": float(r[11]) if r[11] is not None else None}
+         "band": r[10], "delta_1d": float(r[11]) if r[11] is not None else None,
+         "note": r[12] or ""}
         for r in rows
     ]}
 

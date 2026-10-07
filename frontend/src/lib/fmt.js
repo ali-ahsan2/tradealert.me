@@ -126,3 +126,57 @@ export function tzList() {
 }
 
 export const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+export function pct(v, digits = 1) {
+  if (v == null || Number.isNaN(Number(v))) return "—";
+  const n = Number(v);
+  const s = n.toFixed(digits);
+  return (n > 0 ? "+" : "") + s + "%";
+}
+
+export function price(v) {
+  if (v == null) return "—";
+  const n = Number(v);
+  return n >= 1000 ? `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : `$${n.toFixed(2)}`;
+}
+
+export function compact(n) {
+  if (n == null) return "—";
+  const v = Number(n);
+  if (Math.abs(v) >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
+  if (Math.abs(v) >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
+  if (Math.abs(v) >= 1e3) return `${(v / 1e3).toFixed(0)}K`;
+  return String(v);
+}
+
+// Change between the first and last close of a bar series, in percent.
+export function seriesChange(bars, key = "c") {
+  if (!bars || bars.length < 2) return null;
+  const a = Number(bars[0][key]);
+  const b = Number(bars[bars.length - 1][key]);
+  if (!a) return null;
+  return ((b - a) / a) * 100;
+}
+
+// Minimal CSV: quotes any field containing a comma, quote or newline.
+export function toCsv(rows, columns) {
+  const esc = (v) => {
+    const s = v == null ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const head = columns.map((c) => esc(c.label)).join(",");
+  const body = rows.map((r) => columns.map((c) => esc(c.get(r))).join(",")).join("\n");
+  return `${head}\n${body}\n`;
+}
+
+export function downloadText(filename, text, type = "text/csv") {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
