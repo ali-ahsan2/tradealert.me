@@ -81,7 +81,10 @@ function AccountMenu({ me }) {
   );
   return (
     <div className="acct" ref={box}>
-      <button className="acct-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button className="acct-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} aria-label={`Account menu for ${name}`}>
+        <span className="acct-initial" aria-hidden="true">
+          {(name || "?").slice(0, 1)}
+        </span>
         <span className="acct-name">{name}</span>
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
           <path d="M1 3l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" />
@@ -95,6 +98,8 @@ function AccountMenu({ me }) {
               {me.verified ? "Email verified" : "Email not verified"} · {me.tier ? me.tier.label : "Free"} plan
             </div>
           </div>
+          {item("/changes", "Changes since last run")}
+          {item("/calendar", "Catalyst calendar")}
           {item("/strategies", "Strategies and evidence")}
           {item("/digests", "Digests")}
           {item("/compare", "Compare names")}
@@ -133,8 +138,20 @@ export function TopBar({ unread }) {
         <Brand />
         {me && (
           <nav className="navlinks" aria-label="Primary">
+            <NavLink to="/overview" here={here}>
+              Overview
+            </NavLink>
             <NavLink to="/board" here={here}>
               Board
+            </NavLink>
+            <NavLink to="/screen" here={here}>
+              Screen
+            </NavLink>
+            <NavLink to="/changes" here={here}>
+              Changes
+            </NavLink>
+            <NavLink to="/calendar" here={here}>
+              Calendar
             </NavLink>
             <NavLink to="/watchlist" here={here}>
               Watchlist
@@ -210,7 +227,9 @@ export function BottomBar({ unread }) {
   };
   return (
     <nav className="bottombar" aria-label="Primary">
+      {item("/overview", "Overview", "M3 3h6v6H3zM11 3h6v6h-6zM3 11h6v6H3zM11 11h6v6h-6z")}
       {item("/board", "Board", "M3 4h14v12H3zM3 9h14M8 9v7")}
+      {item("/screen", "Screen", "M3 5h14M5 10h10M7 15h6")}
       {item("/watchlist", "Watchlist", "M10 2.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 7.8l5-.7z")}
       {item("/alerts", "Alerts", "M5 13V9a5 5 0 0110 0v4l1.5 2h-13zM8.5 17a1.5 1.5 0 003 0", unread)}
     </nav>

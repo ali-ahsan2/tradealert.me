@@ -19,6 +19,10 @@ import Compare from "./views/Compare.jsx";
 import Strategies, { StrategyDetail } from "./views/Strategies.jsx";
 import Digests, { DigestView } from "./views/Digests.jsx";
 import Industry from "./views/Industry.jsx";
+import Overview from "./views/Overview.jsx";
+import Screen from "./views/Screen.jsx";
+import Changes from "./views/Changes.jsx";
+import Calendar from "./views/Calendar.jsx";
 
 function NotFound() {
   return (
@@ -39,7 +43,11 @@ const authed = (el) => <RequireAuth>{el}</RequireAuth>;
 function Route({ path }) {
   const [pathname] = path.split("?");
   if (pathname === "/") return <Landing />;
+  if (pathname === "/overview") return authed(<Overview />);
   if (pathname === "/board" || pathname.startsWith("/board/")) return authed(<Board />);
+  if (pathname === "/screen") return authed(<Screen />);
+  if (pathname === "/changes") return authed(<Changes />);
+  if (pathname === "/calendar") return authed(<Calendar />);
   const stockMatch = pathname.match(/^\/stock\/([^/?#]+)/);
   if (stockMatch) return authed(<StockReport symbol={decodeURIComponent(stockMatch[1])} />);
   if (pathname === "/login") return <Auth mode="login" />;

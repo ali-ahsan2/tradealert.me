@@ -55,7 +55,7 @@ try:
             cur.execute(
                 "INSERT INTO alert_events (instrument_id, trigger_id, fired_at, detail) "
                 "VALUES (%s, %s, %s, %s) "
-                "ON CONFLICT (instrument_id, trigger_id) DO NOTHING",
+                "ON CONFLICT (instrument_id, trigger_id, fired_on) DO NOTHING",
                 (instr[0], trig[0], AS_OF - timedelta(days=days_before), detail),
             )
             if cur.rowcount:

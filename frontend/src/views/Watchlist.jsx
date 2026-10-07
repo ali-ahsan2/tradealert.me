@@ -1,10 +1,18 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { api, cached, toast } from "../api.js";
 import { Link } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
-import { DAYS, delta, deltaTone, dollars, plural, score as fmtScore, shortDate } from "../lib/fmt.js";
+import { DAYS, delta, deltaTone, dollars, downloadText, inDays, plural, score as fmtScore, shortDate, signed, toCsv, tone } from "../lib/fmt.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import { Empty, ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
+
+const SORTS = {
+  order: ["Your order", null],
+  score: ["Score", (a, b) => (b.value ?? -1) - (a.value ?? -1)],
+  since_pin: ["Score since pinned", (a, b) => ((b.value ?? 0) - (b.score_at_pin ?? 0)) - ((a.value ?? 0) - (a.score_at_pin ?? 0))],
+  px: ["Price since pinned", (a, b) => ((b.st && b.st.chg_since_pin) ?? -Infinity) - ((a.st && a.st.chg_since_pin) ?? -Infinity)],
+  earnings: ["Next earnings", (a, b) => ((a.st && a.st.earnings && a.st.earnings.days) ?? Infinity) - ((b.st && b.st.earnings && b.st.earnings.days) ?? Infinity)],
+};
 
 function NoteEditor({ pick, onSaved }) {
   const [open, setOpen] = useState(false);
@@ -56,6 +64,8 @@ export default function Watchlist() {
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
+  const [stats, setStats] = useState(null);
+  const [sort, setSort] = useState("order");
 
   useEffect(() => {
     let alive = true;
@@ -63,6 +73,9 @@ export default function Watchlist() {
     api("/me/picks")
       .then((d) => alive && setPicks(d.picks))
       .catch((e) => alive && setErr(e));
+    api("/me/watchlist/stats")
+      .then((d) => alive && setStats(d))
+      .catch(() => {});
     api("/me/settings")
       .then((d) => alive && setSettings(d))
       .catch(() => {});
@@ -100,6 +113,34 @@ export default function Watchlist() {
     }
   };
 
+  const bySym = useMemo(() => Object.fromEntries(((stats && stats.picks) || []).map((p) => [p.symbol, p])), [stats]);
+  const ordered = useMemo(() => {
+    if (!picks) return [];
+    const withStats = picks.map((p) => ({ ...p, st: bySym[p.symbol] }));
+    const cmp = SORTS[sort][1];
+    return cmp ? [...withStats].sort(cmp) : withStats;
+  }, [picks, bySym, sort]);
+  const summary = stats && stats.summary;
+
+  const exportCsv = () => {
+    const cols = [
+      { label: "symbol", get: (p) => p.symbol },
+      { label: "theme", get: (p) => p.theme },
+      { label: "industry", get: (p) => p.industry.label },
+      { label: "pinned_at", get: (p) => p.pinned_at },
+      { label: "score_at_pin", get: (p) => (p.score_at_pin == null ? "" : Math.round(p.score_at_pin)) },
+      { label: "score_now", get: (p) => (p.value == null ? "" : Math.round(p.value)) },
+      { label: "band", get: (p) => p.band || "" },
+      { label: "price_since_pin_pct", get: (p) => (p.st && p.st.chg_since_pin != null ? p.st.chg_since_pin : "") },
+      { label: "benchmark", get: (p) => (p.st && p.st.benchmark) || "" },
+      { label: "benchmark_since_pin_pct", get: (p) => (p.st && p.st.benchmark_chg_since_pin != null ? p.st.benchmark_chg_since_pin : "") },
+      { label: "next_earnings", get: (p) => (p.st && p.st.earnings ? p.st.earnings.date : "") },
+      { label: "hard_filters", get: (p) => (p.st && p.st.hf_pass != null ? (p.st.hf_pass ? "pass" : "fail") : "") },
+      { label: "note", get: (p) => p.note || "" },
+    ];
+    downloadText(`tradealert-watchlist-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(ordered, cols) + "\n# Research and information only; not investment advice.\n");
+  };
+
   const tier = me && me.tier;
   const limit = tier ? tier.picks_limit : null;
   const used = picks ? picks.length : 0;
@@ -119,15 +160,64 @@ export default function Watchlist() {
         </div>
         <div className="actions">
           {picks && picks.length > 1 && (
+            <label className="ctl">
+              Sort
+              <select className="inline" value={sort} onChange={(e) => setSort(e.target.value)}>
+                {Object.entries(SORTS).map(([k, [l]]) => (
+                  <option key={k} value={k}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {picks && picks.length > 1 && (
             <Link to={`/compare?symbols=${picks.slice(0, 4).map((p) => p.symbol).join(",")}`} className="btn btn-secondary btn-sm">
               Compare {Math.min(4, picks.length)}
             </Link>
           )}
+          {picks && picks.length > 0 && (
+            <button className="btn-quiet" onClick={exportCsv}>
+              Export CSV
+            </button>
+          )}
+          <Link to="/screen?pinned=1" className="btn btn-secondary btn-sm">
+            Screen my picks
+          </Link>
           <Link to="/board" className="btn btn-secondary btn-sm">
             Pin more from the Board
           </Link>
         </div>
       </div>
+
+      {summary && summary.count > 0 && (
+        <div className="tiles">
+          <div className="tile card">
+            <span className="tile-label">Score since pinned</span>
+            <span className={`tile-value ${deltaTone(summary.mean_score_delta_since_pin)}`}>{delta(summary.mean_score_delta_since_pin)}</span>
+            <span className="tile-sub">mean across {plural(summary.count, "pick")}</span>
+          </div>
+          <div className="tile card">
+            <span className="tile-label">Price since pinned</span>
+            <span className={`tile-value ${tone(summary.mean_chg_since_pin)}`}>{signed(summary.mean_chg_since_pin, 1, "%")}</span>
+            <span className="tile-sub">
+              {summary.mean_rel_since_pin != null ? `${signed(summary.mean_rel_since_pin, 1, "%")} vs each name's industry ETF` : "no benchmark bars yet"}
+            </span>
+          </div>
+          <div className="tile card">
+            <span className="tile-label">Cleared the screen</span>
+            <span className="tile-value">{summary.cleared}</span>
+            <span className="tile-sub">every Fast Mover hard filter passed</span>
+          </div>
+          <div className="tile card">
+            <span className="tile-label">Earnings in 14 days</span>
+            <span className="tile-value">{summary.earnings_14d}</span>
+            <span className="tile-sub">
+              {summary.unread} unread {summary.unread === 1 ? "alert" : "alerts"} · {summary.armed} armed
+            </span>
+          </div>
+        </div>
+      )}
 
       {settings && (
         <Notice tone="info">
@@ -183,15 +273,17 @@ export default function Watchlist() {
 
       {picks && picks.length > 0 && (
         <div className="wl-list">
-          {picks.map((p, i) => {
+          {ordered.map((p) => {
+            const i = picks.findIndex((x) => x.symbol === p.symbol);
             const since = p.value != null && p.score_at_pin != null ? p.value - p.score_at_pin : null;
+            const st = p.st;
             return (
               <article className="card wl-card" key={p.symbol} aria-label={p.symbol}>
                 <div className="order" aria-label="Reorder">
-                  <button disabled={busy || i === 0} onClick={() => move(i, -1)} aria-label={`Move ${p.symbol} up`}>
+                  <button disabled={busy || sort !== "order" || i === 0} onClick={() => move(i, -1)} aria-label={`Move ${p.symbol} up`}>
                     ↑
                   </button>
-                  <button disabled={busy || i === picks.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${p.symbol} down`}>
+                  <button disabled={busy || sort !== "order" || i === picks.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${p.symbol} down`}>
                     ↓
                   </button>
                 </div>
@@ -227,6 +319,36 @@ export default function Watchlist() {
                   <span>
                     Since last run <b className={deltaTone(p.delta_1d)}>{delta(p.delta_1d)}</b>
                   </span>
+                  {st && st.chg_since_pin != null && (
+                    <span title={st.last_date ? `close ${shortDate(st.last_date)}` : ""}>
+                      Price since pinned <b className={tone(st.chg_since_pin)}>{signed(st.chg_since_pin, 1, "%")}</b>
+                      {st.benchmark_chg_since_pin != null && (
+                        <span className="xs faint">
+                          {" "}
+                          vs {st.benchmark} <span className={tone(st.benchmark_chg_since_pin)}>{signed(st.benchmark_chg_since_pin, 1, "%")}</span>
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  {st && st.hf_pass != null && (
+                    <span>
+                      Screen <b className={`verdict ${st.hf_pass ? "pass" : "fail"}`}>{st.hf_pass ? "PASS" : "FAIL"}</b>
+                    </span>
+                  )}
+                  {st && st.earnings && (
+                    <span>
+                      Earnings{" "}
+                      <b className={st.earnings.days >= 0 && st.earnings.days <= 14 ? "soon" : ""}>
+                        {inDays(st.earnings.days)}
+                      </b>
+                      <span className="xs faint"> {st.earnings.date}</span>
+                    </span>
+                  )}
+                  {st && st.unread > 0 && (
+                    <Link to={`/alerts?symbol=${p.symbol}&unread=1`} className="chip chip-plain">
+                      {st.unread} unread {st.unread === 1 ? "alert" : "alerts"}
+                    </Link>
+                  )}
                   <span className="spacer" />
                   <Link to={`/stock/${p.symbol}`}>Open full report</Link>
                   <button className="btn-quiet" onClick={() => unpin(p.symbol)}>

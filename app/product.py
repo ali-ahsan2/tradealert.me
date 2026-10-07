@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from app import context, scope, security
+from app import context, discover, scope, security
 from app.db import get_conn
 
 router = APIRouter()
@@ -319,8 +319,60 @@ def industry_detail(key: str,
                 "last_date": b[3].isoformat() if b[3] else None,
                 "chg_30d": _pct(b[2], b[4]), "chg_90d": _pct(b[2], b[5]),
             }
+            # aggregate shape of the industry on the latest run: band counts,
+            # mean score, how many cleared the screen, lanes. Never a ticker.
+            run0 = _latest_run(cur)
+            distribution, mean_score, cleared, lanes, scored = {}, None, 0, {}, 0
+            if run0:
+                cur.execute(
+                    "SELECT sc.band, COUNT(*), AVG(sc.value), "
+                    f"COUNT(*) FILTER (WHERE {discover._hf_pass()} IS TRUE) "
+                    "FROM scores sc JOIN instruments i ON i.id = sc.instrument_id "
+                    "JOIN strategies st ON st.id = sc.strategy_id AND st.key = 'fast_mover' "
+                    "WHERE sc.run_id = %s AND i.industry_id = %s AND sc.value IS NOT NULL "
+                    "GROUP BY sc.band",
+                    (run0[0], ind[0]),
+                )
+                tot, wsum = 0, 0.0
+                for band, n, avg, cl in cur.fetchall():
+                    distribution[band] = n
+                    tot += n
+                    wsum += float(avg or 0) * n
+                    cleared += cl
+                scored = tot
+                mean_score = round(wsum / tot, 1) if tot else None
+                cur.execute(
+                    "SELECT COALESCE(NULLIF(lane, ''), 'unassigned'), COUNT(*) FROM instruments "
+                    "WHERE industry_id = %s AND active GROUP BY 1 ORDER BY 2 DESC",
+                    (ind[0],),
+                )
+                lanes = {r[0]: r[1] for r in cur.fetchall()}
+            # measured reactions after real dated events in this industry
+            cur.execute(
+                "SELECT be.event_kind, COUNT(*), SUM(CASE WHEN be.hit THEN 1 ELSE 0 END), "
+                "AVG(ABS(be.fwd_max_move_pct)), AVG(be.fwd_close_move_pct), "
+                "COUNT(DISTINCT be.instrument_id) "
+                "FROM backtest_events be JOIN instruments i ON i.id = be.instrument_id "
+                "WHERE i.industry_id = %s AND NOT be.synthetic_data_used "
+                "AND be.resolved_at IS NOT NULL AND be.event_kind <> 'random_day' "
+                "GROUP BY be.event_kind ORDER BY 2 DESC",
+                (ind[0],),
+            )
+            by_kind = [
+                {"kind": r[0], "n": r[1], "hits": r[2],
+                 "hit_rate": round(r[2] / r[1], 3) if r[1] >= 10 else None,
+                 "mean_max_move_pct": _f(r[3]), "mean_close_move_pct": _f(r[4]),
+                 "names": r[5]}
+                for r in cur.fetchall()
+            ]
+            rx_n = sum(r["n"] for r in by_kind)
+            rx_hits = sum(r["hits"] for r in by_kind)
+            reactions = {"n": rx_n, "hits": rx_hits,
+                         "hit_rate": round(rx_hits / rx_n, 3) if rx_n >= 10 else None,
+                         "by_kind": by_kind}
             user = context.user_from_creds(creds, required=False)
             followed, in_scope, names, k, run_as_of = False, False, None, None, None
+            themes = None
             if user is not None:
                 uid = context.user_id(user)
                 scope.provision_free(conn, uid)
@@ -353,6 +405,15 @@ def industry_detail(key: str,
                          "delta_1d": _f(r[6])}
                         for n, r in enumerate(cur.fetchall())
                     ]
+                    # themes inside a followed industry: descriptive labels the
+                    # board already shows beside each visible name
+                    cur.execute(
+                        "SELECT i.theme, COUNT(*) FROM instruments i "
+                        f"WHERE i.industry_id = %s AND i.active AND i.theme <> '' AND {vis} "
+                        "GROUP BY i.theme ORDER BY 2 DESC, 1 LIMIT 12",
+                        tuple([ind[0]] + vis_params),
+                    )
+                    themes = [{"theme": r[0], "n": r[1]} for r in cur.fetchall()]
     finally:
         conn.close()
     return {
@@ -360,6 +421,10 @@ def industry_detail(key: str,
         "universe_count": ind[5], "benchmark": benchmark,
         "followed": followed, "in_scope": in_scope, "names_shown_limit": k,
         "names": names, "run_as_of": run_as_of,
+        "shape": {"scored": scored, "distribution": distribution, "mean_score": mean_score,
+                  "cleared": cleared, "lanes": lanes,
+                  "run_as_of": run0[1].isoformat() if run0 else None},
+        "reactions": reactions, "themes": themes,
     }
 
 

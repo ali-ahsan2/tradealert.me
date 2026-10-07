@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api, toast } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
-import { coverage, dateTime, delta, deltaTone, pct, plural, score as fmtScore, shortDate } from "../lib/fmt.js";
-import { EVIDENCE, HARD_FILTER_FORMAT, SNAPSHOT_LABELS, nounFor } from "../lib/evidence.js";
+import { coverage, dateTime, delta, deltaTone, pct, plural, score as fmtScore, shortDate, signed, tone } from "../lib/fmt.js";
+import { EVIDENCE, HARD_FILTER_FORMAT, SNAPSHOT_LABELS, SNAPSHOT_ORDER, nounFor } from "../lib/evidence.js";
 import SearchBar from "../components/SearchBar.jsx";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Pin from "../components/Pin.jsx";
@@ -57,6 +57,18 @@ export default function StockReport({ symbol }) {
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteBusy, setNoteBusy] = useState(false);
   const [events, setEvents] = useState([]);
+  const [fields, setFields] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    setFields(null);
+    api(`/stock/${encodeURIComponent(symbol)}/fields?strategy=${encodeURIComponent(strategyKey)}`)
+      .then((x) => alive && setFields(x))
+      .catch(() => alive && setFields({ fields: {}, missing_components: [], since_pin: null }));
+    return () => {
+      alive = false;
+    };
+  }, [symbol, strategyKey, pinned]);
 
   useEffect(() => {
     let alive = true;
@@ -136,7 +148,12 @@ export default function StockReport({ symbol }) {
   const noun = nounFor(strat);
   const cov = s ? coverage(s.components_present, s.components_total) : null;
   const atCap = cap && cap.limit != null && cap.used >= cap.limit && !pinned;
-  const snaps = Object.entries(d.snapshot || {});
+  const snaps = Object.entries(d.snapshot || {}).sort(
+    ([a], [b]) => (SNAPSHOT_ORDER.indexOf(a) + 1 || 99) - (SNAPSHOT_ORDER.indexOf(b) + 1 || 99)
+  );
+  const missingComponents = fields ? fields.missing_components || [] : [];
+  const fieldSeries = fields ? Object.entries(fields.fields || {}).filter(([, pts]) => pts.length >= 2) : [];
+  const sincePin = fields && fields.since_pin;
   const missing = s ? Math.max(0, s.components_total - s.components_present) : 0;
   const hardFilters = s && s.hard_filters ? s.hard_filters : [];
   const components = s && s.components ? s.components : [];
@@ -238,6 +255,32 @@ export default function StockReport({ symbol }) {
             <p className="small" style={{ marginBottom: 0, color: note ? "var(--ink)" : "var(--ink-faint)" }}>
               {note || "No note yet."}
             </p>
+          )}
+          {sincePin && (
+            <div className="sincepin xs">
+              <span>
+                Pinned {shortDate(sincePin.pinned_at, tz)}
+                {sincePin.score_at_pin != null && s ? (
+                  <>
+                    {" "}
+                    · score <b>{fmtScore(sincePin.score_at_pin)}</b> → <b>{fmtScore(s.value)}</b>{" "}
+                    <span className={deltaTone(s.value - sincePin.score_at_pin)}>({delta(s.value - sincePin.score_at_pin)})</span>
+                  </>
+                ) : null}
+              </span>
+              {sincePin.chg_pct != null && (
+                <span>
+                  Price since pinned <b className={tone(sincePin.chg_pct)}>{signed(sincePin.chg_pct, 1, "%")}</b>
+                  {sincePin.benchmark_chg_pct != null && (
+                    <>
+                      {" "}
+                      vs {sincePin.benchmark} <span className={tone(sincePin.benchmark_chg_pct)}>{signed(sincePin.benchmark_chg_pct, 1, "%")}</span>
+                    </>
+                  )}
+                  {sincePin.last_date ? ` · close ${shortDate(sincePin.last_date)}` : ""}
+                </span>
+              )}
+            </div>
           )}
         </section>
       )}
@@ -429,6 +472,41 @@ export default function StockReport({ symbol }) {
             </section>
           )}
 
+          {s && fields && (missing > 0 || missingComponents.length > 0) && (
+            <section className="card" aria-labelledby="mc-h">
+              <div className="card-title">
+                <h2 id="mc-h">What would complete this score</h2>
+                <span className="muted small">
+                  {missingComponents.length} of {s.components_total} components without data
+                </span>
+              </div>
+              <p className="muted small">
+                These declared components had no input on this run, so their weight was redistributed and the score shrunk toward neutral. Each names the
+                stored field that would fill it; weights are {strat.label}'s live declaration.
+              </p>
+              {missingComponents.length === 0 ? (
+                <p className="muted small" style={{ marginBottom: 0 }}>
+                  The declared weights do not name the missing components; the breakdown above lists what did have data.
+                </p>
+              ) : (
+                <div className="weights">
+                  {missingComponents.map((c) => (
+                    <div className="weight-row" key={c.key}>
+                      <span>
+                        {c.label}
+                        {c.source && <span className="xs faint" style={{ display: "block" }}>{c.source}</span>}
+                      </span>
+                      <span className="cmp-track" aria-hidden="true">
+                        <span style={{ width: `${Math.round((c.share || 0) * 100)}%` }} />
+                      </span>
+                      <span className="w">{c.share != null ? `${Math.round(c.share * 100)}%` : c.weight}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
           {changes && changes.components.some((c) => c.delta != null && Math.abs(c.delta) >= 0.01) && (
             <section className="card" aria-labelledby="chg-h">
               <div className="card-title">
@@ -465,6 +543,43 @@ export default function StockReport({ symbol }) {
 
           <PriceChart symbol={d.symbol} />
 
+          {fieldSeries.length > 0 && (
+            <section className="card" aria-labelledby="fs-h">
+              <div className="card-title">
+                <h2 id="fs-h">Inputs over time</h2>
+                <span className="muted small">every point is a stored snapshot · last {fields.days} days</span>
+              </div>
+              <div className="fieldgrid">
+                {fieldSeries.map(([k, pts]) => {
+                  const [label, fmt] = SNAPSHOT_LABELS[k] || [k, (x) => x];
+                  const first = pts[0].value;
+                  const last = pts[pts.length - 1].value;
+                  const vals = pts.map((p) => p.value);
+                  const chg = first ? ((last - first) / Math.abs(first)) * 100 : null;
+                  return (
+                    <div className="fieldcard" key={k}>
+                      <div className="fc-top">
+                        <span className="fc-label">{label}</span>
+                        <span className="fc-val mono">{fmt(last)}</span>
+                      </div>
+                      <Sparkline points={vals} min={Math.min(...vals)} max={Math.max(...vals)} neutral={null} width={200} height={32} label={`${label}: ${pts.length} snapshots`} />
+                      <div className="fc-foot xs faint">
+                        {pts.length} snapshots · from {fmt(first)}
+                        {chg != null && Number.isFinite(chg) ? (
+                          <>
+                            {" "}
+                            · <span className={tone(chg)}>{signed(chg, 0, "%")}</span>
+                          </>
+                        ) : null}{" "}
+                        · {shortDate(pts[pts.length - 1].as_of)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
           {reactions.length > 0 && (
             <section className="card" aria-labelledby="rx-h">
               <div className="card-title">
@@ -474,7 +589,8 @@ export default function StockReport({ symbol }) {
               <p className="muted small">
                 Each row is a real past event and the move that followed inside the window. A hit is {EVIDENCE.hitDefinition}.
               </p>
-              <table className="hf reactions">
+              <div className="tscroll">
+<table className="hf reactions">
                 <thead>
                   <tr>
                     <th scope="col">Date</th>
@@ -513,6 +629,7 @@ export default function StockReport({ symbol }) {
                   ))}
                 </tbody>
               </table>
+</div>
             </section>
           )}
 
@@ -652,6 +769,25 @@ export default function StockReport({ symbol }) {
                 );
               })
             )}
+          </section>
+          <section>
+            <h3>Find more like it</h3>
+            <div className="aside-note">
+              <Link to={`/screen?industries=${d.industry.key}${strat.key !== "fast_mover" ? `&strategy=${strat.key}` : ""}`}>Screen {d.industry.label}</Link>
+              {d.lane ? (
+                <>
+                  {" "}
+                  · <Link to={`/screen?lane=${encodeURIComponent(d.lane)}`}>{d.lane}-lane names</Link>
+                </>
+              ) : null}
+              {s && s.hard_filters && s.hard_filters.length > 0 && s.hard_filters.every((f) => f.pass) ? (
+                <>
+                  {" "}
+                  · <Link to="/screen?hf=pass">Everything that cleared the screen</Link>
+                </>
+              ) : null}
+              {" "}· <Link to="/calendar">Calendar</Link>
+            </div>
           </section>
           <section>
             <h3>Run</h3>

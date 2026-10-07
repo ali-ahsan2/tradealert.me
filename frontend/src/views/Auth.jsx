@@ -37,7 +37,7 @@ export default function Auth({ mode }) {
         navigate("/onboarding");
       } else {
         await login(email, password);
-        navigate(next || "/board");
+        navigate(next || "/overview");
       }
     } catch (e2) {
       setErr(e2.detail || String(e2.message || e2));

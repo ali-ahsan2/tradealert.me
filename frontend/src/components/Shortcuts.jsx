@@ -6,16 +6,21 @@ import { Modal } from "./ui.jsx";
 // Keyboard: "/" opens the palette, "?" opens this sheet, and "g" then a
 // letter jumps between screens. Never fires while typing in a field.
 
-const GO = { b: "/board", w: "/watchlist", a: "/alerts", s: "/settings", t: "/strategies", d: "/digests", p: "/pricing" };
+const GO = { o: "/overview", b: "/board", x: "/screen", c: "/changes", l: "/calendar", w: "/watchlist", a: "/alerts", s: "/settings", t: "/strategies", d: "/digests", p: "/pricing" };
 
 const ROWS = [
   ["⌘K / Ctrl+K or /", "Find a name or jump to a screen"],
+  ["g then o", "Overview"],
   ["g then b", "Board"],
+  ["g then x", "Screener"],
+  ["g then c", "Changes"],
+  ["g then l", "Calendar"],
   ["g then w", "Watchlist"],
   ["g then a", "Alerts"],
   ["g then t", "Strategies"],
   ["g then d", "Digests"],
   ["g then s", "Account"],
+  ["j / k, ↵, p", "Move through a table, open the row, pin it"],
   ["?", "This sheet"],
   ["esc", "Close any dialog"],
 ];

@@ -291,6 +291,7 @@ def get_picks(creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
                 "JOIN tickers t ON t.id = i.ticker_id "
                 "JOIN industries ind ON ind.id = i.industry_id "
                 "LEFT JOIN scores sc ON sc.instrument_id = i.id AND sc.run_id = %s "
+                "  AND sc.strategy_id = (SELECT id FROM strategies WHERE key = 'fast_mover') "
                 "WHERE p.user_id = %s AND p.active "
                 "ORDER BY p.sort_order, p.pinned_at",
                 (run_id, uid),
