@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./lab.css";
 import { api, login, getToken, logout } from "../api.js";
+import ReportsScreen from "./Reports.jsx";
 
 const ADMIN_CHECK = "/admin/_check";
 
@@ -218,6 +219,7 @@ const SCREEN_INTROS = {
   backtest: "Test a strategy against recorded history. Every run is audited.",
   findings: "What the backtests have shown, and the runs that back it.",
   log: "Every run, in order.",
+  reports: "Where the data comes from, and what it shows at every level.",
 };
 
 const WALKTHROUGH_STEPS = [
@@ -1479,6 +1481,7 @@ function LabApp() {
           >
             Strategies
           </button>
+          {tab("Reports", "reports")}
           {tab("Findings", "findings")}
           {tab("Log", "log")}
         </nav>
@@ -1547,6 +1550,7 @@ function LabApp() {
         {screen === "findings" && (
           <FindingsScreen key={citeQueryId || "none"} citeQueryId={citeQueryId} />
         )}
+        {screen === "reports" && <ReportsScreen />}
         {screen === "log" && <LogScreen />}
       </div>
     </>

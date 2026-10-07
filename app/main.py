@@ -18,7 +18,8 @@ from pydantic import BaseModel, Field
 
 from app import email as emailer
 from app import security
-from app import account, admin, alerts, billing, lab, lab_regression, lab_release, oauth, scope
+from app import (account, admin, alerts, billing, lab, lab_regression, lab_release,
+                 oauth, reporting, scope)
 from app.db import _load_env, get_conn
 
 _load_env()
@@ -36,6 +37,7 @@ app.include_router(lab.router)
 app.include_router(lab_regression.router)
 app.include_router(lab_release.router)
 app.include_router(oauth.router)
+app.include_router(reporting.router)
 bearer = HTTPBearer(auto_error=False)
 
 _ROOT = Path(__file__).resolve().parent.parent

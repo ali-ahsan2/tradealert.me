@@ -6,7 +6,7 @@ services:
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
         PIP_FIND_LINKS: ${PIP_FIND_LINKS:-}
     restart: unless-stopped
-    environment:
+    environment: &app_env
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET}
       APP_BASE_URL: ${APP_BASE_URL}
@@ -40,6 +40,43 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  # Scheduled ingest and delivery. Same image as app; only the command
+  # differs, so a deploy updates both from one build.
+  worker:
+    build:
+      context: .
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+        PIP_FIND_LINKS: ${PIP_FIND_LINKS:-}
+    restart: unless-stopped
+    environment:
+      <<: *app_env
+      PRICES_REFRESH_HOURS: ${PRICES_REFRESH_HOURS:-6}
+      EVENTS_REFRESH_HOURS: ${EVENTS_REFRESH_HOURS:-12}
+      ALERTS_SWEEP_MINUTES: ${ALERTS_SWEEP_MINUTES:-15}
+      DIGEST_HOUR_UTC: ${DIGEST_HOUR_UTC:-13}
+      HOUSEKEEP_HOURS: ${HOUSEKEEP_HOURS:-24}
+      DISK_WARN_PCT: ${DISK_WARN_PCT:-75}
+      DISK_CRIT_PCT: ${DISK_CRIT_PCT:-88}
+      BARS_RETENTION_DAYS: ${BARS_RETENTION_DAYS:-1100}
+      OPS_EMAIL: ${OPS_EMAIL:-}
+      ALERT_FILE: /var/log/tradealert/alerts.log
+    volumes:
+      # Alerts land on the host so a disk warning survives the container and
+      # can be tailed or mailed even when SES is not configured.
+      - ./logs:/var/log/tradealert
+    # Migrations are the app container's job; the worker only reads a schema
+    # that is already there.
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   postgres:
     image: postgres:16

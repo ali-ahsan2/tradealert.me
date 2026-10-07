@@ -153,13 +153,21 @@ def _mark_fail(conn, ticker_id, err):
 
 
 def _targets(conn, stale_only=False, limit=None):
+    """Active instruments plus every benchmark.
+
+    Benchmarks have no instrument row (they are never scored), so an
+    instruments-only join would silently never fetch them.
+    """
     sql = ("SELECT t.id, t.symbol FROM tickers t "
-           "JOIN instruments i ON i.ticker_id = t.id AND i.active ")
+           "WHERE (EXISTS (SELECT 1 FROM instruments i "
+           "               WHERE i.ticker_id = t.id AND i.active) "
+           "    OR EXISTS (SELECT 1 FROM reference_assets r "
+           "               WHERE r.ticker_id = t.id)) ")
     if stale_only:
-        sql += ("LEFT JOIN ingest_state s ON s.ticker_id = t.id AND s.source = 'yahoo' "
-                "WHERE s.last_bar_date IS NULL "
-                "   OR s.last_bar_date < (CURRENT_DATE - 1) ")
-    sql += "GROUP BY t.id, t.symbol ORDER BY t.symbol"
+        sql += ("AND NOT EXISTS (SELECT 1 FROM ingest_state s "
+                "                WHERE s.ticker_id = t.id AND s.source = 'yahoo' "
+                "                  AND s.last_bar_date >= (CURRENT_DATE - 1)) ")
+    sql += "ORDER BY t.symbol"
     if limit:
         sql += f" LIMIT {int(limit)}"
     with conn.cursor() as cur:
@@ -167,11 +175,31 @@ def _targets(conn, stale_only=False, limit=None):
         return cur.fetchall()
 
 
+def start_run(conn, source):
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO source_runs (source) VALUES (%s) RETURNING id", (source,))
+        rid = cur.fetchone()[0]
+    conn.commit()
+    return rid
+
+
+def finish_run(conn, run_id, ok, failed, rows, detail=None):
+    status = "ok" if not failed else ("partial" if ok else "failed")
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE source_runs SET finished_at=now(), ok_count=%s, fail_count=%s, "
+            " rows_written=%s, status=%s, detail=%s WHERE id=%s",
+            (ok, failed, rows, status, json.dumps(detail or {}), run_id))
+    conn.commit()
+
+
 def refresh_all(rng="2y", stale_only=False, limit=None, pace=PACE_SECONDS, verbose=True):
     conn = get_conn()
     ok = failed = bars = 0
     errors = []
+    run_id = None
     try:
+        run_id = start_run(conn, "yahoo_prices")
         targets = _targets(conn, stale_only=stale_only, limit=limit)
         total = len(targets)
         if verbose:
@@ -196,6 +224,8 @@ def refresh_all(rng="2y", stale_only=False, limit=None, pace=PACE_SECONDS, verbo
                 print(f"  {n}/{total}  ok={ok} fail={failed} bars={bars}  {el:.0f}s")
             if pace:
                 time.sleep(pace)
+        if run_id:
+            finish_run(conn, run_id, ok, failed, bars, {"errors": errors[:40], "range": rng})
     finally:
         conn.close()
     return {"ok": ok, "failed": failed, "bars": bars, "errors": errors}
