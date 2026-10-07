@@ -65,6 +65,32 @@ export const SNAPSHOT_LABELS = {
   volx20d: ["Volume vs 20-day", (v) => (typeof v === "number" ? `${v}x` : v)],
   day_pct: ["Day move", (v) => (typeof v === "number" ? `${v > 0 ? "+" : ""}${v}%` : v)],
   earnings: ["Next earnings", (v) => v],
+  earnings_conf: ["Earnings date", (v) => String(v)],
+  si_pct_float: ["Short interest", (v) => (typeof v === "number" ? `${v}% of float` : v)],
+  si_shares_m: ["Shares short", (v) => (typeof v === "number" ? `${v}M` : v)],
+  dtc: ["Days to cover", (v) => (typeof v === "number" ? `${v}d` : v)],
+  float_m: ["Float", (v) => (typeof v === "number" ? `${v}M shares` : v)],
+  fee_pct: ["Borrow fee", (v) => (typeof v === "number" ? `${v}%` : v)],
+  borrow_avail: ["Shares to borrow", (v) => (typeof v === "number" ? v.toLocaleString() : v)],
+  growth_pct: ["Revenue growth", (v) => (typeof v === "number" ? `${v > 0 ? "+" : ""}${v}% y/y` : v)],
+  avgvol20: ["20-day avg volume", (v) => (typeof v === "number" ? v.toLocaleString() : v)],
+  hi52: ["52-week high", (v) => (typeof v === "number" ? `$${v.toFixed(2)}` : v)],
+  lo52: ["52-week low", (v) => (typeof v === "number" ? `$${v.toFixed(2)}` : v)],
+};
+
+// Order the dossier lists snapshot fields in: price and size first, then
+// the short-side inputs, then momentum, then dates.
+export const SNAPSHOT_ORDER = [
+  "px", "day_pct", "cap_usd_m", "so_m", "float_m", "si_pct_float", "si_shares_m", "dtc",
+  "fee_pct", "borrow_avail", "growth_pct", "run3m_pct", "off_high_pct", "hi52", "lo52",
+  "volx20d", "avgvol20", "earnings", "earnings_conf",
+];
+
+// Short column labels for the screener and watchlist.
+export const FIELD_SHORT = {
+  cap_usd_m: "Cap", si_pct_float: "SI %", float_m: "Float", fee_pct: "Fee", volx20d: "Vol×20d",
+  run3m_pct: "3m", off_high_pct: "Off high", dtc: "DTC", px: "Price", day_pct: "Day",
+  growth_pct: "Growth",
 };
 
 function fmtCap(m) {

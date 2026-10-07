@@ -180,3 +180,45 @@ export function downloadText(filename, text, type = "text/csv") {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+// Signed number with a fixed number of decimals; "—" for nothing.
+export function signed(v, digits = 1, suffix = "") {
+  if (v == null || Number.isNaN(Number(v))) return "—";
+  const n = Number(v);
+  const s = Math.abs(n).toFixed(digits);
+  return (n > 0 ? "+" : n < 0 ? "−" : "") + s + suffix;
+}
+
+export function tone(v) {
+  if (v == null) return "";
+  const n = Number(v);
+  return n > 0 ? "pos" : n < 0 ? "neg" : "";
+}
+
+// "today", "tomorrow", "in 12d", "3d ago" for a day offset from today.
+export function inDays(days) {
+  if (days == null) return "—";
+  if (days === 0) return "today";
+  if (days === 1) return "tomorrow";
+  if (days === -1) return "yesterday";
+  return days > 0 ? `in ${days}d` : `${-days}d ago`;
+}
+
+export function weekday(iso) {
+  const t = new Date(`${iso}T12:00:00Z`);
+  if (Number.isNaN(t.getTime())) return "";
+  return t.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" });
+}
+
+// Monday-start week key for grouping dated rows.
+export function weekStart(iso) {
+  const t = new Date(`${iso}T12:00:00Z`);
+  if (Number.isNaN(t.getTime())) return iso;
+  const day = (t.getUTCDay() + 6) % 7;
+  t.setUTCDate(t.getUTCDate() - day);
+  return t.toISOString().slice(0, 10);
+}
+
+export function rate(v) {
+  return v == null ? "—" : `${Math.round(v * 100)}%`;
+}

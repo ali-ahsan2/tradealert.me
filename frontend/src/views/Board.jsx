@@ -11,13 +11,17 @@ import {
   deltaTone,
   dollars,
   downloadText,
+  inDays,
   industriesLabel,
+  pct,
   plural,
   score as fmtScore,
   shortDate,
   toCsv,
+  tone,
 } from "../lib/fmt.js";
 import { EVIDENCE, nounFor } from "../lib/evidence.js";
+import { useRowNav } from "../lib/rownav.js";
 import SearchBar from "../components/SearchBar.jsx";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Pin from "../components/Pin.jsx";
@@ -57,6 +61,18 @@ const SORTS = {
       b.components_present / Math.max(1, b.components_total) -
       a.components_present / Math.max(1, a.components_total),
   },
+  px30: {
+    label: "30-day price move",
+    cmp: (a, b) => ((b.price && b.price.chg_30d) ?? -Infinity) - ((a.price && a.price.chg_30d) ?? -Infinity),
+  },
+  rel30: {
+    label: "30-day move vs ETF",
+    cmp: (a, b) => ((b.price && b.price.rel_30d) ?? -Infinity) - ((a.price && a.price.rel_30d) ?? -Infinity),
+  },
+  earnings: {
+    label: "Next earnings",
+    cmp: (a, b) => (a.earnings_in ?? Infinity) - (b.earnings_in ?? Infinity),
+  },
 };
 
 const HELP = {
@@ -66,6 +82,8 @@ const HELP = {
   coverage:
     "How many scoring inputs had data on this run. 2 of 3 segments: some inputs missing, score shrunk toward neutral.",
   delta: "Change in the score since the previous run. 'new' means the name was not scored last run.",
+  screen: "Hard-filter verdict stored with the score: every filter passed, or at least one failed. Only Fast Mover stores one.",
+  px: "Price change over the last 30 days from daily closes, and the gap to the industry's ETF over the same window.",
 };
 
 const BANDS = ["strong", "elevated", "neutral", "weak", "excluded"];
@@ -97,6 +115,9 @@ export default function Board() {
   const [strip, setStrip] = useState(() => q.get("first_run") === "1" || ls.get("ta_board_intro_hidden") !== "1");
   const [provHidden, setProvHidden] = useState({});
   const [upgradeHidden, setUpgradeHidden] = useState(ss.get("ta_upgrade_hidden") === "1");
+  const [lane, setLane] = useState(q.get("lane") || "all");
+  const [cleared, setCleared] = useState(q.get("cleared") === "1");
+  const [priceCols, setPriceCols] = useState(ls.get("ta_board_px") === "1");
 
   useEffect(() => {
     cached("/strategies").then((d) => setStrategies(d.strategies)).catch(() => setStrategies([]));
@@ -157,10 +178,16 @@ export default function Board() {
   }, [data, industriesAll, rows]);
 
   const view = useMemo(() => {
-    const filtered = industry === "all" ? rows : rows.filter((r) => r.industry.key === industry);
+    let filtered = industry === "all" ? rows : rows.filter((r) => r.industry.key === industry);
+    if (lane !== "all") filtered = filtered.filter((r) => (r.lane || "") === lane);
+    if (cleared) filtered = filtered.filter((r) => r.hf_pass === true);
     const ranked = [...filtered].sort(SORTS.score.cmp).map((r, i) => ({ ...r, viewRank: i + 1 }));
     return ranked.sort(SORTS[sort].cmp);
-  }, [rows, industry, sort]);
+  }, [rows, industry, lane, cleared, sort]);
+  const lanes = useMemo(() => [...new Set(rows.map((r) => r.lane).filter(Boolean))].sort(), [rows]);
+  const clearedCount = useMemo(() => rows.filter((r) => r.hf_pass === true).length, [rows]);
+  const hasVerdicts = useMemo(() => rows.some((r) => r.hf_pass != null), [rows]);
+  const earningsSoon = useMemo(() => rows.filter((r) => r.earnings_in != null && r.earnings_in >= 0 && r.earnings_in <= 14).length, [rows]);
 
   const movers = useMemo(() => {
     if (view.length < 4) return null;
@@ -209,6 +236,27 @@ export default function Board() {
       return n;
     });
 
+  const openRow = (r) => navigate(`/stock/${r.symbol}${strategy !== "fast_mover" ? `?strategy=${strategy}` : ""}`);
+  const cursor = useRowNav(view.length, {
+    onOpen: (i) => view[i] && openRow(view[i]),
+    onPin: (i) => {
+      const r = view[i];
+      if (!r || !pins) return;
+      const on = pins.has(r.symbol);
+      api(`/me/picks${on ? `/${encodeURIComponent(r.symbol)}` : ""}`, on ? { method: "DELETE" } : { method: "POST", json: { symbol: r.symbol } })
+        .then(() => {
+          onPinChange(r.symbol, !on);
+          toast(on ? `Removed ${r.symbol} from your watchlist.` : `Pinned ${r.symbol}.`);
+        })
+        .catch((e) => toast(e.detail || "That didn't work."));
+    },
+  });
+  const togglePriceCols = () => {
+    const next = !priceCols;
+    setPriceCols(next);
+    ls.set("ta_board_px", next ? "1" : "0");
+  };
+
   const exportCsv = () => {
     const cols = [
       { label: "rank", get: (r) => r.viewRank },
@@ -220,6 +268,11 @@ export default function Board() {
       { label: "band", get: (r) => r.band },
       { label: "coverage", get: (r) => `${r.components_present}/${r.components_total}` },
       { label: "delta_since_last_run", get: (r) => (r.delta_1d == null ? "new" : Math.round(r.delta_1d)) },
+      { label: "lane", get: (r) => r.lane || "" },
+      { label: "hard_filters", get: (r) => (r.hf_pass == null ? "" : r.hf_pass ? "pass" : "fail") },
+      { label: "px_chg_30d", get: (r) => (r.price && r.price.chg_30d != null ? r.price.chg_30d : "") },
+      { label: "px_rel_30d_vs_etf", get: (r) => (r.price && r.price.rel_30d != null ? r.price.rel_30d : "") },
+      { label: "earnings_in_days", get: (r) => (r.earnings_in == null ? "" : r.earnings_in) },
       { label: "run_as_of", get: () => data.as_of },
     ];
     const csv = toCsv(view, cols) + `\n# Research and information only; not investment advice. Scores rank names for a human to review.\n`;
@@ -317,7 +370,35 @@ export default function Board() {
             {followed[0].label} <span className="mono faint">{followed[0].etf}</span>
           </Link>
         )}
+        {lanes.length > 1 && (
+          <div className="seg" role="group" aria-label="Lane">
+            <button aria-pressed={lane === "all"} onClick={() => setLane("all")}>
+              Any lane
+            </button>
+            {lanes.map((l) => (
+              <button key={l} aria-pressed={lane === l} onClick={() => setLane(l)}>
+                {l}
+              </button>
+            ))}
+          </div>
+        )}
+        {hasVerdicts && (
+          <button className="fchip" aria-pressed={cleared} onClick={() => setCleared((c) => !c)} title={HELP.screen}>
+            Cleared the screen <span className="mono">{clearedCount}</span>
+          </button>
+        )}
+        {earningsSoon > 0 && (
+          <Link to="/calendar?days=14" className="fchip" title="Names with a dated earnings print inside 14 days">
+            Earnings in 14d <span className="mono">{earningsSoon}</span>
+          </Link>
+        )}
         <span className="spacer" />
+        <Link to={`/screen${strategy !== "fast_mover" ? `?strategy=${strategy}` : ""}${industry !== "all" ? `${strategy !== "fast_mover" ? "&" : "?"}industries=${industry}` : ""}`} className="btn-quiet">
+          Open in Screener
+        </Link>
+        <button className="btn-quiet" onClick={togglePriceCols} aria-pressed={priceCols} title={HELP.px}>
+          {priceCols ? "Hide price columns" : "Price columns"}
+        </button>
         <label className="ctl">
           Sort
           <select className="inline" value={sort} onChange={(e) => setSort(e.target.value)}>
@@ -368,7 +449,14 @@ export default function Board() {
         <Empty
           title="No names match."
           action={
-            <button className="btn btn-secondary" onClick={() => pickIndustry("all")}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                pickIndustry("all");
+                setLane("all");
+                setCleared(false);
+              }}
+            >
               Clear filters
             </button>
           }
@@ -412,16 +500,35 @@ export default function Board() {
                   <SortTh k="delta" sort={sort} setSort={setSort} num help={HELP.delta}>
                     Δ run
                   </SortTh>
+                  {hasVerdicts && (
+                    <th scope="col">
+                      Screen
+                      <Help text={HELP.screen} />
+                    </th>
+                  )}
+                  {priceCols && (
+                    <>
+                      <SortTh k="px30" sort={sort} setSort={setSort} num help={HELP.px}>
+                        30d
+                      </SortTh>
+                      <SortTh k="rel30" sort={sort} setSort={setSort} num>
+                        vs ETF
+                      </SortTh>
+                      <SortTh k="earnings" sort={sort} setSort={setSort}>
+                        Earnings
+                      </SortTh>
+                    </>
+                  )}
                   <th scope="col">
                     <span className="sr-only">Pin</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {view.map((r) => {
+                {view.map((r, i) => {
                   const cov = coverage(r.components_present, r.components_total);
                   return (
-                    <tr key={r.symbol} className="rowlink" onClick={() => navigate(`/stock/${r.symbol}${strategy !== "fast_mover" ? `?strategy=${strategy}` : ""}`)}>
+                    <tr key={r.symbol} data-rownav={i} className={`rowlink ${cursor === i ? "cursor" : ""}`} onClick={() => openRow(r)}>
                       <td className="c-sel c-hide" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
@@ -438,6 +545,11 @@ export default function Board() {
                         <span className="theme" title={r.theme}>
                           {r.theme}
                         </span>
+                        {r.earnings_in != null && r.earnings_in >= 0 && r.earnings_in <= 14 && (
+                          <span className="chip chip-plain soon" title="Dated earnings print inside 14 days">
+                            ER {inDays(r.earnings_in)}
+                          </span>
+                        )}
                       </td>
                       <td className="c-ind">
                         <Link to={`/industries/${r.industry.key}`} className="ind" onClick={(e) => e.stopPropagation()}>
@@ -463,6 +575,20 @@ export default function Board() {
                       <td className={`num c-delta ${deltaTone(r.delta_1d)}`} data-label="Δ">
                         {delta(r.delta_1d)}
                       </td>
+                      {hasVerdicts && (
+                        <td className="c-hide">
+                          {r.hf_pass == null ? <span className="faint">—</span> : <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`}>{r.hf_pass ? "PASS" : "FAIL"}</span>}
+                        </td>
+                      )}
+                      {priceCols && (
+                        <>
+                          <td className={`num c-hide ${tone(r.price && r.price.chg_30d)}`}>{pct(r.price && r.price.chg_30d)}</td>
+                          <td className={`num c-hide ${tone(r.price && r.price.rel_30d)}`} title={r.price && r.price.benchmark ? `vs ${r.price.benchmark}` : ""}>
+                            {pct(r.price && r.price.rel_30d)}
+                          </td>
+                          <td className="c-hide">{r.earnings_in == null ? <span className="faint">—</span> : <span className="mono">{inDays(r.earnings_in)}</span>}</td>
+                        </>
+                      )}
                       <td className="c-pin">{pins && <Pin symbol={r.symbol} pinned={pins.has(r.symbol)} onChange={onPinChange} />}</td>
                     </tr>
                   );
@@ -546,8 +672,15 @@ export default function Board() {
             </dd>
             <dt>Δ run</dt>
             <dd>Change in the score since the previous run. "new" means the name was not scored last run.</dd>
+            <dt>Screen</dt>
+            <dd>The hard-filter verdict stored with each Fast Mover score. PASS means every filter passed; the Screener can isolate those names.</dd>
             <dt>Compare</dt>
             <dd>Tick up to four rows and choose Compare to see their filters, components and data side by side.</dd>
+            <dt>Keyboard</dt>
+            <dd>
+              <span className="mono">j</span>/<span className="mono">k</span> move through rows, <span className="mono">Enter</span> opens the report,{" "}
+              <span className="mono">p</span> pins.
+            </dd>
           </dl>
         </div>
       </details>

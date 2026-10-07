@@ -8,7 +8,13 @@ import { score as fmtScore } from "../lib/fmt.js";
 // "palette:open" event from anywhere.
 
 const SCREENS = [
+  { label: "Overview", to: "/overview", hint: "g o" },
   { label: "Board", to: "/board", hint: "g b" },
+  { label: "Screener", to: "/screen", hint: "g x" },
+  { label: "Screener · cleared the screen", to: "/screen?hf=pass" },
+  { label: "Screener · earnings within 14 days", to: "/screen?earnings_within=14&sort=earnings" },
+  { label: "Changes since last run", to: "/changes", hint: "g c" },
+  { label: "Calendar", to: "/calendar", hint: "g l" },
   { label: "Watchlist", to: "/watchlist", hint: "g w" },
   { label: "Alerts", to: "/alerts", hint: "g a" },
   { label: "Alerts · armed", to: "/alerts?tab=armed" },

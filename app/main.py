@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from app import email as emailer
 from app import security
-from app import (account, admin, alerts, billing, dossier, lab, lab_regression,
+from app import (account, admin, alerts, billing, discover, dossier, lab, lab_regression,
                  lab_release, oauth, product, reporting, scope)
 from app.db import _load_env, get_conn
 
@@ -33,6 +33,7 @@ app.include_router(account.router)
 app.include_router(alerts.router)
 app.include_router(admin.router)
 app.include_router(billing.router)
+app.include_router(discover.router)
 app.include_router(lab.router)
 app.include_router(lab_regression.router)
 app.include_router(lab_release.router)
@@ -437,11 +438,18 @@ def board(band: str = "", strategy: str = "fast_mover",
             sql = (
                 "SELECT s.symbol, i.theme, i.instrument_group, "
                 "ind.key, ind.label, ind.benchmark_etf, sc.value, sc.band, "
-                "sc.components_present, sc.components_total, sc.delta_1d "
+                "sc.components_present, sc.components_total, sc.delta_1d, "
+                f"i.lane, ind.id, {discover._hf_pass()} AS hf_pass, "
+                "px.last_close, px.c30, "
+                "(CASE WHEN e.value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' "
+                " THEN substr(e.value, 1, 10)::date - CURRENT_DATE END) AS earnings_in "
                 "FROM scores sc "
                 "JOIN instruments i ON i.id = sc.instrument_id "
                 "JOIN tickers s ON s.id = i.ticker_id "
                 "JOIN industries ind ON ind.id = i.industry_id "
+                f"{discover.price_lateral('s')} "
+                "LEFT JOIN LATERAL (SELECT value FROM snapshots sn WHERE sn.ticker_id = s.id "
+                "  AND sn.field = 'earnings' ORDER BY sn.as_of DESC LIMIT 1) e ON TRUE "
                 "WHERE sc.run_id = %s AND sc.strategy_id = %s "
                 "AND sc.value IS NOT NULL "
             )
@@ -457,10 +465,19 @@ def board(band: str = "", strategy: str = "fast_mover",
             params.append(names_shown_limit + 1)
             cur.execute(sql, tuple(params))
             rows = cur.fetchall()
+            bench = discover.benchmarks(cur, [r[12] for r in rows])
     finally:
         conn.close()
     truncated = len(rows) > names_shown_limit
     rows = rows[:names_shown_limit]
+
+    def _price(r):
+        chg = discover._pct(r[14], r[15])
+        b = bench.get(r[12]) or {}
+        rel = (round(chg - b["chg_30d"], 2)
+               if chg is not None and b.get("chg_30d") is not None else None)
+        return {"last_close": float(r[14]) if r[14] is not None else None,
+                "chg_30d": chg, "rel_30d": rel, "benchmark": b.get("symbol")}
     return {
         "as_of": run[1].isoformat(),
         "run_id": run_id,
@@ -470,7 +487,9 @@ def board(band: str = "", strategy: str = "fast_mover",
              "industry": {"key": r[3], "label": r[4], "benchmark_etf": r[5]},
              "value": float(r[6]), "band": r[7],
              "components_present": r[8], "components_total": r[9],
-             "delta_1d": float(r[10]) if r[10] is not None else None}
+             "delta_1d": float(r[10]) if r[10] is not None else None,
+             "lane": r[11] or "", "hf_pass": r[13], "price": _price(r),
+             "earnings_in": r[16]}
             for i, r in enumerate(rows)
         ],
         "meta": {"shown": len(rows), "truncated": truncated,
@@ -483,7 +502,10 @@ _SNAPSHOT_FIELDS = {
     "px": "px", "cap_usd_m": "cap_usd_m", "so_m": "so_m",
     "run3m_pct": "run3m_pct", "off_high_pct": "off_high_pct",
     "volx20d": "volx20d", "day_pct": "day_pct",
-    "earnings": "earnings",
+    "earnings": "earnings", "earnings_conf": "earnings_conf",
+    "si_pct_float": "si_pct_float", "si_shares_m": "si_shares_m", "dtc": "dtc",
+    "float_m": "float_m", "fee_pct": "fee_pct", "borrow_avail": "borrow_avail",
+    "growth_pct": "growth_pct", "avgvol20": "avgvol20", "hi52": "hi52", "lo52": "lo52",
 }
 
 
@@ -630,10 +652,11 @@ def search(q: str = "", creds: HTTPAuthorizationCredentials | None = Depends(bea
                 "LEFT JOIN scores sc ON sc.instrument_id = i.id "
                 "  AND sc.run_id = %s "
                 f"WHERE (s.symbol ILIKE %s OR i.theme ILIKE %s "
-                f"OR ind.label ILIKE %s) AND {vis} "
+                f"OR ind.label ILIKE %s OR i.hook ILIKE %s OR i.thesis ILIKE %s) AND {vis} "
                 "ORDER BY (s.symbol = %s) DESC, sc.value DESC NULLS LAST "
                 "LIMIT 12",
-                tuple([run[0], q + "%", "%" + q + "%", "%" + q + "%"] +
+                tuple([run[0], q + "%", "%" + q + "%", "%" + q + "%",
+                       "%" + q + "%", "%" + q + "%"] +
                       vis_params + [q.upper()]),
             )
             rows = cur.fetchall()

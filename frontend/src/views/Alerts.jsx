@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api, cached, toast } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { hasChannel, useMe } from "../lib/me.jsx";
-import { dollars, shortDate } from "../lib/fmt.js";
+import { dollars, pct, rate, shortDate, signed, tone } from "../lib/fmt.js";
 import { TRIGGERS } from "../lib/evidence.js";
 import SearchBar from "../components/SearchBar.jsx";
 import { AlertItem } from "../components/EventList.jsx";
@@ -53,7 +53,7 @@ function buildQuery(params) {
 export default function Alerts() {
   const { me } = useMe();
   const q = useQuery();
-  const tab = q.get("tab") === "armed" ? "armed" : "history";
+  const tab = q.get("tab") === "armed" ? "armed" : q.get("tab") === "outcomes" ? "outcomes" : "history";
   const fTrigger = q.get("trigger") || "";
   const fSymbol = (q.get("symbol") || "").toUpperCase();
   const fUnread = q.get("unread") === "1";
@@ -69,8 +69,24 @@ export default function Alerts() {
   const [channels, setChannels] = useState(["email"]);
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState(null);
+  const [outcomes, setOutcomes] = useState(null);
+  const [outErr, setOutErr] = useState(null);
+  const oDays = [90, 365, 730].includes(Number(q.get("odays"))) ? Number(q.get("odays")) : 365;
 
   const locked = Boolean(me && me.tier && me.tier.alerts_limit === 0);
+
+  useEffect(() => {
+    if (tab !== "outcomes" || locked) return undefined;
+    let alive = true;
+    setOutcomes(null);
+    setOutErr(null);
+    api(`/alerts/outcomes?days=${oDays}`)
+      .then((d) => alive && setOutcomes(d))
+      .catch((e) => alive && setOutErr(e));
+    return () => {
+      alive = false;
+    };
+  }, [tab, oDays, locked, reload]);
 
   useEffect(() => {
     let alive = true;
@@ -249,7 +265,131 @@ export default function Alerts() {
         <button role="tab" className="tab" aria-selected={tab === "armed"} onClick={() => setTab("armed")}>
           Armed{rules ? ` · ${rules.length}` : ""}
         </button>
+        <button role="tab" className="tab" aria-selected={tab === "outcomes"} onClick={() => setTab("outcomes")}>
+          Outcomes
+        </button>
       </div>
+
+      {tab === "outcomes" && (
+        <>
+          <div className="filters-row">
+            <span className="muted small">What price did after each trigger fired on the names you can see, measured on daily bars.</span>
+            <span className="spacer" />
+            <label className="ctl">
+              Window
+              <select className="inline" value={oDays} onChange={(e) => navigate(`/alerts?tab=outcomes${Number(e.target.value) === 365 ? "" : `&odays=${e.target.value}`}`, { replace: true })}>
+                <option value={90}>90 days</option>
+                <option value={365}>1 year</option>
+                <option value={730}>2 years</option>
+              </select>
+            </label>
+          </div>
+          {outErr && <ErrorCard error={outErr} onRetry={() => setReload((n) => n + 1)} title="Couldn't load outcomes." />}
+          {!outErr && !outcomes && <Skeleton rows={5} height={44} />}
+          {outcomes && outcomes.triggers.length === 0 && <Empty title="No alert has fired on your names in this window." />}
+          {outcomes && outcomes.triggers.length > 0 && (
+            <>
+              <div className="table-card">
+                <table className="data compact outcomes">
+                  <thead>
+                    <tr>
+                      <th scope="col">Trigger</th>
+                      <th scope="col" className="num">
+                        Fired
+                      </th>
+                      <th scope="col" className="num">
+                        Measured
+                      </th>
+                      <th scope="col" className="num">
+                        Next day
+                      </th>
+                      <th scope="col" className="num">
+                        5-day close
+                      </th>
+                      <th scope="col" className="num">
+                        5-day high
+                      </th>
+                      <th scope="col" className="num">
+                        Up after 5d
+                      </th>
+                      <th scope="col" className="num">
+                        Reached +10%
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {outcomes.triggers.map((t) => {
+                      const enough = t.measured >= 10;
+                      return (
+                        <tr key={t.key}>
+                          <td>
+                            <Link to={`/alerts?trigger=${t.key}`}>{t.label}</Link>
+                          </td>
+                          <td className="num">{t.n}</td>
+                          <td className="num">{t.measured}</td>
+                          <td className={`num ${tone(t.mean_chg_1d)}`}>{signed(t.mean_chg_1d, 1, "%")}</td>
+                          <td className={`num ${tone(t.mean_chg_5d)}`} title={t.median_chg_5d != null ? `median ${signed(t.median_chg_5d, 1, "%")}` : ""}>
+                            {signed(t.mean_chg_5d, 1, "%")}
+                          </td>
+                          <td className={`num ${tone(t.mean_max_5d)}`}>{signed(t.mean_max_5d, 1, "%")}</td>
+                          <td className="num">{enough ? rate(t.share_up_5d) : <span className="faint" title="Fewer than ten measured events; no rate is shown">n &lt; 10</span>}</td>
+                          <td className="num">{enough ? rate(t.share_max_10) : <span className="faint">n &lt; 10</span>}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="footnote">{outcomes.method} These are measured moves on your universe, not a backtest and not a forecast; averages on small counts swing with one name.</p>
+              {outcomes.events.length > 0 && (
+                <section className="card" aria-labelledby="oe-h">
+                  <div className="card-title">
+                    <h2 id="oe-h">Recent events and what followed</h2>
+                    <span className="muted small">latest {outcomes.events.length}</span>
+                  </div>
+                  <div className="tscroll">
+<table className="hf reactions">
+                    <thead>
+                      <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Name</th>
+                        <th scope="col">Trigger</th>
+                        <th scope="col" className="num">
+                          Next day
+                        </th>
+                        <th scope="col" className="num">
+                          5-day close
+                        </th>
+                        <th scope="col" className="num">
+                          5-day high
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {outcomes.events.map((ev) => (
+                        <tr key={ev.id}>
+                          <td className="mono">{shortDate(ev.date)}</td>
+                          <td>
+                            <Link className="sym" to={`/stock/${ev.symbol}`}>
+                              {ev.symbol}
+                            </Link>{" "}
+                            <span className="muted small">{ev.theme}</span>
+                          </td>
+                          <td title={ev.detail}>{ev.trigger}</td>
+                          <td className={`num ${tone(ev.chg_1d)}`}>{pct(ev.chg_1d)}</td>
+                          <td className={`num ${tone(ev.chg_5d)}`}>{ev.pending ? <span className="faint">window open</span> : pct(ev.chg_5d)}</td>
+                          <td className={`num ${tone(ev.max_5d)}`}>{ev.pending ? <span className="faint">—</span> : pct(ev.max_5d)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+</div>
+                </section>
+              )}
+            </>
+          )}
+        </>
+      )}
 
       {tab === "history" && (
         <>

@@ -38,7 +38,7 @@ export default function Landing() {
   const maxCount = industries && industries.length ? Math.max(...industries.map((i) => i.universe_count || 0)) : 1;
   const sortedTiers = tiers ? [...tiers].sort((a, b) => a.price_monthly_cents - b.price_monthly_cents) : [];
   const free = sortedTiers.find((t) => t.price_monthly_cents === 0);
-  const primary = me ? ["/board", "Open your Board"] : ["/signup", "Start free"];
+  const primary = me ? ["/overview", "Open your Overview"] : ["/signup", "Start free"];
 
   return (
     <div className="ld">
