@@ -980,3 +980,48 @@ label.labfield {
   gap: var(--s-3);
   padding: 0 var(--s-4);
 }
+/* ---------- reporting ---------- */
+
+.rep-nav {
+  margin: 0;
+  padding: 0;
+  border-top: 0;
+}
+
+.rep-toolbar {
+  display: flex;
+  align-items: end;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.rep-spacer {
+  flex: 1 1 auto;
+}
+
+.chartbox {
+  width: 100%;
+  min-height: 380px;
+}
+
+.chg.pos {
+  color: var(--pos);
+}
+
+.chg.neg {
+  color: var(--neg);
+}
+
+.row-click {
+  cursor: pointer;
+}
+
+.row-click:hover td {
+  background: var(--surface-raised);
+}
+
+/* A source that is planned rather than running should read as absent, not
+   as a failure. */
+.row-dim td {
+  opacity: 0.55;
+}
