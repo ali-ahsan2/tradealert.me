@@ -7,6 +7,11 @@
 html[data-surface="lab"] {
   --lab-fs-answer: 30px;
   --lab-measure: 880px;
+
+  /* Fallback only. The real value is computed from the chosen accent's
+     luminance by the boot script in lab.html, since the accent is a runtime
+     user setting and can be any color. */
+  --on-accent: #06120d;
   --lab-font-display: "Source Serif 4", Georgia, "Times New Roman", serif;
   --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
     Helvetica, Arial, sans-serif;
@@ -47,7 +52,7 @@ html[data-surface="lab"] .rate-headline {
   line-height: 26px;
   text-align: center;
   background: var(--info);
-  color: #06120d;
+  color: var(--on-accent);
 }
 
 .labnav {
@@ -105,11 +110,12 @@ html[data-surface="lab"] .rate-headline {
   font-size: var(--fs-md);
 }
 
-.lab-picker {
-  display: flex;
-  align-items: end;
-  gap: var(--s-4);
-  flex-wrap: wrap;
+/* Persistent strategy context: the selected strategy stays pinned while the
+   sub-tabs below it change view, so the three per-strategy screens no longer
+   each need their own picker. */
+.labcontext {
+  display: grid;
+  gap: var(--s-3);
   padding: var(--s-4);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -117,16 +123,73 @@ html[data-surface="lab"] .rate-headline {
   box-shadow: var(--shadow);
 }
 
-.lab-picker .labfield {
-  flex: 1 1 320px;
-  max-width: 520px;
+.labcontext-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
 }
 
-.picker-hint {
-  flex: 2 1 320px;
-  margin: 0;
-  color: var(--ink-faint);
+.labcontext-back {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink-muted);
+  font: inherit;
   font-size: var(--fs-sm);
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.labcontext-back:hover {
+  color: var(--info);
+}
+
+select.labcontext-name {
+  font: inherit;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  padding: 6px 10px;
+  max-width: 100%;
+  cursor: pointer;
+}
+
+select.labcontext-name:focus {
+  outline: none;
+  border-color: var(--info);
+}
+
+.labsubnav {
+  display: flex;
+  gap: var(--s-1);
+  border-top: 1px solid var(--border);
+  padding-top: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.labsubnav button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: var(--fs-sm);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.labsubnav button:hover {
+  color: var(--ink);
+}
+
+.labsubnav button.active {
+  color: var(--ink);
+  border-bottom-color: var(--info);
+  font-weight: 600;
 }
 
 .labmeta {
@@ -207,7 +270,8 @@ html[data-surface="lab"] .rate-headline {
 .chip.on {
   background: var(--info);
   border-color: var(--info);
-  color: #fff;
+  color: var(--on-accent);
+  font-weight: 600;
 }
 
 .labfield-label {
@@ -352,7 +416,7 @@ label.labfield {
 .btn-primary {
   border-color: var(--info);
   background: var(--info);
-  color: #06120d;
+  color: var(--on-accent);
   font-weight: 600;
 }
 
@@ -442,6 +506,34 @@ label.labfield {
   display: flex;
   gap: var(--s-2);
   align-items: center;
+}
+
+/* Overrides label.labfield's grid so the row stays inline when the two are
+   combined to inherit the shared input styling. */
+.rel-select.labfield {
+  display: flex;
+}
+
+.labfield input.qid-input {
+  width: 90px;
+  flex: none;
+}
+
+.result-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-2);
+}
+
+.result-head h3 {
+  flex: 1 1 auto;
+}
+
+.is-stale {
+  opacity: 0.55;
+  transition: opacity 120ms ease;
 }
 
 .labcollapse-head {

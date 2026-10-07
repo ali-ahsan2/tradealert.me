@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./lab.css";
 import { api, login, getToken, logout } from "../api.js";
@@ -40,12 +40,14 @@ function useFetch(deps, loader) {
   return { data, err, loading };
 }
 
-function Load({ data, err, children }) {
+function Load({ data, err, loading, children }) {
   if (err) return <div className="errorbox" role="alert">{err}</div>;
   if (data === null || data === undefined) {
     return <p className="muted">Loading…</p>;
   }
-  return children(data);
+  // Keep the previous render visible while refetching, dimmed, so switching
+  // strategy doesn't blank the screen and then repaint.
+  return <div className={loading ? "is-stale" : undefined}>{children(data)}</div>;
 }
 
 function useGate() {
@@ -140,22 +142,6 @@ function Denied({ retry }) {
       >
         Sign in as a different account
       </button>
-    </div>
-  );
-}
-
-function StratPicker({ value, options, onChange, hint }) {
-  return (
-    <div className="lab-picker">
-      <label className="labfield">
-        Strategy
-        <select value={value} aria-label="Strategy" onChange={(e) => onChange(e.target.value)}>
-          {options.map((o) => (
-            <option key={o.key} value={o.key}>{o.label}</option>
-          ))}
-        </select>
-      </label>
-      {hint && <p className="picker-hint">{hint}</p>}
     </div>
   );
 }
@@ -387,20 +373,17 @@ function BandsTable({ bands }) {
   );
 }
 
-function InputsScreen({ strat, strategies, setStrat }) {
-  const { data, err } = useFetch([strat], () =>
+function InputsScreen({ strat }) {
+  const { data, err, loading } = useFetch([strat], () =>
     api(`/admin/lab/strategies/${strat}/inputs`));
   const coverage = useFetch([strat], () =>
     api(`/admin/lab/strategies/${strat}/coverage`));
   return (
     <div className="labstack">
-      <StratPicker
-        value={strat}
-        options={strategies}
-        onChange={setStrat}
-        hint="Read-mostly: what the strategy says it does, plus what the ledger has compared it against."
-      />
-      <Load data={data} err={err}>
+      <p className="labmeta" style={{ margin: 0 }}>
+        Read-mostly: what the strategy says it does, plus what the ledger has compared it against.
+      </p>
+      <Load data={data} err={err} loading={loading}>
         {(data) => (
           <>
         <div className="card">
@@ -445,7 +428,7 @@ function InputsScreen({ strat, strategies, setStrat }) {
           </>
         )}
       </Load>
-      <Load data={coverage.data} err={coverage.err}>
+      <Load data={coverage.data} err={coverage.err} loading={coverage.loading}>
         {(data) => (
         <div className="card">
           <h3>Event coverage</h3>
@@ -479,8 +462,8 @@ function InputsScreen({ strat, strategies, setStrat }) {
   );
 }
 
-function VersionsScreen({ strat, strategies, setStrat }) {
-  const { data, err } = useFetch([strat], () =>
+function VersionsScreen({ strat }) {
+  const { data, err, loading } = useFetch([strat], () =>
     api(`/admin/lab/strategies/${strat}/versions`));
   const [a, setA] = useState("");
   const [b, setB] = useState("");
@@ -592,13 +575,10 @@ function VersionsScreen({ strat, strategies, setStrat }) {
     );
   return (
     <div className="labstack">
-      <StratPicker
-        value={strat}
-        options={strategies}
-        onChange={setStrat}
-        hint="Version history is a ledger: each version is a recorded decision, not something you can quietly undo."
-      />
-      <Load data={data} err={err}>
+      <p className="labmeta" style={{ margin: 0 }}>
+        Version history is a ledger: each version is a recorded decision, not something you can quietly undo.
+      </p>
+      <Load data={data} err={err} loading={loading}>
         {(data) => (
           <>
         <div className="card">
@@ -677,7 +657,7 @@ function VersionsScreen({ strat, strategies, setStrat }) {
 
 const KINDS = ["earnings", "random_day", "fda", "contract_award", "filing", "macro"];
 
-function BacktestScreen({ strat, strategies, setStrat }) {
+function BacktestScreen({ strat, onCite }) {
   const industries = useFetch([], () => api("/industries"));
   const versions = useFetch([strat], () => api(`/admin/lab/strategies/${strat}/versions`));
   const [ver, setVer] = useState("");
@@ -699,6 +679,13 @@ function BacktestScreen({ strat, strategies, setStrat }) {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState(null);
   const [runErr, setRunErr] = useState("");
+  const resultRef = useRef(null);
+
+  useEffect(() => {
+    if (result || runErr) {
+      resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [result, runErr]);
 
   const toggle = (arr, setArr, v) =>
     setArr(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
@@ -807,12 +794,9 @@ function BacktestScreen({ strat, strategies, setStrat }) {
 
   return (
     <>
-      <StratPicker
-        value={strat}
-        options={strategies}
-        onChange={setStrat}
-        hint="A backtest is one audited query: universe → event kinds → hit rule → baselines. The strategy and version decide which recorded inputs it runs on."
-      />
+      <p className="labmeta" style={{ margin: "0 0 var(--s-4)" }}>
+        A backtest is one audited query: universe → event kinds → hit rule → baselines. The strategy and version decide which recorded inputs it runs on.
+      </p>
       <form onSubmit={run} className="labstack">
         <section className="lab-step">
           <h3><span className="stepnum">1</span> Strategy and version</h3>
@@ -957,7 +941,7 @@ function BacktestScreen({ strat, strategies, setStrat }) {
           </p>
         </div>
       </form>
-      <div aria-live="polite">
+      <div aria-live="polite" ref={resultRef} style={{ scrollMarginTop: 72 }}>
         {runErr && <div className="errorbox">{runErr}</div>}
         {result && (
           <>
@@ -971,7 +955,12 @@ function BacktestScreen({ strat, strategies, setStrat }) {
               <p className="notice">Served from an earlier identical query (#{result.cached_from_query_id}); still audited as a new run.</p>
             )}
             <div className="card">
-              <h3>Result · query #{result.query_id}</h3>
+              <div className="result-head">
+                <h3 style={{ margin: 0 }}>Result · query #{result.query_id}</h3>
+                <button type="button" className="btn" onClick={() => onCite(result.query_id)}>
+                  Cite this run in a finding
+                </button>
+              </div>
               {result.warnings.length > 0 && (
                 <div style={{ marginBottom: 8 }}>
                   {result.warnings.map((w, i) => (
@@ -1030,28 +1019,36 @@ function BacktestScreen({ strat, strategies, setStrat }) {
 const STATUSES = ["hypothesis", "tested", "held_up", "failed", "superseded"];
 const KINDFIELDS = ["filter", "weight", "band", "component", "other"];
 
-function FindingsScreen() {
+function FindingsScreen({ citeQueryId }) {
   const [filter, setFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const { data, err, loading: _l } = useFetch([filter, statusFilter], () => {
+  const [nonce, setNonce] = useState(0);
+  const { data, err, loading } = useFetch([filter, statusFilter, nonce], () => {
     const q = [];
     if (filter) q.push(`strategy=${encodeURIComponent(filter)}`);
     if (statusFilter) q.push(`status=${encodeURIComponent(statusFilter)}`);
     return api(`/admin/lab/findings${q.length ? "?" + q.join("&") : ""}`);
   });
   const [openId, setOpenId] = useState(null);
-  const [form, setForm] = useState({ title: "", claim: "", claim_kind: "filter", query_ids: "", notes: "" });
+  const [form, setForm] = useState({
+    title: "",
+    claim: "",
+    claim_kind: "filter",
+    query_ids: citeQueryId ? String(citeQueryId) : "",
+    notes: "",
+  });
   const [formErr, setFormErr] = useState("");
+  const [saved, setSaved] = useState("");
   const [busy, setBusy] = useState(false);
   const list = data?.findings || [];
-  void _l;
 
   const create = async (e) => {
     e.preventDefault();
     setBusy(true);
     setFormErr("");
+    setSaved("");
     try {
-      await api("/admin/lab/findings", {
+      const d = await api("/admin/lab/findings", {
         method: "POST",
         json: {
           title: form.title,
@@ -1062,6 +1059,8 @@ function FindingsScreen() {
         },
       });
       setForm({ title: "", claim: "", claim_kind: "filter", query_ids: "", notes: "" });
+      setSaved(`Saved as finding #${d.id}${d.evidence_grade ? ` · evidence grade ${d.evidence_grade}` : ""}.`);
+      setNonce((n) => n + 1);
     } catch (ex) {
       setFormErr(ex.message);
     } finally {
@@ -1075,6 +1074,14 @@ function FindingsScreen() {
         <form onSubmit={create} style={{ display: "grid", gap: 12 }}>
           <h3>Record a finding</h3>
           {formErr && <div className="errorbox">{formErr}</div>}
+          <div aria-live="polite">
+            {saved && <p className="notice" style={{ margin: 0 }}>{saved}</p>}
+          </div>
+          {citeQueryId && (
+            <p className="labmeta" style={{ margin: 0 }}>
+              Citing backtest query #{citeQueryId}, carried over from the run you just made.
+            </p>
+          )}
           <label className="labfield">
             Title
             <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
@@ -1126,10 +1133,10 @@ function FindingsScreen() {
               </select>
             </label>
           </div>
-          <Load data={data} err={err}>
+          <Load data={data} err={err} loading={loading}>
 {(data) => (
           list.length === 0 ? (
-              <p className="muted">No findings.</p>
+              <p className="muted">{loading ? "Loading…" : "No findings recorded yet. Run a backtest, then cite it here."}</p>
             ) : (
               list.map((f) => (
                 <div key={f.id}>
@@ -1158,7 +1165,7 @@ function FindingsScreen() {
 }
 
 function FindingDetail({ fid, grade }) {
-  const { data, err } = useFetch([fid], () => api(`/admin/lab/findings/${fid}`));
+  const { data, err, loading } = useFetch([fid], () => api(`/admin/lab/findings/${fid}`));
   const [addQ, setAddQ] = useState("");
   const [addRel, setAddRel] = useState("supports");
   const [msg, setMsg] = useState("");
@@ -1200,7 +1207,7 @@ function FindingDetail({ fid, grade }) {
   };
   return (
     <div className="card" style={{ marginTop: 6 }}>
-      <Load data={data} err={err}>
+      <Load data={data} err={err} loading={loading}>
         {(data) => (
           <>
         <p style={{ marginTop: 0 }}>{data.claim}</p>
@@ -1229,10 +1236,9 @@ function FindingDetail({ fid, grade }) {
             </div>
           ))
         )}
-        <div className="rel-select" style={{ marginTop: 10 }}>
+        <div className="rel-select labfield" style={{ marginTop: 10 }}>
           <input
-            className="mono"
-            style={{ width: 90, background: "var(--surface-sunken)", border: "1px solid var(--border-strong)", borderRadius: "var(--r-sm)", padding: "6px 8px", color: "var(--ink)" }}
+            className="mono qid-input"
             placeholder="query id"
             value={addQ}
             onChange={(e) => setAddQ(e.target.value)}
@@ -1254,11 +1260,11 @@ function FindingDetail({ fid, grade }) {
 }
 
 function LogScreen() {
-  const { data, err } = useFetch([], () => api("/admin/lab/queries?limit=100"));
+  const { data, err, loading } = useFetch([], () => api("/admin/lab/queries?limit=100"));
   return (
     <div className="card">
       <h3>Query audit log</h3>
-      <Load data={data} err={err}>
+      <Load data={data} err={err} loading={loading}>
         {(data) => (
         data.queries.length === 0 ? (
           <p className="muted">No queries recorded.</p>
@@ -1292,11 +1298,13 @@ function LogScreen() {
 }
 
 const WALKTHROUGH_SEEN_KEY = "lab_walkthrough_seen";
+const STRATEGY_SCREENS = ["inputs", "versions", "backtest"];
 
 function LabApp() {
   const { data: strategies, err } = useFetch([], () => api("/admin/lab/strategies"));
-  const [screen, setScreen] = useState("inputs");
+  const [screen, setScreen] = useState("strategies");
   const [strat, setStrat] = useState("");
+  const [citeQueryId, setCiteQueryId] = useState(null);
   const [showWalk, setShowWalk] = useState(() => {
     try {
       return !localStorage.getItem(WALKTHROUGH_SEEN_KEY);
@@ -1318,15 +1326,27 @@ function LabApp() {
       if (first) setStrat(first.key);
     }
   }, [strategies, strat]);
-  const go = async (key, s) => {
-    const d = await api("/admin/lab/strategies");
-    const list = d.strategies;
-    setStrat(list.some((x) => x.key === key) ? key : list[0].key);
+  const go = (key, s) => {
+    setStrat(key);
+    setCiteQueryId(null);
     setScreen(s);
   };
   const options = strategies ? strategies.strategies : [];
+  const navTo = (id) => {
+    setCiteQueryId(null);
+    setScreen(id);
+  };
   const tab = (label, id) => (
-    <button className={screen === id ? "active" : ""} onClick={() => setScreen(id)}>
+    <button className={screen === id ? "active" : ""} onClick={() => navTo(id)}>
+      {label}
+    </button>
+  );
+  const subtab = (label, id) => (
+    <button
+      className={screen === id ? "active" : ""}
+      aria-current={screen === id ? "page" : undefined}
+      onClick={() => navTo(id)}
+    >
       {label}
     </button>
   );
@@ -1336,10 +1356,12 @@ function LabApp() {
         <span className="mark">LB</span>
         <span className="muted">Lab</span>
         <nav className="labnav">
-          {tab("Strategies", "strategies")}
-          {tab("Inputs", "inputs")}
-          {tab("Versions", "versions")}
-          {tab("Backtest", "backtest")}
+          <button
+            className={screen === "strategies" || STRATEGY_SCREENS.includes(screen) ? "active" : ""}
+            onClick={() => navTo("strategies")}
+          >
+            Strategies
+          </button>
           {tab("Findings", "findings")}
           {tab("Log", "log")}
         </nav>
@@ -1360,20 +1382,55 @@ function LabApp() {
       {showWalk && <Walkthrough onClose={closeWalk} />}
       <div className="labwrap">
         {err && <div className="errorbox">{err}</div>}
+        {STRATEGY_SCREENS.includes(screen) && (
+          <div className="labcontext">
+            <div className="labcontext-head">
+              <button
+                type="button"
+                className="labcontext-back"
+                onClick={() => setScreen("strategies")}
+              >
+                ← All strategies
+              </button>
+              <select
+                className="labcontext-name"
+                aria-label="Strategy"
+                value={strat}
+                onChange={(e) => setStrat(e.target.value)}
+              >
+                {options.map((o) => (
+                  <option key={o.key} value={o.key}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <nav className="labsubnav">
+              {subtab("Inputs", "inputs")}
+              {subtab("Versions", "versions")}
+              {subtab("Backtest", "backtest")}
+            </nav>
+          </div>
+        )}
         <p className="labscreen-intro">{SCREEN_INTROS[screen]}</p>
         {screen === "strategies" && (
           <StrategiesScreen strategies={strategies} onPick={go} />
         )}
-        {screen === "inputs" && (
-          <InputsScreen strat={strat} strategies={options} setStrat={setStrat} />
+        {STRATEGY_SCREENS.includes(screen) && !strat && (
+          <p className="muted">Loading strategies…</p>
         )}
-        {screen === "versions" && (
-          <VersionsScreen strat={strat} strategies={options} setStrat={setStrat} />
+        {screen === "inputs" && strat && <InputsScreen strat={strat} />}
+        {screen === "versions" && strat && <VersionsScreen strat={strat} />}
+        {screen === "backtest" && strat && (
+          <BacktestScreen
+            strat={strat}
+            onCite={(qid) => {
+              setCiteQueryId(qid);
+              setScreen("findings");
+            }}
+          />
         )}
-        {screen === "backtest" && (
-          <BacktestScreen strat={strat} strategies={options} setStrat={setStrat} />
+        {screen === "findings" && (
+          <FindingsScreen key={citeQueryId || "none"} citeQueryId={citeQueryId} />
         )}
-        {screen === "findings" && <FindingsScreen />}
         {screen === "log" && <LogScreen />}
       </div>
     </>
