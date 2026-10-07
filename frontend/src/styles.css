@@ -130,6 +130,12 @@ p {
   border: 0;
 }
 
+/* a hidden header label in a far-right column of a scrolling table sits at
+   its static position, which can widen the page; anchor it to its cell */
+table.data th {
+  position: relative;
+}
+
 .row {
   display: flex;
   align-items: center;
