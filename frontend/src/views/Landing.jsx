@@ -1,326 +1,173 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../api.js";
-import { navigate } from "./../main.jsx";
-import { currentStyle, STYLES } from "../components/theme.js";
+import React, { useEffect, useState } from "react";
+import { api, cached } from "../api.js";
+import { Link } from "../lib/router.jsx";
+import { useMe } from "../lib/me.jsx";
+import { alertsLabel, dollars, industriesLabel, shortDate } from "../lib/fmt.js";
+import { EVIDENCE, GROUPS, TICKER_RECORD } from "../lib/evidence.js";
+import { Monogram, StatusChip } from "../components/ui.jsx";
 import "./landing.css";
 
-// Source for every figure below: test_results.md (Fast Mover backtest, run 2026-09-11).
-const GROUPS = [
-  { key: "random", label: "Random trading days", sub: "no earnings within 6 days", hits: 85, n: 232, pct: 36.6 },
-  { key: "earnings", label: "All earnings events", sub: "27 tickers, about two years", hits: 112, n: 191, pct: 58.6 },
-  { key: "filtered", label: "Everything Fast Mover flagged", sub: "8 tickers, 32 events", hits: 26, n: 32, pct: 81.2 },
-];
-
-const TICKERS = [
-  ["INOD", 8, 6],
-  ["AEHR", 7, 7],
-  ["BKSY", 5, 3],
-  ["SEZL", 4, 4],
-  ["TSSI", 3, 3],
-  ["PDYN", 3, 1],
-  ["DUOT", 1, 1],
-  ["OUST", 1, 1],
-];
+// One page. What the platform does, the one body of evidence it has
+// (including what that evidence does not prove), the five strategies, the
+// universe, and the plans. No testimonials, no urgency, no illustration.
 
 const HOW = [
-  {
-    n: "01",
-    title: "Reads public data",
-    body: "Filings, prices, news on a fixed schedule. No hand-entry.",
-  },
-  {
-    n: "02",
-    title: "Asks the questions",
-    body: "The analyst's questions, checked against the data.",
-  },
-  {
-    n: "03",
-    title: "Scores every ticker",
-    body: "0 to 100 every run. Thin data pulls toward neutral.",
-  },
-  {
-    n: "04",
-    title: "Flags moves early",
-    body: "Strong scores hit your inbox before the window opens.",
-  },
+  ["Reads public data", "Filings, prices and news on a fixed schedule from primary sources. No hand entry."],
+  ["Applies the same checks to every name", "Hard filters first. A name clears every one or earns no strong score."],
+  ["Scores what passes, 0 to 100", "Missing inputs pull the score toward neutral, so thin data can't produce an extreme number."],
+  ["Shows its working", "Every score carries its coverage, its source dates and the exact filter results."],
 ];
 
-const COPY = {
-  contemporary: {
-    heroTitle: "Get in before the big move.",
-    slides: [
-      "The big moves a stock makes are usually decided in the first hours after a report lands.",
-      "Fast Mover reads those reports on a fixed schedule and scores every covered ticker out of 100.",
-      "The strong scores reach your inbox before the event window opens.",
-    ],
-    cta: "Open the Fast Mover board",
-    more: "How we score it",
-    howH2: "An algorithm that asks the right questions.",
-    howSub: "Fast Mover checks every ticker against the same standard on every run. A ticker clears every check or it earns no strong score. No exceptions to flatter the numbers.",
-    spreadH2: "The record: 26 hits from 8 tickers.",
-    spreadSub: "AEHR clears the screen seven times and moves all seven. PDYN clears it three times and moves once. No single ticker carries the result.",
-    note: "The largest move in the sample is INOD after its 2026-05-07 report, on 17.4x volume, screen cleared. The screen raises the odds of a move, not its size.",
-    limitsH2: "The score lands before the move.",
-    limitsSub: "Every clear-screen event is scored from filings and market data already on file when the alert goes out. Nothing is added after the fact.",
-    l1t: "Read it first",
-    l1b: "Fast Mover sends the score before the event window opens. The move has not happened when you read it.",
-    l2t: "Follows every alert",
-    l2b: "26 of 32 clear-screen events move within a week of the alert going out. An 81.2% hit rate against a 20-day, 3x-volume bar.",
-    l3t: "The record is the record",
-    l3b: "No filing, no price bar, and no score is added or changed after the fact. What goes out is exactly what you see.",
-    limitsFoot: "Straight limits: the screen does not call direction, no trades are simulated, and 32 events is a small deck.",
-    stratsH2: "One engine runs every screen.",
-    stratsSub: "Fast Mover ships signals today. Every other screen runs the same ranks and shares the same scoring, and goes live as its own backtest clears.",
-    fmLead: "Public data, one question: which tickers are built for a big move, and when. Strong scores reach your inbox before the window opens.",
-    provHead: "Preview screens, same engine, same inputs.",
-    flowH2: "From data to inbox",
-    closeH2: "Read the board free before you pay for it.",
-  },
-  brutalist: {
-    heroTitle: "CALLED BEFORE IT MOVES.",
-    slides: [
-      "A stock's big moves are decided in the first hours after the report lands.",
-      "Fast Mover reads the report on schedule and scores every covered ticker out of 100.",
-      "Strong scores hit your inbox before the window opens.",
-    ],
-    cta: "OPEN THE BOARD",
-    more: "SEE THE TEST",
-    howH2: "ONE STANDARD. NO EXCEPTIONS.",
-    howSub: "Every ticker clears the same checks on every run or it earns no strong score. No special cases to keep the numbers looking good.",
-    spreadH2: "THE RECORD: 26 HITS FROM 8 TICKERS.",
-    spreadSub: "AEHR clears the screen seven times and moves all seven. PDYN clears it three times and moves once. No single ticker carries the result.",
-    note: "Biggest move in the sample: INOD after its 2026-05-07 report, on 17.4x volume, screen cleared.",
-    limitsH2: "THE SCORE LANDS BEFORE THE WINDOW OPENS.",
-    limitsSub: "Scores are cut from filings and market data already on file when each alert goes out. Nothing is added afterwards.",
-    l1t: "READ IT FIRST",
-    l1b: "The score hits your inbox before the window opens. At the moment you read it the move has not happened.",
-    l2t: "FOLLOWS EVERY ALERT",
-    l2b: "26 of 32 clear screens move inside a week. An 81.2% hit rate against a 20-day, 3x-volume bar.",
-    l3t: "NO RETROFITS",
-    l3b: "No filing, no price bar, and no score is touched after the fact. What goes out is what you see.",
-    limitsFoot: "LIMITS: NO DIRECTION CALL. NO SIMULATED TRADES. 32 EVENTS IS A SMALL DECK.",
-    stratsH2: "ONE ENGINE RUNS EVERY SCREEN.",
-    stratsSub: "Fast Mover ships signals today. Every preview screen runs the same ranks and the same scoring.",
-    fmLead: "Public data, one question: which tickers are built for a big move, and when. Strong scores reach your inbox before the window opens.",
-    provHead: "PREVIEW SCREENS. SAME ENGINE.",
-    flowH2: "FROM DATA TO INBOX",
-    closeH2: "READ THE BOARD BEFORE YOU PAY.",
-  },
-};
-
-function go(to) {
-  return (e) => {
-    e.preventDefault();
-    navigate(to);
-  };
-}
-
-// A callback ref rather than a query on mount, so sections that render only
-// after their API data arrives still get observed.
-function useReveal() {
-  const ioRef = useRef(null);
-  useEffect(() => () => ioRef.current && ioRef.current.disconnect(), []);
-  return useCallback((el) => {
-    if (!el || el.classList.contains("is-in")) return;
-    if (!("IntersectionObserver" in window)) {
-      el.classList.add("is-in");
-      return;
-    }
-    if (!ioRef.current) {
-      ioRef.current = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((e) => {
-            if (e.isIntersecting) {
-              e.target.classList.add("is-in");
-              ioRef.current.unobserve(e.target);
-            }
-          });
-        },
-        { threshold: 0.15, rootMargin: "0px 0px -40px 0px" }
-      );
-    }
-    ioRef.current.observe(el);
-  }, []);
-}
-
-function EvidencePanel({ reveal }) {
-  const ref = useRef(null);
-  return (
-    <figure
-      className="ld-panel"
-      ref={(el) => {
-        ref.current = el;
-        reveal(el);
-      }}
-      data-reveal
-    >
-      <figcaption className="ld-panel-head">
-        <span>Hit rate inside the event window</span>
-        <span className="mono">2-year test · 32 events</span>
-      </figcaption>
-      <div className="ld-panel-big">
-        <span className="ld-num">81.2<small>%</small></span>
-        <span className="ld-panel-bigsub">
-          of the tickers we flagged moved hard.
-          <br />
-          <span className="mono">26 of 32</span>
-        </span>
-      </div>
-      <ol className="ld-bars">
-        {GROUPS.map((g, i) => (
-          <li key={g.key} className={`ld-bar ld-bar-${g.key}`} style={{ "--i": i, "--w": g.pct / 100 }}>
-            <div className="ld-bar-label">
-              <span>{g.label}</span>
-              <span className="ld-bar-sub">{g.sub}</span>
-            </div>
-            <div className="ld-bar-track" aria-hidden="true">
-              <span className="ld-bar-fill" />
-            </div>
-            <div className="ld-bar-val mono">
-              <b>{g.pct.toFixed(1)}%</b>
-              <span>
-                {g.hits}/{g.n}
-              </span>
-            </div>
-          </li>
-        ))}
-      </ol>
-      <p className="ld-panel-foot">
-        A hit means the ticker moved 20% or more, or traded at 3x its normal volume,
-        between 2 trading days before the signal and 5 after it. The screen is
-        measured on that, and so is this page.
-      </p>
-    </figure>
-  );
-}
-
 export default function Landing() {
+  const { me } = useMe();
   const [strategies, setStrategies] = useState(null);
   const [industries, setIndustries] = useState(null);
   const [run, setRun] = useState(null);
   const [tiers, setTiers] = useState(null);
-  const [slide, setSlide] = useState(0);
-  const [styleKey, setStyleKey] = useState(currentStyle());
-
-  const st = STYLES.find((s) => s.key === styleKey) || STYLES[0];
-  const copy = COPY[st.copy] || COPY.contemporary;
-  const slides = copy.slides;
 
   useEffect(() => {
-    const h = () => setStyleKey(currentStyle());
-    document.addEventListener("ta-theme", h);
-    return () => document.removeEventListener("ta-theme", h);
-  }, []);
-
-  useEffect(() => {
-    const t = setInterval(() => setSlide((k) => (k + 1) % slides.length), 5500);
-    return () => clearInterval(t);
-  }, [slide, slides.length]);
-
-  useEffect(() => {
-    api("/strategies").then((d) => setStrategies(d.strategies)).catch(() => setStrategies(null));
-    api("/industries").then((d) => setIndustries(d.industries)).catch(() => setIndustries(null));
+    cached("/strategies").then((d) => setStrategies(d.strategies)).catch(() => setStrategies([]));
+    cached("/industries").then((d) => setIndustries(d.industries)).catch(() => setIndustries([]));
     api("/runs/latest").then(setRun).catch(() => setRun(null));
-    api("/entitlements").then((d) => setTiers(d.tiers)).catch(() => setTiers(null));
+    cached("/entitlements").then((d) => setTiers(d.tiers)).catch(() => setTiers(null));
   }, []);
 
-  const reveal = useReveal();
-
-  const provisional = strategies ? strategies.filter((s) => s.key !== "fast_mover") : [];
   const fm = strategies && strategies.find((s) => s.key === "fast_mover");
+  const provisional = strategies ? strategies.filter((s) => !s.calibrated) : [];
   const universeTotal = industries ? industries.reduce((a, i) => a + (i.universe_count || 0), 0) : null;
-  const maxCount = industries ? Math.max(...industries.map((i) => i.universe_count || 0)) : 1;
-  const paid = tiers ? tiers.filter((t) => t.price_monthly_cents > 0) : [];
-  const free = tiers && tiers.find((t) => t.price_monthly_cents === 0);
-  const dollars = (c) => `$${Math.round(c / 100)}`;
-  const tierWith = (ch) => paid.find((t) => t.channels.includes(ch));
+  const maxCount = industries && industries.length ? Math.max(...industries.map((i) => i.universe_count || 0)) : 1;
+  const sortedTiers = tiers ? [...tiers].sort((a, b) => a.price_monthly_cents - b.price_monthly_cents) : [];
+  const free = sortedTiers.find((t) => t.price_monthly_cents === 0);
+  const primary = me ? ["/board", "Open your Board"] : ["/signup", "Start free"];
 
   return (
-    <main className="ld">
+    <div className="ld">
       <section className="ld-hero">
-        <div className="ld-grid" aria-hidden="true" />
         <div className="ld-hero-copy">
-          <h1 className="ld-h1 ld-rise" style={{ "--d": 0 }}>
-            {copy.heroTitle}
-          </h1>
-          <div className="ld-slide ld-rise" style={{ "--d": 1 }}>
-            {slides.map((s, k) => (
-              <p
-                key={k}
-                className={`ld-slip ${k === slide ? "on" : ""}`}
-                aria-hidden={k !== slide}
-              >
-                {s}
-              </p>
-            ))}
-            <div className="ld-dots" role="tablist" aria-label="What Fast Mover does">
-              {slides.map((_, k) => (
-                <button
-                  key={k}
-                  role="tab"
-                  aria-selected={k === slide}
-                  aria-label={`Message ${k + 1} of ${slides.length}`}
-                  className={k === slide ? "on" : ""}
-                  onClick={() => setSlide(k)}
-                />
-              ))}
-            </div>
+          <p className="eyebrow">Ranked small-cap research, with its working shown</p>
+          <h1>Know which names are built to move before their next event.</h1>
+          <p className="ld-lede">
+            Fast Mover reads filings and market data on a schedule, runs every covered name through
+            the same hard filters, and ranks what passes. On real data, <b>{EVIDENCE.hits} of {EVIDENCE.events}</b>{" "}
+            names that cleared the screen moved 20% or traded 3x volume inside the event window.
+          </p>
+          <div className="ld-actions">
+            <Link to={primary[0]} className="btn btn-primary btn-lg">
+              {primary[1]}
+            </Link>
+            <Link to="/pricing" className="btn btn-secondary btn-lg">
+              Compare plans
+            </Link>
           </div>
-          <div className="ld-actions ld-rise" style={{ "--d": 3 }}>
-            <a className="ld-btn" href="/board" onClick={go("/board")}>
-              {copy.cta}
-              <span className="ld-arrow" aria-hidden="true">→</span>
-            </a>
-            <a className="ld-link" href="#limits">
-              {copy.more}
-            </a>
-          </div>
-          {run && (
-            <p className="ld-age mono ld-rise" style={{ "--d": 4 }}>
-              <span className="ld-dot" aria-hidden="true" />
-              Board as of {new Date(run.as_of).toUTCString().slice(5, 16)} · {run.universe_active} tickers scored
-            </p>
-          )}
+          <p className="ld-age mono">
+            {run
+              ? `Latest run ${shortDate(run.as_of)} · ${run.universe_active} names scored`
+              : "Scores regenerate on a daily run"}
+            {free ? ` · Free covers the top ${free.names_shown_limit} in one industry` : ""}
+          </p>
         </div>
-        <EvidencePanel reveal={reveal} />
+        <figure className="card ld-panel">
+          <figcaption className="ld-panel-head">
+            <span>Hit rate inside the event window</span>
+            <span className="mono muted">2-year test · {EVIDENCE.events} events</span>
+          </figcaption>
+          <div className="ld-panel-big">
+            <span className="ld-num mono">
+              {EVIDENCE.hitRate}
+              <small>%</small>
+            </span>
+            <span className="ld-panel-bigsub">
+              of names that cleared the screen moved hard.
+              <br />
+              <span className="mono">
+                {EVIDENCE.hits} of {EVIDENCE.events}
+              </span>
+            </span>
+          </div>
+          <ol className="ld-bars">
+            {GROUPS.map((g) => (
+              <li key={g.key} className={`ld-bar ${g.key === "filtered" ? "hi" : ""}`}>
+                <div className="ld-bar-label">
+                  <span>{g.label}</span>
+                  <span className="ld-bar-sub">{g.sub}</span>
+                </div>
+                <div className="ld-bar-track" aria-hidden="true">
+                  <span className="ld-bar-fill" style={{ width: `${g.pct}%` }} />
+                </div>
+                <div className="ld-bar-val mono">
+                  <b>{g.pct.toFixed(1)}%</b>
+                  <span>
+                    {g.hits}/{g.n}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <p className="ld-panel-foot">
+            A hit is {EVIDENCE.hitDefinition}, measured from {EVIDENCE.window}. The screen is judged
+            on that, and so is this page.
+          </p>
+        </figure>
       </section>
 
-      <section className="ld-how" ref={reveal} data-reveal>
+      <section className="ld-section">
         <header className="ld-sechead">
-          <h2 className="ld-h2">{copy.howH2}</h2>
-          <p className="ld-sub">{copy.howSub}</p>
+          <h2>One standard, applied to every name on every run.</h2>
+          <p className="ld-sub">
+            There are no exceptions to flatter the numbers. If a filter fails, the report says so in
+            a word, next to the figure that failed it.
+          </p>
         </header>
-        <ol className="ld-how-grid">
-          {HOW.map((h, i) => (
-            <li key={h.n} style={{ "--i": i }}>
-              <span className="ld-how-n mono">{h.n}</span>
-              <h3>{h.title}</h3>
-              <p>{h.body}</p>
+        <ol className="ld-how">
+          {HOW.map(([t, b], i) => (
+            <li key={t}>
+              <span className="ld-n mono">0{i + 1}</span>
+              <h3>{t}</h3>
+              <p>{b}</p>
             </li>
           ))}
         </ol>
       </section>
 
-      <section className="ld-spread" ref={reveal} data-reveal>
-        <div className="ld-spread-copy">
-          <h2 className="ld-h2">{copy.spreadH2}</h2>
-          <p className="ld-sub">{copy.spreadSub}</p>
-          <div className="ld-note">
-            <span className="ld-note-num mono">+123.2%</span>
-            <p>{copy.note}</p>
+      <section className="ld-section ld-record">
+        <div>
+          <header className="ld-sechead">
+            <h2>
+              The record: {EVIDENCE.hits} hits from {EVIDENCE.tickers} names.
+            </h2>
+            <p className="ld-sub">
+              AEHR cleared the screen seven times and moved all seven. PDYN cleared it three times and
+              moved once. No single name carries the result, and the misses are shown at the same
+              weight as the hits.
+            </p>
+          </header>
+          <div className="card card-sunken ld-limits">
+            <h3>What the test does not prove</h3>
+            <ul>
+              <li>It measures whether a large move happened, not its direction.</li>
+              <li>No trades are simulated and no profit is claimed.</li>
+              <li>{EVIDENCE.events} events over roughly two years of regimes is a small sample.</li>
+              <li>Four of the five strategies have not been tested at all yet.</li>
+            </ul>
           </div>
         </div>
-        <div className="ld-matrix" role="table" aria-label="Screen-clearing events by ticker">
+        <div className="card ld-matrix" role="table" aria-label="Screen-clearing events by name">
           <div className="ld-matrix-legend" aria-hidden="true">
-            <span><i className="ld-sq hit" /> hit</span>
-            <span><i className="ld-sq" /> miss</span>
+            <span>
+              <i className="ld-sq hit" /> hit
+            </span>
+            <span>
+              <i className="ld-sq" /> miss
+            </span>
           </div>
-          {TICKERS.map(([t, n, h], row) => (
-            <div className="ld-mrow" role="row" key={t} style={{ "--r": row }}>
-              <span className="ld-mt mono" role="cell">{t}</span>
+          {TICKER_RECORD.map(([t, n, h]) => (
+            <div className="ld-mrow" role="row" key={t}>
+              <span className="ld-mt mono" role="cell">
+                {t}
+              </span>
               <span className="ld-msq" role="cell" aria-label={`${h} hits of ${n} events`}>
                 {Array.from({ length: n }, (_, k) => (
-                  <i key={k} className={`ld-sq ${k < h ? "hit" : ""}`} style={{ "--k": k }} />
+                  <i key={k} className={`ld-sq ${k < h ? "hit" : ""}`} />
                 ))}
               </span>
               <span className="ld-mc mono" role="cell">
@@ -329,172 +176,151 @@ export default function Landing() {
             </div>
           ))}
           <div className="ld-mrow ld-mtotal" role="row">
-            <span className="ld-mt mono" role="cell">Total</span>
+            <span className="ld-mt mono" role="cell">
+              Total
+            </span>
             <span role="cell" />
-            <span className="ld-mc mono" role="cell">26/32</span>
+            <span className="ld-mc mono" role="cell">
+              {EVIDENCE.hits}/{EVIDENCE.events}
+            </span>
           </div>
         </div>
       </section>
 
-      <section className="ld-limits" id="limits" ref={reveal} data-reveal>
-        <div className="ld-limits-head">
-          <h2 className="ld-h2">{copy.limitsH2}</h2>
-          <p className="ld-sub">{copy.limitsSub}</p>
-        </div>
-        <ol className="ld-limit-list">
-          <li>
-            <span className="ld-limit-n mono">01</span>
-            <h3>{copy.l1t}</h3>
-            <p>{copy.l1b}</p>
-          </li>
-          <li>
-            <span className="ld-limit-n mono">02</span>
-            <h3>{copy.l2t}</h3>
-            <p>{copy.l2b}</p>
-          </li>
-          <li>
-            <span className="ld-limit-n mono">03</span>
-            <h3>{copy.l3t}</h3>
-            <p>{copy.l3b}</p>
-          </li>
-        </ol>
-        <p className="ld-limits-foot mono">{copy.limitsFoot}</p>
-      </section>
-
-      <section className="ld-strats" ref={reveal} data-reveal>
+      <section className="ld-section">
         <header className="ld-sechead">
-          <h2 className="ld-h2">{copy.stratsH2}</h2>
-          <p className="ld-sub">{copy.stratsSub}</p>
+          <h2>One engine, five lenses. One of them is calibrated.</h2>
+          <p className="ld-sub">
+            Every strategy declares its own components and runs through the same scoring math. Only
+            Fast Mover has the resolved outcomes to back its weights; the others are labelled
+            provisional everywhere they appear, and produce candidates rather than signals.
+          </p>
         </header>
-        <div className="ld-strat-grid">
-          <article className="ld-fm">
-            <div className="ld-fm-top">
-              <span className="ld-mono-mark mono">FM</span>
+        <div className="ld-strats">
+          <article className="card ld-fm">
+            <div className="row">
+              <Monogram>FM</Monogram>
+              <h3>Fast Mover</h3>
+              <StatusChip calibrated />
             </div>
-            <h3>Fast Mover</h3>
-            <p>{copy.fmLead}</p>
-            <dl className="ld-fm-stats">
+            <p className="muted">
+              Floating supply, crowding, and a dated catalyst. Hard filters on market cap, float,
+              short interest, revenue growth and catalyst timing are the evidenced claim; the
+              scorecard ranks what passes.
+            </p>
+            <dl className="ld-stats">
               <div>
-                <dt>Cleared events</dt>
-                <dd className="mono">{fm ? fm.resolved_outcomes_count : 32}</dd>
+                <dt>Resolved outcomes</dt>
+                <dd className="mono">{fm ? fm.resolved_outcomes_count : EVIDENCE.events}</dd>
               </div>
               <div>
                 <dt>Hit rate</dt>
-                <dd className="mono">81.2%</dd>
+                <dd className="mono">{EVIDENCE.hitRate}%</dd>
               </div>
               <div>
-                <dt>Sends</dt>
+                <dt>Produces</dt>
                 <dd>Signals</dd>
               </div>
             </dl>
           </article>
-          <div className="ld-prov">
-            <p className="ld-prov-head">{copy.provHead}</p>
+          <div className="card card-sunken ld-prov">
+            <p className="eyebrow">Provisional strategies · weights not yet backed by outcomes</p>
             <ul>
-              {provisional.length ? provisional.map((s) => (
+              {(provisional.length
+                ? provisional
+                : [
+                    { key: "market_shift", label: "Market Shift", monogram: "MS" },
+                    { key: "geopolitics", label: "GeoPolitics", monogram: "GP" },
+                    { key: "industry_restructure", label: "Industry Restructure", monogram: "IR" },
+                    { key: "monetary_shifts", label: "Monetary Shifts", monogram: "MN" },
+                  ]
+              ).map((s) => (
                 <li key={s.key}>
-                  <span className="ld-mono-mark mono">{s.monogram}</span>
-                  <span className="ld-prov-name">
-                    <b>{s.label}</b>
-                  </span>
-                  <span className="ld-prov-chip mono">Preview</span>
+                  <Monogram>{s.monogram}</Monogram>
+                  <b>{s.label}</b>
+                  <span className="mono muted">{s.resolved_outcomes_count ?? 0}/{EVIDENCE.calibrationThreshold} outcomes</span>
                 </li>
-              )) : (
-                <li><span className="ld-prov-name"><b>Loading…</b></span></li>
-              )}
+              ))}
             </ul>
+            <p className="xs faint">
+              Each becomes calibrated only after {EVIDENCE.calibrationThreshold} resolved outcomes and a human review
+              of the weights. That event is dated and shown on every report.
+            </p>
           </div>
         </div>
       </section>
 
-      <section className="ld-flow" ref={reveal} data-reveal>
-        <h2 className="ld-h2">{copy.flowH2}</h2>
-        <ol className="ld-steps">
-          <li style={{ "--i": 0 }}>
-            <span className="ld-step-n mono">01</span>
-            <h3>Collect</h3>
-            <p>
-              Public filings, market data, and news schedules, gathered on fixed intervals from
-              primary sources.
-            </p>
-          </li>
-          <li style={{ "--i": 1 }}>
-            <span className="ld-step-n mono">02</span>
-            <h3>Score</h3>
-            <p>
-              Every covered ticker gets a 0 to 100 score each run. Missing inputs pull the score toward
-              neutral so two data points cannot produce an extreme number.
-            </p>
-          </li>
-          <li style={{ "--i": 2 }}>
-            <span className="ld-step-n mono">03</span>
-            <h3>Alert</h3>
-            <p>
-              Rules you set yourself: a price move, a volume spike, a new filing, an insider trade.
-              Check the trigger against the source before you act.
-            </p>
-          </li>
-          <li style={{ "--i": 3 }}>
-            <span className="ld-step-n mono">04</span>
-            <h3>Deliver</h3>
-            <p>
-              {tiers && tierWith("push") && tierWith("sms") && tierWith("webhook")
-                ? `Email on every plan. Web push from ${dollars(tierWith("push").price_monthly_cents)}, SMS from ${dollars(
-                    tierWith("sms").price_monthly_cents
-                  )}, a signed webhook at ${dollars(tierWith("webhook").price_monthly_cents)} a month.`
-                : "Email on every plan. Web push, SMS and a signed webhook on paid plans."}
-            </p>
-          </li>
-        </ol>
+      <section className="ld-section">
+        <header className="ld-sechead">
+          <h2>{industries && industries.length ? `${universeTotal} names in ${industries.length} industries.` : "The names we cover."}</h2>
+          <p className="ld-sub">
+            You follow industries; the Board shows the top names in each, scored against a sector
+            benchmark. Pin a name to keep it in view and in your weekly digest.
+          </p>
+        </header>
+        <ul className="ld-ind">
+          {[...(industries || [])]
+            .sort((a, b) => b.universe_count - a.universe_count)
+            .map((i) => (
+              <li key={i.key} title={i.description}>
+                <span className="ld-ind-name">{i.label}</span>
+                <span className="mono faint">{i.benchmark_etf}</span>
+                <span className="ld-ind-bar" aria-hidden="true">
+                  <span style={{ width: `${Math.round((i.universe_count / maxCount) * 100)}%` }} />
+                </span>
+                <span className="mono">{i.universe_count}</span>
+              </li>
+            ))}
+        </ul>
       </section>
 
-      <section className="ld-universe" ref={reveal} data-reveal>
+      {sortedTiers.length > 0 && (
+        <section className="ld-section">
           <header className="ld-sechead">
-            <h2 className="ld-h2">
-              {industries ? `${universeTotal} tickers in ${industries.length} industries` : "The tickers we cover"}
-            </h2>
+            <h2>Same scores on every plan. Plans differ in reach.</h2>
             <p className="ld-sub">
-              Each industry runs against a sector benchmark. You follow industries; the board shows
-              the top tickers in each.
+              Nobody gets a better number. Paid plans follow more industries, show more names, pin
+              more, and add delivery channels.
             </p>
           </header>
-          <ul className="ld-ind">
-            {[...(industries || [])]
-              .sort((a, b) => b.universe_count - a.universe_count)
-              .map((i, k) => (
-                <li key={i.key} style={{ "--w": i.universe_count / maxCount, "--i": k }} title={i.description}>
-                  <span className="ld-ind-name">{i.label}</span>
-                  <span className="ld-ind-etf mono">{i.benchmark_etf}</span>
-                  <span className="ld-ind-bar" aria-hidden="true">
-                    <span />
-                  </span>
-                  <span className="ld-ind-n mono">{i.universe_count}</span>
-                </li>
-              ))}
-          </ul>
+          <div className="ld-plans">
+            {sortedTiers.map((t) => (
+              <div key={t.key} className={`card ld-plan ${t.key === "pro" ? "popular" : ""}`}>
+                <div className="ld-plan-top">
+                  <b>{t.label}</b>
+                  <span className="mono">{t.price_monthly_cents === 0 ? "$0" : `${dollars(t.price_monthly_cents)}/mo`}</span>
+                </div>
+                <ul>
+                  <li>{industriesLabel(t.industries_limit)}</li>
+                  <li>top {t.names_shown_limit} names each</li>
+                  <li>{t.picks_limit} pinned</li>
+                  <li>{alertsLabel(t.alerts_limit)}</li>
+                </ul>
+              </div>
+            ))}
+          </div>
+          <p className="small muted">
+            <Link to="/pricing">Full comparison, including delivery channels and what happens on a downgrade →</Link>
+          </p>
         </section>
+      )}
 
-      <section className="ld-close" ref={reveal} data-reveal>
-        <h2 className="ld-close-h">{copy.closeH2}</h2>
+      <section className="ld-close">
+        <h2>Read the Board free before you pay for it.</h2>
         <p className="ld-sub">
-          {free && paid.length
-            ? `The free plan covers the top ${free.names_shown_limit} tickers in ${free.industries_limit} industry, by email. Paid plans run ${dollars(
-                paid[0].price_monthly_cents
-              )} to ${dollars(paid[paid.length - 1].price_monthly_cents)} a month and go up to the top ${
-                paid[paid.length - 1].names_shown_limit
-              } tickers in every industry.`
-            : "The free plan covers the top tickers in one industry, by email."}
+          {free
+            ? `Free covers the top ${free.names_shown_limit} names in one industry and a weekly digest. No card needed; verification only gates delivery, never browsing.`
+            : "No card needed; verification only gates delivery, never browsing."}
         </p>
         <div className="ld-actions">
-          <a className="ld-btn" href="/signup" onClick={go("/signup")}>
-            Create a free account
-            <span className="ld-arrow" aria-hidden="true">→</span>
-          </a>
-          <a className="ld-link" href="/pricing" onClick={go("/pricing")}>
+          <Link to={primary[0]} className="btn btn-primary btn-lg">
+            {primary[1]}
+          </Link>
+          <Link to="/pricing" className="btn btn-secondary btn-lg">
             Compare plans
-          </a>
+          </Link>
         </div>
       </section>
-    </main>
+    </div>
   );
 }

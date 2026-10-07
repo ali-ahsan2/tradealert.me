@@ -3,120 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#0b0f15" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f141b" media="(prefers-color-scheme: dark)" />
     <meta name="robots" content="noindex, nofollow" />
-    <script>
-      (function () {
-        var B = {
-          dark: ["#0b0f15","#e6ebf2","#31c48d","#11161f","#202a3a"],
-          paper: ["#f2efe7","#23201a","#1f6f45","#faf8f2","#e0dacb"],
-          mist: ["#eef1f6","#1b2230","#3357c4","#f6f8fb","#d4dbe5"],
-          terminal: ["#0a0f0b","#d8f2e0","#39e075","#0f1611","#1e2d22"],
-          midnight: ["#0b1220","#dfe7f8","#41c6d8","#111a30","#20304d"]
-        };
-        var SC = { corporate: 4, brutalist: 0, glass: 16, swiss: 2 };
-        var B2 = { corporate: "solid", brutalist: "solid", glass: "solid", swiss: "grid" };
-        var SHAD = { corporate: "flat", brutalist: "hard", glass: "frost", swiss: "hair" };
-        function H(c) { var s = String(c).replace("#", ""); if (s.length === 3) s = s.split("").map(function (x) { return x + x; }).join(""); return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)]; }
-        function S(c) { return "#" + c.map(function (x) { return Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, "0"); }).join(""); }
-        function M(a, b, t) { var A = H(a), C = H(b); return S(A.map(function (v, i) { return v + (C[i] - v) * t; })); }
-        function L(c) { var r = H(c); return (0.2126 * r[0] + 0.7152 * r[1] + 0.0722 * r[2]) / 255; }
-        function ls(k) { return localStorage.getItem(k); }
-        function js(k) { try { return JSON.parse(ls(k) || "{}"); } catch (e) { return {}; } }
-        function nm(v) { return v === null || v === "" ? null : Number(v); }
-        try {
-          var theme = ls("ta_theme") || "dark";
-          var style = ls("ta_style") || "corporate";
-          var bg = ls("ta_bg") || B2[style] || "solid";
-          var rad = nm(ls("ta_radius"));
-          if (rad === null) { var sh = ls("ta_shape"); rad = sh === "pill" ? 20 : sh === "squared" ? 3 : SC[style] || 4; }
-          rad = Math.max(0, Math.min(28, Math.round(rad)));
-          var paralle = ls("ta_paralle") === "1";
-          var font = ls("ta_displayfont") || "auto";
-          var fs = nm(ls("ta_textsize"));
-          if (fs === null) { fs = 100; }
-          fs = Math.max(90, Math.min(120, Math.round(fs)));
-          var pal = js("ta_palette"), leg = js("ta_accents");
-          var ov = pal[theme] || (leg[theme] ? { accent: leg[theme] } : {});
-          var base = B[theme] || B.dark;
-          var bgc = ov.bg || base[0], ink = ov.ink || base[1], acc = ov.accent || base[2];
-          var suf = ov.surface || base[3], bd = ov.border || base[4];
-          var dark = L(bgc) < 0.42;
-          var neg = "#e05656", warn = "#d9a441", wf = "#2c2513";
-          if (theme === "paper" || theme === "mist") { neg = "#b3382e"; warn = "#96701c"; wf = "#f3e9cd"; }
-          if (theme === "terminal") { neg = "#ff7e5f"; warn = "#cfe35a"; wf = "#202a12"; }
-          if (ov.neg) { neg = ov.neg; }
-          var brdS = dark ? M(bd, ink, 0.28) : M(bd, ink, 0.18);
-          var muted = ov.muted || M(ink, bgc, 0.34);
-          var bg2 = M(acc, bgc, dark ? 0.5 : 0.36);
-          var bg2d = M(acc, bgc, dark ? 0.2 : 0.12);
-          var stageInk = L(M(acc, bgc, 0.42)) < 0.5 ? "#f2f5fa" : "#10141c";
-          function SH(mode, tok, dk) {
-            var b = tok["--border-strong"], bd = tok["--border"], ac = tok["--accent"], in2 = tok["--ink"];
-            switch (mode) {
-              case "hard": return ["5px 5px 0 0 " + b, "8px 8px 0 0 " + in2, "none"];
-              case "rect": return ["3px 3px 0 0 " + in2, "6px 6px 0 0 " + in2, "none"];
-              case "ring": return ["0 0 0 1px " + bd, "0 0 0 1px " + b + ", 0 14px 26px -18px rgba(0,0,0,0.5)", "none"];
-              case "glow": return ["0 0 0 1px " + bd, "0 0 0 1px " + b + ", 0 0 30px -6px " + ac, "none"];
-              case "neon": return ["0 2px 18px -6px " + ac, "0 0 34px -4px " + ac, "inset 0 0 18px -12px " + ac];
-              case "bevel": return ["inset -1px -1px 0 0 " + b + ", inset 1px 1px 0 0 " + tok["--surface-raised"], "inset -2px -2px 0 0 " + b, "inset 1px 1px 0 0 " + tok["--surface-raised"]];
-              case "frost": return dk ? ["0 8px 28px -14px rgba(0,0,0,0.5)", "0 18px 44px -16px rgba(0,0,0,0.55)", "none"] : ["0 8px 24px -16px rgba(20,30,40,0.18)", "0 20px 40px -20px rgba(20,30,40,0.2)", "none"];
-              case "hair": return [dk ? "0 1px 0 rgba(255,255,255,0.04)" : "0 1px 0 rgba(20,30,40,0.04)", "none", "none"];
-              case "flat": return ["none", "none", "none"];
-              case "deep": return dk ? ["0 1px 1px rgba(0,0,0,0.25), 0 18px 40px -24px rgba(0,0,0,0.55)", "0 2px 2px rgba(0,0,0,0.3), 0 34px 70px -28px rgba(0,0,0,0.6)", "inset 0 1px 0 rgba(255,255,255,0.05)"] : ["0 1px 1px rgba(20,30,40,0.04), 0 20px 44px -28px rgba(20,30,40,0.22)", "0 2px 2px rgba(20,30,40,0.05), 0 36px 72px -32px rgba(20,30,40,0.28)", "inset 0 1px 0 rgba(255,255,255,0.85)"];
-              default: return dk ? ["0 1px 1px rgba(0,0,0,0.35), 0 10px 28px -14px rgba(0,0,0,0.6)", "0 2px 2px rgba(0,0,0,0.42), 0 26px 60px -18px rgba(0,0,0,0.72)", "inset 0 1px 0 rgba(255,255,255,0.055)"] : ["0 1px 1px rgba(20,30,40,0.05), 0 10px 24px -12px rgba(20,30,40,0.18)", "0 2px 2px rgba(20,30,40,0.06), 0 28px 56px -20px rgba(20,30,40,0.3)", "inset 0 1px 0 rgba(255,255,255,0.75)"];
-            }
-          }
-          var sht = { "--border-strong": brdS, "--border": bd, "--accent": acc, "--ink": ink, "--surface-raised": dark ? M(suf, "#ffffff", 0.06) : M(suf, "#ffffff", 0.35) };
-          var s3 = SH(SHAD[style] || "default", sht, dark);
-          var stack = s3[0], lift = s3[1], tile = s3[2];
-          var el = document.documentElement;
-          el.dataset.theme = theme; el.dataset.style = style; el.dataset.bg = bg;
-          el.dataset.radius = String(rad); el.dataset.cta = paralle ? "paralle" : "square";
-          el.dataset.font = font; el.dataset.size = String(fs);
-          el.style.setProperty("--fs-scale", (fs / 100).toFixed(2));
-          var tokens = {
-            "--bg": bgc,
-            "--bg-bleed": dark ? M(bgc, "#000000", 0.03) : M(bgc, "#ffffff", 0.02),
-            "--surface": suf,
-            "--surface-raised": dark ? M(suf, "#ffffff", 0.06) : M(suf, "#ffffff", 0.35),
-            "--surface-sunken": dark ? M(bgc, "#000000", 0.045) : M(bgc, "#000000", 0.035),
-            "--border": bd,
-            "--border-strong": brdS,
-            "--ink": ink,
-            "--ink-muted": muted,
-            "--ink-faint": M(muted, bgc, 0.5),
-            "--accent": acc,
-            "--on-accent": L(acc) > 0.45 ? "#06120d" : "#ffffff",
-            "--neg": neg,
-            "--warn": warn,
-            "--warn-fill": wf,
-            "--bg2": bg2,
-            "--bg2-dim": bg2d,
-            "--stage-ink": stageInk,
-            "--stack": stack,
-            "--stack-lift": lift,
-            "--tile-hi": tile,
-            "--shadow": stack,
-            "--shadow-lift": lift
-          };
-          for (var k in tokens) el.style.setProperty(k, tokens[k]);
-          el.style.setProperty("--r-sm", Math.max(1, Math.round(rad * 0.45)) + "px");
-          el.style.setProperty("--r-md", Math.round(rad * 0.72) + "px");
-          el.style.setProperty("--r", rad + "px");
-          el.style.setProperty("--r-pill", "999px");
-          var m = document.querySelector('meta[name="color-scheme"]');
-          if (m) m.setAttribute("content", dark ? "dark" : "light");
-          var tc = document.querySelector('meta[name="theme-color"]');
-          if (tc) tc.setAttribute("content", bgc);
-        } catch (e) {}
-      })();
-    </script>
     <title>Lab — tradealert.me strategy analysis</title>
     <link rel="stylesheet" href="/tokens.css" />
     <link rel="stylesheet" href="/theme-override.css" />
-    <link rel="stylesheet" href="/stylekit.css" />
+    <link rel="stylesheet" href="/lab-fonts.css" />
   </head>
   <body>
     <div id="root"></div>

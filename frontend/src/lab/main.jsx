@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./lab.css";
 import { api, login, getToken, logout } from "../api.js";
-import ThemeSwitcher from "../components/ThemeSwitcher.jsx";
 import ReportsScreen from "./Reports.jsx";
 
 const ADMIN_CHECK = "/admin/_check";
@@ -1489,7 +1488,6 @@ function LabApp() {
         <span style={{ flex: 1 }} />
         <span className="muted mono">{strategies ? `${strategies.events_total} fixture events` : ""}</span>
         <button className="btn" onClick={() => setShowWalk(true)}>Guide</button>
-        <ThemeSwitcher />
         <button
           className="btn"
           onClick={() => {
