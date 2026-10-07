@@ -153,10 +153,14 @@ def _instruments(cur):
 
 
 def ingest_earnings(years=2, limit=None, verbose=True):
+    from app.market_data import finish_run, start_run
+
     since = date.today() - timedelta(days=365 * years)
     conn = get_conn()
     written = skipped = failed = 0
+    run_id = None
     try:
+        run_id = start_run(conn, "sec_earnings")
         with conn.cursor() as cur:
             rows = _instruments(cur)
         if limit:
@@ -212,6 +216,9 @@ def ingest_earnings(years=2, limit=None, verbose=True):
             conn.commit()
             if verbose and n % 50 == 0:
                 print(f"  {n}/{len(rows)} written={written} skipped={skipped} failed={failed}")
+        if run_id:
+            finish_run(conn, run_id, len(rows) - failed, failed, written,
+                       {"skipped": skipped, "since": str(since)})
     finally:
         conn.close()
     return {"written": written, "skipped": skipped, "failed": failed}
