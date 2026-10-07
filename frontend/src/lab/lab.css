@@ -178,15 +178,14 @@ html[data-surface="lab"] .rate-headline {
 
 .stratcard-desc {
   margin: 0;
-  max-width: 66ch;
   color: var(--ink-muted);
   font-size: var(--fs-sm);
   line-height: 1.5;
 }
 
 .stratcard-facts {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: var(--s-2) var(--s-4);
   margin: var(--s-1) 0 0;
   padding-top: var(--s-3);
@@ -360,7 +359,6 @@ select.labcontext-name:focus {
 
 .sec-head p {
   margin: 0;
-  max-width: 68ch;
   color: var(--ink-faint);
   font-size: var(--fs-sm);
   line-height: 1.5;
@@ -425,7 +423,6 @@ select.labcontext-name:focus {
 
 .vitem-why {
   margin: var(--s-2) 0 0;
-  max-width: 78ch;
   font-size: var(--fs-sm);
   line-height: 1.55;
 }
