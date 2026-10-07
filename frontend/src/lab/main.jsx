@@ -213,12 +213,12 @@ function Collapsible({ title, subtitle, defaultOpen, children }) {
 }
 
 const SCREEN_INTROS = {
-  strategies: "Every strategy the site can score with. Open one to inspect or test it.",
-  inputs: "What this strategy claims to do, and what evidence backs each claim. Describes the rules; says nothing about whether they work.",
-  versions: "Each version is a recorded decision. Compare two on the same events to see whether a change actually helped.",
-  backtest: "One audited query: universe, event kinds, hit rule, baselines. Every run is recorded and can be cited by a finding.",
-  findings: "The written record of what backtests have shown. A finding is only as strong as the runs linked to it.",
-  log: "Every backtest ever run, so any result traces back to the query that produced it.",
+  strategies: "Open one to inspect or test it.",
+  inputs: "What the strategy does. Not whether it works.",
+  versions: "What changed, when, and whether it helped.",
+  backtest: "Test a strategy against recorded history. Every run is audited.",
+  findings: "What the backtests have shown, and the runs that back it.",
+  log: "Every run, in order.",
 };
 
 const WALKTHROUGH_STEPS = [
@@ -460,7 +460,7 @@ function InputsScreen({ strat }) {
         <div className="card">
           <div className="sec-head">
             <h3>Hard filters</h3>
-            <p>A stock that fails any of these is excluded outright, whatever it scores.</p>
+            <p>Fail any one and the stock is excluded, whatever it scores.</p>
           </div>
           <div className="table-scroll">
             <FiltersTable filters={data.hard_filters} />
@@ -469,10 +469,7 @@ function InputsScreen({ strat }) {
         <div className="card">
           <div className="sec-head">
             <h3>Component weights</h3>
-            <p>
-              How much each signal contributes to the score. Declared is the intended weight;
-              median effective is what it actually came to once missing data was accounted for.
-            </p>
+            <p>Declared is intended. Median effective is what it came to after missing data.</p>
           </div>
           <div className="table-scroll">
             <ComponentsTable components={data.components} />
@@ -481,14 +478,14 @@ function InputsScreen({ strat }) {
         <div className="card">
           <div className="sec-head">
             <h3>Band cutoffs</h3>
-            <p>Score thresholds that sort a stock into a band. A label, never a gate.</p>
+            <p>A label, never a gate.</p>
           </div>
           <BandsTable bands={data.band_cutoffs} />
         </div>
         <div className="card">
           <div className="sec-head">
             <h3>Related findings</h3>
-            <p>Conclusions recorded against this strategy, each backed by the runs linked to it.</p>
+            <p>Each backed by the runs linked to it.</p>
           </div>
           {data.findings.length === 0 ? (
             <p className="muted">No findings recorded for this strategy yet.</p>
@@ -513,7 +510,7 @@ function InputsScreen({ strat }) {
         <div className="card">
           <div className="sec-head">
             <h3>Event coverage</h3>
-            <p>How much recorded history is available to test this strategy against.</p>
+            <p>Recorded history available to test against.</p>
           </div>
           <div className="statrow">
             <div className="stat">
@@ -676,7 +673,7 @@ function VersionsScreen({ strat }) {
         <div className="card">
           <div className="sec-head">
             <h3>History</h3>
-            <p>Every recorded change to this strategy, newest first.</p>
+            <p>Newest first.</p>
           </div>
           {data.versions.length === 0 ? (
             <p className="muted">No versions recorded.</p>
@@ -702,11 +699,7 @@ function VersionsScreen({ strat }) {
         <div className="card">
           <div className="sec-head">
             <h3>Compare two versions</h3>
-            <p>
-              See what changed between them, and how each performed on the same events.
-              Comparing on different event sets is how a meaningless improvement number gets made,
-              so that comparison is not offered.
-            </p>
+            <p>Both must run on the same events, or the difference means nothing.</p>
           </div>
           <div className="formrow">
             <label className="labfield">
@@ -919,10 +912,7 @@ function BacktestScreen({ strat, onCite }) {
         <section className="lab-step">
           <div className="sec-head">
             <h3><span className="stepnum">1</span> Which version to test</h3>
-            <p>
-              Runs the filters, weights and cutoffs recorded at that point in time.
-              Leave it on current to test the live definition.
-            </p>
+            <p>Runs the rules as they stood at that point in time.</p>
           </div>
           <label className="labfield" style={{ maxWidth: 280 }}>
             Version
@@ -937,10 +927,7 @@ function BacktestScreen({ strat, onCite }) {
         <section className="lab-step">
           <div className="sec-head">
             <h3><span className="stepnum">2</span> Which stocks to test on</h3>
-            <p>
-              Runs on every stock the strategy can see unless you narrow it.
-              Most first runs should leave this alone.
-            </p>
+            <p>Every stock the strategy can see, unless you narrow it.</p>
           </div>
           <Collapsible
             title="Narrow the universe"
@@ -991,10 +978,7 @@ function BacktestScreen({ strat, onCite }) {
         <section className="lab-step">
           <div className="sec-head">
             <h3><span className="stepnum">3</span> What counts as a hit</h3>
-            <p>
-              After one of these events, a stock counts as a hit if it moved enough.
-              Set the bar below.
-            </p>
+            <p>Pick the events, then set how big a move counts.</p>
           </div>
           <div>
             <span className="labfield-label">
@@ -1034,11 +1018,7 @@ function BacktestScreen({ strat, onCite }) {
         <section className="lab-step">
           <div className="sec-head">
             <h3><span className="stepnum">4</span> What to compare against</h3>
-            <p>
-              A hit rate on its own means little. If the strategy hits 30% of the time but random
-              days also hit 28%, it is not adding much. A result can only be cited by a finding
-              once it beats these.
-            </p>
+            <p>A hit rate alone means little. 30% is only good if random days do worse.</p>
           </div>
           <div className="chiprow">
             <Chip label="All selected events" on={baselines.includes("all_events")} onClick={() => toggle(baselines, setBaselines, "all_events")} />
@@ -1048,7 +1028,7 @@ function BacktestScreen({ strat, onCite }) {
         <section className="lab-step">
           <div className="sec-head">
             <h3><span className="stepnum">5</span> Record what you expected <span className="muted">(optional)</span></h3>
-            <p>Skip this for a quick look. Fill it in when the result might become a finding you cite later.</p>
+            <p>Fill this in only if the result might become a finding.</p>
           </div>
           <Collapsible
             title="Record a hypothesis"

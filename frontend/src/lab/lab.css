@@ -95,19 +95,17 @@ html[data-surface="lab"] .rate-headline {
 .labstack {
   display: grid;
   gap: var(--s-4);
-  width: min(80%, 1100px);
+  width: min(100%, 1040px);
+  margin-inline: auto;
 }
 
-@media (max-width: 900px) {
-  .labstack {
-    width: 100%;
-  }
-}
 
 .labgrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: var(--s-3);
+  width: min(100%, 1040px);
+  margin-inline: auto;
 }
 
 .card {
@@ -129,13 +127,14 @@ html[data-surface="lab"] .rate-headline {
 .stratlist {
   display: grid;
   gap: var(--s-3);
-  width: min(80%, 1100px);
+  width: min(100%, 1040px);
+  margin-inline: auto;
 }
 
 .stratcard {
   display: grid;
-  gap: var(--s-4);
-  padding: var(--s-5);
+  gap: var(--s-3);
+  padding: var(--s-4);
 }
 
 .stratcard-main {
@@ -179,17 +178,17 @@ html[data-surface="lab"] .rate-headline {
 
 .stratcard-desc {
   margin: 0;
-  max-width: 72ch;
+  max-width: 66ch;
   color: var(--ink-muted);
   font-size: var(--fs-sm);
-  line-height: 1.55;
+  line-height: 1.5;
 }
 
 .stratcard-facts {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s-3) var(--s-5);
-  margin: var(--s-2) 0 0;
+  gap: var(--s-2) var(--s-4);
+  margin: var(--s-1) 0 0;
   padding-top: var(--s-3);
   border-top: 1px solid var(--border);
 }
@@ -219,11 +218,6 @@ html[data-surface="lab"] .rate-headline {
   flex-wrap: wrap;
 }
 
-@media (max-width: 900px) {
-  .stratlist {
-    width: 100%;
-  }
-}
 
 /* Persistent strategy context: the selected strategy stays pinned while the
    sub-tabs below it change view, so the three per-strategy screens no longer
@@ -231,6 +225,8 @@ html[data-surface="lab"] .rate-headline {
 .labcontext {
   display: grid;
   gap: var(--s-3);
+  width: min(100%, 1040px);
+  margin-inline: auto;
   padding: var(--s-4);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -339,21 +335,35 @@ select.labcontext-name:focus {
    detail screens so every table says what it is before showing numbers. */
 .sec-head {
   display: grid;
-  gap: var(--s-1);
+  gap: 2px;
   margin-bottom: var(--s-3);
+}
+
+/* Paragraphs in a card carry UA margins that double up against the section
+   head's own spacing; the card owns the rhythm instead. */
+.card > p:first-of-type,
+.lab-step > p:first-of-type {
+  margin-top: 0;
+}
+
+.sec-head + p,
+.sec-head + .table-scroll,
+.sec-head + table {
+  margin-top: 0;
 }
 
 .sec-head h3 {
   margin: 0;
-  font-size: var(--fs-md);
+  font-size: var(--fs-base);
+  letter-spacing: -0.01em;
 }
 
 .sec-head p {
   margin: 0;
-  max-width: 78ch;
-  color: var(--ink-muted);
+  max-width: 68ch;
+  color: var(--ink-faint);
   font-size: var(--fs-sm);
-  line-height: 1.55;
+  line-height: 1.5;
 }
 
 .statrow {
@@ -872,8 +882,8 @@ label.labfield {
 }
 
 .labscreen-intro {
-  margin: calc(-1 * var(--s-2)) 0 0;
-  max-width: 78ch;
+  width: min(100%, 1040px);
+  margin: calc(-1 * var(--s-2)) auto 0;
   color: var(--ink-muted);
   font-size: var(--fs-sm);
   line-height: 1.5;
