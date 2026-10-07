@@ -108,6 +108,27 @@ html[data-surface="lab"] .rate-headline {
 .card h3 {
   margin: 0 0 var(--s-2);
   font-size: var(--fs-md);
+  overflow-wrap: anywhere;
+}
+
+/* Column layout so the action row sits on the bottom edge: cards in the grid
+   stretch to the tallest, and without this a card with a shorter value list
+   would float its buttons up out of line with its neighbours. */
+.stratcard {
+  display: flex;
+  flex-direction: column;
+}
+
+.stratcard .kv {
+  margin: 0;
+}
+
+.stratcard-actions {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: var(--s-4);
 }
 
 /* Persistent strategy context: the selected strategy stays pinned while the
@@ -310,9 +331,10 @@ select.labcontext-name:focus {
 
 .kv {
   display: grid;
-  grid-template-columns: minmax(120px, 40%) 1fr;
-  gap: var(--s-1) var(--s-3);
+  grid-template-columns: minmax(84px, max-content) minmax(0, 1fr);
+  gap: var(--s-2) var(--s-3);
   font-size: var(--fs-sm);
+  align-items: baseline;
 }
 
 .kv dt {
@@ -321,6 +343,21 @@ select.labcontext-name:focus {
 
 .kv dd {
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Mono runs optically larger than the body face at the same size. */
+.kv dd.mono {
+  font-size: var(--fs-xs);
+}
+
+/* Secondary line under a value, e.g. who ran the query under when. */
+.kv-sub {
+  display: block;
+  color: var(--ink-faint);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
 }
 
 table.labtable {

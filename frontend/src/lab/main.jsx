@@ -10,6 +10,25 @@ function pct(x) {
   return x == null ? "—" : (x * 100).toFixed(1) + "%";
 }
 
+// Timestamps arrive as full ISO strings. Cards show the age; the exact value
+// stays in the title attribute for anyone who needs it.
+function relTime(iso) {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return iso;
+  const mins = Math.round((Date.now() - t) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(t).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 function errText(detail) {
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) return detail.map(String).join("\n");
@@ -251,7 +270,7 @@ function StrategiesScreen({ strategies, onPick }) {
   return (
     <div className="labgrid">
       {list.map((s) => (
-        <div className="card" key={s.key}>
+        <div className="card stratcard" key={s.key}>
           <h3>{s.label}</h3>
           <dl className="kv">
             <dt>key</dt>
@@ -261,9 +280,18 @@ function StrategiesScreen({ strategies, onPick }) {
             <dt>calibrated</dt>
             <dd>{s.calibrated ? "yes" : "no"}</dd>
             <dt>last query</dt>
-            <dd>{s.last_query_at ? `${s.last_query_by} · ${s.last_query_at}` : "never"}</dd>
+            <dd>
+              {s.last_query_at ? (
+                <>
+                  <span title={s.last_query_at}>{relTime(s.last_query_at)}</span>
+                  <span className="kv-sub">{s.last_query_by}</span>
+                </>
+              ) : (
+                "never"
+              )}
+            </dd>
           </dl>
-          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+          <div className="stratcard-actions">
             <button className="btn btn-primary" onClick={() => onPick(s.key, "inputs")}>
               Inputs
             </button>
