@@ -57,7 +57,7 @@ export default function Reset() {
               <input id="reset-email" type="email" required value={email}
                      onChange={(e) => setEmail(e.target.value)} />
             </div>
-            {msg && <p className="note">{msg}</p>}
+            {msg && <p className="note" role="status">{msg}</p>}
             <button className="btn btn-primary" style={{ width: "100%" }}>
               Send reset link
             </button>
@@ -85,7 +85,7 @@ export default function Reset() {
               <input id="reset-pw2" type="password" required minLength={8} value={confirm}
                      onChange={(e) => setConfirm(e.target.value)} />
             </div>
-            {msg && <p className="note">{msg}</p>}
+            {msg && <p className="note" role="status">{msg}</p>}
             <button className="btn btn-primary" style={{ width: "100%" }}>Set password</button>
           </form>
         )}

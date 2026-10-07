@@ -131,7 +131,7 @@ export default function Auth({ mode }) {
               </small>
             )}
           </div>
-          {err && <p className="err">{err}</p>}
+          {err && <p className="err" role="alert">{err}</p>}
           <button className="btn btn-primary" disabled={busy} style={{ width: "100%" }}>
             {busy ? "…" : mode === "signup" ? "Create account" : "Sign in"}
           </button>

@@ -104,9 +104,28 @@ function derive(base, over) {
   };
 }
 
+// Storage access throws, not returns null, in Safari private browsing. Every
+// read and write goes through these so a blocked store degrades to defaults
+// instead of taking the page down.
+function lsGet(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function lsSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* preference just won't persist */
+  }
+}
+
 function readJSON(key, fallback) {
   try {
-    return JSON.parse(localStorage.getItem(key) || "") || fallback;
+    return JSON.parse(lsGet(key) || "") || fallback;
   } catch {
     return fallback;
   }
@@ -125,32 +144,32 @@ export function styleOf() {
 }
 
 export function currentStyle() {
-  return localStorage.getItem(STYLE_KEY) || "corporate";
+  return lsGet(STYLE_KEY) || "corporate";
 }
 
 export function currentBg() {
-  const saved = localStorage.getItem(BG_KEY);
+  const saved = lsGet(BG_KEY);
   return saved || styleOf().bg;
 }
 
 export function currentRadius() {
-  const saved = localStorage.getItem(RADIUS_KEY);
+  const saved = lsGet(RADIUS_KEY);
   if (saved !== null) return clampR(Number(saved));
-  const legacy = localStorage.getItem(SHAPE_KEY);
+  const legacy = lsGet(SHAPE_KEY);
   if (legacy) return legacy === "pill" ? 20 : legacy === "squared" ? 3 : 8;
   return styleOf().corner;
 }
 
 export function currentParalle() {
-  return localStorage.getItem(PARALLE_KEY) === "1";
+  return lsGet(PARALLE_KEY) === "1";
 }
 
 export function currentFont() {
-  return localStorage.getItem(FONT_KEY) || "auto";
+  return lsGet(FONT_KEY) || "auto";
 }
 
 export function currentSize() {
-  const raw = localStorage.getItem(SIZE_KEY);
+  const raw = lsGet(SIZE_KEY);
   if (raw === null) return 100;
   const v = Number(raw);
   return Number.isFinite(v) ? Math.max(90, Math.min(120, Math.round(v))) : 100;
@@ -175,7 +194,7 @@ export function themeState() {
 }
 
 export function currentTheme() {
-  return localStorage.getItem(THEME_KEY) || "dark";
+  return lsGet(THEME_KEY) || "dark";
 }
 
 function shadowFor(mode, tok, dark) {
@@ -258,37 +277,37 @@ function apply() {
 }
 
 export function setTheme(theme) {
-  localStorage.setItem(THEME_KEY, theme);
+  lsSet(THEME_KEY, theme);
   apply();
 }
 
 export function setStyle(style) {
-  localStorage.setItem(STYLE_KEY, style);
+  lsSet(STYLE_KEY, style);
   apply();
 }
 
 export function setBg(bg) {
-  localStorage.setItem(BG_KEY, bg);
+  lsSet(BG_KEY, bg);
   apply();
 }
 
 export function setRadius(r) {
-  localStorage.setItem(RADIUS_KEY, String(clampR(r)));
+  lsSet(RADIUS_KEY, String(clampR(r)));
   apply();
 }
 
 export function setParalle(on) {
-  localStorage.setItem(PARALLE_KEY, on ? "1" : "0");
+  lsSet(PARALLE_KEY, on ? "1" : "0");
   apply();
 }
 
 export function setFont(k) {
-  localStorage.setItem(FONT_KEY, k);
+  lsSet(FONT_KEY, k);
   apply();
 }
 
 export function setSize(v) {
-  localStorage.setItem(SIZE_KEY, String(Math.max(90, Math.min(120, Math.round(v)))));
+  lsSet(SIZE_KEY, String(Math.max(90, Math.min(120, Math.round(v)))));
   apply();
 }
 
@@ -297,7 +316,7 @@ export function setPalette(theme, field, value) {
   const cur = { ...paletteMasters(theme) };
   cur[field] = value;
   all[theme] = cur;
-  localStorage.setItem(PALETTE_KEY, JSON.stringify(all));
+  lsSet(PALETTE_KEY, JSON.stringify(all));
   apply();
 }
 
@@ -312,7 +331,7 @@ export function resetPaletteField(theme, field) {
     delete cur[field];
     if (Object.keys(cur).length === 0) delete all[theme];
     else all[theme] = cur;
-    localStorage.setItem(PALETTE_KEY, JSON.stringify(all));
+    lsSet(PALETTE_KEY, JSON.stringify(all));
   }
   apply();
 }
@@ -320,7 +339,7 @@ export function resetPaletteField(theme, field) {
 export function resetPalette(theme) {
   const all = readJSON(PALETTE_KEY, {});
   delete all[theme];
-  localStorage.setItem(PALETTE_KEY, JSON.stringify(all));
+  lsSet(PALETTE_KEY, JSON.stringify(all));
   apply();
 }
 

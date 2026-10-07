@@ -60,7 +60,7 @@ export default function Pricing({ notice }) {
         <h1>Plans</h1>
         <div className="meta">Board scope, watchlist size, alert volume, and channels.</div>
       </div>
-      {msg && <p className="note">{msg}</p>}
+      {msg && <p className="note" role="status">{msg}</p>}
       <div className="tiergrid">
         {d.tiers.map((t) => {
           const isCurrent = t.key === currentKey;

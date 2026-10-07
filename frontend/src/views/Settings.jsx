@@ -81,7 +81,7 @@ function Settings() {
         <h1>Account</h1>
         <div className="meta">Settings, industries, and delivery channels</div>
       </div>
-      {msg && <p className="note">{msg}</p>}
+      {msg && <p className="note" role="status">{msg}</p>}
 
       <div className="report">
         <div className="report-main">
@@ -197,8 +197,9 @@ function Settings() {
               </label>
             </div>
             <div className="field" style={{ marginTop: "var(--s-3)" }}>
-              <label>Webhook URL (Investor; HMAC-SHA256 signed)</label>
-              <input value={settings.webhook_url || ""}
+              <label htmlFor="webhook-url">Webhook URL (Investor; HMAC-SHA256 signed)</label>
+              <input id="webhook-url"
+                     value={settings.webhook_url || ""}
                      placeholder="https://…"
                      disabled={!me.tier || !me.tier.channels.includes("webhook")}
                      onChange={(e) => patch({ webhook_url: e.target.value }, "webhook url")} />

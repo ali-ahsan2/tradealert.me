@@ -195,7 +195,9 @@ a:hover {
 
 .btn-primary {
   background: var(--info);
-  color: #06120d;
+  /* Computed from the chosen accent's luminance in index.html; the accent is
+     a runtime user setting, so a fixed value fails at one end of the range. */
+  color: var(--on-accent, #06120d);
 }
 
 .btn-primary:hover {

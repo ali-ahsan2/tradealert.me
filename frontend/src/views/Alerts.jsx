@@ -122,7 +122,7 @@ export default function Alerts() {
               <button className="btn btn-primary" style={{ width: "100%" }}>Arm alert (email)</button>
             </form>
           )}
-          {msg && <p className="note" style={{ fontSize: "var(--fs-sm)" }}>{msg}</p>}
+          {msg && <p className="note" role="status" style={{ fontSize: "var(--fs-sm)" }}>{msg}</p>}
         </aside>
       </div>
     </div>

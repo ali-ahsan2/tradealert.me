@@ -12,12 +12,22 @@ export default function Board() {
   const [err, setErr] = useState(null);
   const [band, setBand] = useState("");
   const [me, setMe] = useState(null);
-  const [strip, setStrip] = useState(
-    () => window.localStorage.getItem("ta_board_intro_hidden") !== "1"
-  );
+  // Storage access throws outright in Safari private browsing, which would
+  // take the whole board down over a dismissable intro strip.
+  const [strip, setStrip] = useState(() => {
+    try {
+      return window.localStorage.getItem("ta_board_intro_hidden") !== "1";
+    } catch {
+      return true;
+    }
+  });
 
   const hideStrip = () => {
-    window.localStorage.setItem("ta_board_intro_hidden", "1");
+    try {
+      window.localStorage.setItem("ta_board_intro_hidden", "1");
+    } catch {
+      /* dismissal just won't persist */
+    }
     setStrip(false);
   };
 
