@@ -85,7 +85,7 @@ html[data-surface="lab"] .rate-headline {
 }
 
 .labwrap {
-  max-width: 1280px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: var(--s-5);
   display: grid;
@@ -95,6 +95,13 @@ html[data-surface="lab"] .rate-headline {
 .labstack {
   display: grid;
   gap: var(--s-4);
+  width: min(80%, 1100px);
+}
+
+@media (max-width: 900px) {
+  .labstack {
+    width: 100%;
+  }
 }
 
 .labgrid {
@@ -117,24 +124,105 @@ html[data-surface="lab"] .rate-headline {
   overflow-wrap: anywhere;
 }
 
-/* Column layout so the action row sits on the bottom edge: cards in the grid
-   stretch to the tallest, and without this a card with a shorter value list
-   would float its buttons up out of line with its neighbours. */
-.stratcard {
-  display: flex;
-  flex-direction: column;
+/* One strategy per row rather than a tile grid: the descriptions are full
+   sentences and need a reading measure, which a 280px tile cannot give. */
+.stratlist {
+  display: grid;
+  gap: var(--s-3);
+  width: min(80%, 1100px);
 }
 
-.stratcard .kv {
+.stratcard {
+  display: grid;
+  gap: var(--s-4);
+  padding: var(--s-5);
+}
+
+.stratcard-main {
+  display: flex;
+  gap: var(--s-4);
+  align-items: flex-start;
+}
+
+.stratcard-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.04em;
+}
+
+.stratcard-body {
+  min-width: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+
+.stratcard-title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.stratcard-title h3 {
   margin: 0;
+  font-size: var(--fs-md);
+}
+
+.stratcard-desc {
+  margin: 0;
+  max-width: 72ch;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+}
+
+.stratcard-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-5);
+  margin: var(--s-2) 0 0;
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--border);
+}
+
+.stratcard-facts > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stratcard-facts dt {
+  color: var(--ink-faint);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stratcard-facts dd {
+  margin: 0;
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
 }
 
 .stratcard-actions {
   display: flex;
   gap: var(--s-2);
   flex-wrap: wrap;
-  margin-top: auto;
-  padding-top: var(--s-4);
+}
+
+@media (max-width: 900px) {
+  .stratlist {
+    width: 100%;
+  }
 }
 
 /* Persistent strategy context: the selected strategy stays pinned while the
@@ -247,6 +335,143 @@ select.labcontext-name:focus {
   color: var(--ink-faint);
 }
 
+/* Section heading plus its one-line explanation, used across the three
+   detail screens so every table says what it is before showing numbers. */
+.sec-head {
+  display: grid;
+  gap: var(--s-1);
+  margin-bottom: var(--s-3);
+}
+
+.sec-head h3 {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+
+.sec-head p {
+  margin: 0;
+  max-width: 78ch;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+}
+
+.statrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-5);
+  padding: var(--s-3) 0 var(--s-4);
+}
+
+.stat {
+  display: grid;
+  gap: 2px;
+}
+
+.stat-num {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.stat-lab {
+  color: var(--ink-faint);
+  font-size: var(--fs-xs);
+}
+
+.vtimeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-3);
+}
+
+.vitem {
+  border-left: 2px solid var(--border);
+  padding: 0 0 var(--s-1) var(--s-4);
+}
+
+.vitem.current {
+  border-left-color: var(--info);
+}
+
+.vitem-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.vitem-ver {
+  font-weight: 600;
+  font-size: var(--fs-md);
+}
+
+.vitem-when {
+  color: var(--ink-faint);
+  font-size: var(--fs-sm);
+}
+
+.vitem-why {
+  margin: var(--s-2) 0 0;
+  max-width: 78ch;
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+}
+
+.vitem-by {
+  margin: var(--s-1) 0 0;
+  color: var(--ink-faint);
+  font-size: var(--fs-xs);
+}
+
+.diffwrap {
+  display: grid;
+  gap: var(--s-3);
+  margin-top: var(--s-4);
+}
+
+.diffwrap-lead {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+}
+
+/* Reads as a sentence: "counts as a hit when the stock moved at least X% or
+   traded at least Yx normal volume". */
+.hitrule {
+  display: flex;
+  align-items: end;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.hitrule-lead {
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  padding-bottom: 9px;
+}
+
+.hitrule-field {
+  flex: 0 1 190px;
+}
+
+.hitrule-join {
+  flex: 0 0 auto;
+  width: 78px;
+}
+
+.hitrule-plain {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: var(--fs-sm);
+}
+
 .subgrid-2 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
@@ -272,12 +497,17 @@ select.labcontext-name:focus {
   gap: var(--s-3);
 }
 
-.lab-step > h3 {
+.lab-step .sec-head h3 {
   display: flex;
   align-items: center;
   gap: 10px;
   margin: 0;
   font-size: var(--fs-md);
+}
+
+/* The explanation aligns with the heading text, not the step number. */
+.lab-step .sec-head p {
+  padding-left: calc(26px + 10px);
 }
 
 .stepnum {

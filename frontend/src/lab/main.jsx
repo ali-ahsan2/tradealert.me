@@ -278,41 +278,63 @@ function Chip({ label, on, onClick }) {
 function StrategiesScreen({ strategies, onPick }) {
   const list = strategies?.strategies || [];
   return (
-    <div className="labgrid">
+    <div className="stratlist">
       {list.map((s) => (
-        <div className="card stratcard" key={s.key}>
-          <h3>{s.label}</h3>
-          <dl className="kv">
-            <dt>key</dt>
-            <dd className="mono">{s.key}</dd>
-            <dt>version</dt>
-            <dd>{s.version_number ?? "—"}</dd>
-            <dt>calibrated</dt>
-            <dd>{s.calibrated ? "yes" : "no"}</dd>
-            <dt>last query</dt>
-            <dd>
-              {s.last_query_at ? (
-                <>
-                  <span title={s.last_query_at}>{relTime(s.last_query_at)}</span>
-                  <span className="kv-sub">{s.last_query_by}</span>
-                </>
-              ) : (
-                "never"
-              )}
-            </dd>
-          </dl>
+        <article className="card stratcard" key={s.key}>
+          <div className="stratcard-main">
+            <span className="stratcard-mark" aria-hidden="true">{s.monogram || s.key.slice(0, 2).toUpperCase()}</span>
+            <div className="stratcard-body">
+              <div className="stratcard-title">
+                <h3>{s.label}</h3>
+                {s.calibrated ? (
+                  <span className="badge ok" title={`Weights backed by ${s.resolved_outcomes_count} resolved outcomes`}>
+                    calibrated
+                  </span>
+                ) : (
+                  <span className="badge warn" title="Weights are provisional priors, not yet backed by resolved outcomes">
+                    provisional
+                  </span>
+                )}
+              </div>
+              {s.description && <p className="stratcard-desc">{s.description}</p>}
+              <dl className="stratcard-facts">
+                <div>
+                  <dt>Version</dt>
+                  <dd>v{s.version_number ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt>Outcomes</dt>
+                  <dd>{s.resolved_outcomes_count ?? 0} resolved</dd>
+                </div>
+                <div>
+                  <dt>Last tested</dt>
+                  <dd>
+                    {s.last_query_at ? (
+                      <span title={`${s.last_query_at} · ${s.last_query_by}`}>{relTime(s.last_query_at)}</span>
+                    ) : (
+                      <span className="muted">never</span>
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Key</dt>
+                  <dd className="mono">{s.key}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
           <div className="stratcard-actions">
-            <button className="btn btn-primary" onClick={() => onPick(s.key, "inputs")}>
-              Inputs
+            <button className="btn btn-primary" onClick={() => onPick(s.key, "backtest")}>
+              Run a backtest
+            </button>
+            <button className="btn" onClick={() => onPick(s.key, "inputs")}>
+              Inspect inputs
             </button>
             <button className="btn" onClick={() => onPick(s.key, "versions")}>
-              Versions
-            </button>
-            <button className="btn" onClick={() => onPick(s.key, "backtest")}>
-              Backtest
+              History
             </button>
           </div>
-        </div>
+        </article>
       ))}
     </div>
   );
@@ -331,7 +353,6 @@ function FiltersTable({ filters }) {
   }
   return (
     <table className="labtable">
-      <caption className="mono">hard filters</caption>
       <thead>
         <tr><th>Rule</th><th>Source</th><th>Cov.</th><th>Evidence</th></tr>
       </thead>
@@ -368,7 +389,6 @@ function ComponentsTable({ components }) {
   }
   return (
     <table className="labtable">
-      <caption className="mono">components · declared → median effective</caption>
       <thead>
         <tr><th>Component</th><th>Declared</th><th>Median eff.</th><th>Cov.</th><th>Evidence</th></tr>
       </thead>
@@ -395,7 +415,6 @@ function BandsTable({ bands }) {
   if (entries.length === 0) return <p className="muted">No band cutoffs recorded.</p>;
   return (
     <table className="labtable">
-      <caption className="mono">band cutoffs</caption>
       <thead>
         <tr><th>Band</th><th>Cutoff</th></tr>
       </thead>
@@ -437,20 +456,42 @@ function InputsScreen({ strat }) {
           {data.score_evidence_note && (
             <div className="banner" style={{ marginTop: 12 }}>{data.score_evidence_note}</div>
           )}
-          <div className="subgrid-2" style={{ marginTop: 12 }}>
-            <div className="card-stack">
-              <FiltersTable filters={data.hard_filters} />
-            </div>
-            <div className="card-stack">
-              <ComponentsTable components={data.components} />
-              <BandsTable bands={data.band_cutoffs} />
-            </div>
+        </div>
+        <div className="card">
+          <div className="sec-head">
+            <h3>Hard filters</h3>
+            <p>A stock that fails any of these is excluded outright, whatever it scores.</p>
+          </div>
+          <div className="table-scroll">
+            <FiltersTable filters={data.hard_filters} />
           </div>
         </div>
         <div className="card">
-          <h3>Related findings</h3>
+          <div className="sec-head">
+            <h3>Component weights</h3>
+            <p>
+              How much each signal contributes to the score. Declared is the intended weight;
+              median effective is what it actually came to once missing data was accounted for.
+            </p>
+          </div>
+          <div className="table-scroll">
+            <ComponentsTable components={data.components} />
+          </div>
+        </div>
+        <div className="card">
+          <div className="sec-head">
+            <h3>Band cutoffs</h3>
+            <p>Score thresholds that sort a stock into a band. A label, never a gate.</p>
+          </div>
+          <BandsTable bands={data.band_cutoffs} />
+        </div>
+        <div className="card">
+          <div className="sec-head">
+            <h3>Related findings</h3>
+            <p>Conclusions recorded against this strategy, each backed by the runs linked to it.</p>
+          </div>
           {data.findings.length === 0 ? (
-            <p className="muted">No findings recorded for this strategy.</p>
+            <p className="muted">No findings recorded for this strategy yet.</p>
           ) : (
             data.findings.map((f, i) => (
               <div className="rel" key={f.id || i} style={{ marginBottom: 8 }}>
@@ -470,15 +511,30 @@ function InputsScreen({ strat }) {
       <Load data={coverage.data} err={coverage.err} loading={coverage.loading}>
         {(data) => (
         <div className="card">
-          <h3>Event coverage</h3>
-          <dl className="kv">
-            <dt>instruments</dt><dd>{coverage.data.instruments}</dd>
-            <dt>events</dt><dd>{coverage.data.events} ({coverage.data.events_complete} complete)</dd>
-            <dt>kinds available</dt><dd>{coverage.data.events_kinds ? coverage.data.events_kinds.join(", ") : "earnings"}</dd>
-          </dl>
+          <div className="sec-head">
+            <h3>Event coverage</h3>
+            <p>How much recorded history is available to test this strategy against.</p>
+          </div>
+          <div className="statrow">
+            <div className="stat">
+              <span className="stat-num">{coverage.data.instruments}</span>
+              <span className="stat-lab">instruments</span>
+            </div>
+            <div className="stat">
+              <span className="stat-num">{coverage.data.events}</span>
+              <span className="stat-lab">events · {coverage.data.events_complete} complete</span>
+            </div>
+            <div className="stat">
+              <span className="stat-num">
+                {coverage.data.events_kinds ? coverage.data.events_kinds.length : 1}
+              </span>
+              <span className="stat-lab">
+                {coverage.data.events_kinds ? coverage.data.events_kinds.join(", ") : "earnings"}
+              </span>
+            </div>
+          </div>
           <div className="table-scroll">
           <table className="labtable" style={{ marginTop: 8 }}>
-            <caption className="mono">by industry</caption>
             <thead>
               <tr><th>Industry</th><th>Events</th><th>Instruments</th><th>Synthetic</th></tr>
             </thead>
@@ -618,28 +674,40 @@ function VersionsScreen({ strat }) {
         {(data) => (
           <>
         <div className="card">
-          <h3>Versions</h3>
+          <div className="sec-head">
+            <h3>History</h3>
+            <p>Every recorded change to this strategy, newest first.</p>
+          </div>
           {data.versions.length === 0 ? (
             <p className="muted">No versions recorded.</p>
           ) : (
-            data.versions.map((v) => (
-              <div className="rel" key={v.id} style={{ marginBottom: 8 }}>
-                <dl className="kv">
-                  <dt>version</dt><dd>{v.version_number}</dd>
-                  <dt>effective</dt>
-                  <dd>
-                    <span title={v.effective_from}>{shortDate(v.effective_from)}</span>
-                    {v.effective_to ? <> → <span title={v.effective_to}>{shortDate(v.effective_to)}</span></> : " → now"}
-                  </dd>
-                  <dt>by</dt><dd>{v.created_by}</dd>
-                </dl>
-                {v.change_reason && <p className="muted" style={{ margin: 0 }}>{v.change_reason}</p>}
-              </div>
-            ))
+            <ol className="vtimeline">
+              {data.versions.map((v, i) => (
+                <li className={`vitem${i === 0 ? " current" : ""}`} key={v.id}>
+                  <div className="vitem-head">
+                    <span className="vitem-ver">v{v.version_number}</span>
+                    {i === 0 && <span className="badge ok">in effect</span>}
+                    <span className="vitem-when" title={v.effective_from}>
+                      {shortDate(v.effective_from)}
+                      {v.effective_to ? ` → ${shortDate(v.effective_to)}` : " → now"}
+                    </span>
+                  </div>
+                  {v.change_reason && <p className="vitem-why">{v.change_reason}</p>}
+                  <p className="vitem-by">{v.created_by}</p>
+                </li>
+              ))}
+            </ol>
           )}
         </div>
         <div className="card">
-          <h3>Diff versions</h3>
+          <div className="sec-head">
+            <h3>Compare two versions</h3>
+            <p>
+              See what changed between them, and how each performed on the same events.
+              Comparing on different event sets is how a meaningless improvement number gets made,
+              so that comparison is not offered.
+            </p>
+          </div>
           <div className="formrow">
             <label className="labfield">
               Earlier version
@@ -663,8 +731,15 @@ function VersionsScreen({ strat }) {
           </div>
           {diffErr && <div className="errorbox" style={{ marginTop: 8 }}>{diffErr}</div>}
           {diff && (
-            <div className="subgrid-2" style={{ marginTop: 12 }}>
-              <p className="muted">v{diff.earlier} → v{diff.later}</p>
+            <div className="diffwrap">
+              <p className="diffwrap-lead">
+                Changes from <strong>v{diff.earlier}</strong> to <strong>v{diff.later}</strong>
+              </p>
+              {diff.hard_filters.length === 0 &&
+                diff.component_weights.length === 0 &&
+                diff.band_cutoffs.length === 0 && (
+                  <p className="muted">No differences in filters, weights or cutoffs between these two versions.</p>
+                )}
               <DiffList title="Hard filters" items={diff.hard_filters} />
               <DiffList title="Component weights" items={diff.component_weights} />
               <DiffList title="Band cutoffs" items={diff.band_cutoffs} />
@@ -674,10 +749,8 @@ function VersionsScreen({ strat }) {
                 <div className="card">
                   <h3>Performance on the same events</h3>
                   <p className="muted">
-                    No cached backtest pair covers both versions with an identical
-                    spec. Comparing two versions on different event sets is how a
-                    meaningless improvement number gets made, so the tool will not
-                    offer that comparison.
+                    No existing run covers both versions with an identical spec, so there is
+                    nothing fair to compare yet. Running both now on one shared event set fixes that.
                   </p>
                   <button className="btn btn-primary" onClick={runMatched} disabled={matching}>
                     {matching ? "Running…" : "Run both versions on the same events"}
@@ -696,6 +769,14 @@ function VersionsScreen({ strat }) {
 }
 
 const KINDS = ["earnings", "random_day", "fda", "contract_award", "filing", "macro"];
+const KIND_LABELS = {
+  earnings: "Earnings",
+  random_day: "Random day",
+  fda: "FDA decision",
+  contract_award: "Contract award",
+  filing: "SEC filing",
+  macro: "Macro event",
+};
 
 function BacktestScreen({ strat, onCite }) {
   const industries = useFetch([], () => api("/industries"));
@@ -836,27 +917,31 @@ function BacktestScreen({ strat, onCite }) {
     <>
       <form onSubmit={run} className="labstack">
         <section className="lab-step">
-          <h3><span className="stepnum">1</span> Strategy and version</h3>
-          <div className="formrow">
-            <label className="labfield">
-              Version
-              <select aria-label="Version" value={ver} onChange={(e) => setVer(e.target.value)}>
-                <option value="">current</option>
-                {(versions.data?.versions || []).map((v) => (
-                  <option key={v.id} value={v.version_number}>{v.version_number}</option>
-                ))}
-              </select>
-            </label>
-            <p className="labmeta" style={{ margin: 0 }}>
-              Pick a version to run the filters, weights, and band cutoffs recorded for that point in time. Leave on current to run the live definition.
+          <div className="sec-head">
+            <h3><span className="stepnum">1</span> Which version to test</h3>
+            <p>
+              Runs the filters, weights and cutoffs recorded at that point in time.
+              Leave it on current to test the live definition.
             </p>
           </div>
+          <label className="labfield" style={{ maxWidth: 280 }}>
+            Version
+            <select aria-label="Version" value={ver} onChange={(e) => setVer(e.target.value)}>
+              <option value="">current (live definition)</option>
+              {(versions.data?.versions || []).map((v) => (
+                <option key={v.id} value={v.version_number}>v{v.version_number}</option>
+              ))}
+            </select>
+          </label>
         </section>
         <section className="lab-step">
-          <h3><span className="stepnum">2</span> Universe</h3>
-          <p className="labmeta" style={{ margin: 0 }}>
-            Leave everything below empty to run on every stock the strategy is allowed to see. Narrow it down only if you want to test a specific slice.
-          </p>
+          <div className="sec-head">
+            <h3><span className="stepnum">2</span> Which stocks to test on</h3>
+            <p>
+              Runs on every stock the strategy can see unless you narrow it.
+              Most first runs should leave this alone.
+            </p>
+          </div>
           <Collapsible
             title="Narrow the universe"
             subtitle={universeIsSet ? universeSummary : "using the full universe"}
@@ -904,51 +989,67 @@ function BacktestScreen({ strat, onCite }) {
           </Collapsible>
         </section>
         <section className="lab-step">
-          <h3><span className="stepnum">3</span> Event kinds and hit rule</h3>
-          <div className="formrow">
-            <label className="labfield">
-              Hit: price move ≥ %
-              <input type="number" step="any" value={price} onChange={(e) => setPrice(e.target.value)} />
-            </label>
-            <label className="labfield">
-              Hit: volume spike ≥ ×
-              <input type="number" step="any" value={vol} onChange={(e) => setVol(e.target.value)} />
-            </label>
-            <label className="labfield">
-              Combine
-              <select value={combine} onChange={(e) => setCombine(e.target.value)}>
-                <option value="or">OR</option>
-                <option value="and">AND</option>
-              </select>
-            </label>
+          <div className="sec-head">
+            <h3><span className="stepnum">3</span> What counts as a hit</h3>
+            <p>
+              After one of these events, a stock counts as a hit if it moved enough.
+              Set the bar below.
+            </p>
           </div>
           <div>
-            <span className="labfield-label">Event kinds</span>
+            <span className="labfield-label">
+              Events to test
+              <span className="muted"> ({kinds.length} selected)</span>
+            </span>
             <div className="chiprow">
               {KINDS.map((k) => (
-                <Chip key={k} label={k} on={kinds.includes(k)} onClick={() => toggle(kinds, setKinds, k)} />
+                <Chip key={k} label={KIND_LABELS[k] || k} on={kinds.includes(k)} onClick={() => toggle(kinds, setKinds, k)} />
               ))}
             </div>
           </div>
+          <div className="hitrule">
+            <span className="hitrule-lead">Counts as a hit when the stock</span>
+            <label className="labfield hitrule-field">
+              moved at least (%)
+              <input type="number" step="any" value={price} onChange={(e) => setPrice(e.target.value)} />
+            </label>
+            <label className="labfield hitrule-field hitrule-join">
+              <span className="labfield-label" style={{ margin: 0 }}>&nbsp;</span>
+              <select aria-label="Combine conditions" value={combine} onChange={(e) => setCombine(e.target.value)}>
+                <option value="or">or</option>
+                <option value="and">and</option>
+              </select>
+            </label>
+            <label className="labfield hitrule-field">
+              traded at least (× normal volume)
+              <input type="number" step="any" value={vol} onChange={(e) => setVol(e.target.value)} />
+            </label>
+          </div>
+          <p className="hitrule-plain">
+            {combine === "or"
+              ? `A stock counts as a hit if it moved ${price || "—"}% or more, or traded ${vol || "—"}× its normal volume.`
+              : `A stock counts as a hit only if it moved ${price || "—"}% or more and traded ${vol || "—"}× its normal volume.`}
+          </p>
         </section>
         <section className="lab-step">
-          <h3>
-            <span className="stepnum">4</span> Baselines
-            <Help text="A baseline is what the strategy's hit rate gets measured against. If a strategy hits 30% of the time but random days also hit 28% of the time, the strategy isn't actually adding much." />
-          </h3>
-          <p className="labmeta" style={{ margin: 0 }}>
-            Every hit rate is compared against these. A result only becomes citable by a finding when it clears its baselines.
-          </p>
+          <div className="sec-head">
+            <h3><span className="stepnum">4</span> What to compare against</h3>
+            <p>
+              A hit rate on its own means little. If the strategy hits 30% of the time but random
+              days also hit 28%, it is not adding much. A result can only be cited by a finding
+              once it beats these.
+            </p>
+          </div>
           <div className="chiprow">
             <Chip label="All selected events" on={baselines.includes("all_events")} onClick={() => toggle(baselines, setBaselines, "all_events")} />
             <Chip label="Random trading days" on={baselines.includes("random_day")} onClick={() => toggle(baselines, setBaselines, "random_day")} />
           </div>
         </section>
         <section className="lab-step">
-          <h3><span className="stepnum">5</span> Hypothesis <span className="muted">(optional)</span></h3>
-          <p className="labmeta" style={{ margin: 0 }}>
-            Skip this for a quick look. Fill it in when a result might become a finding you cite later.
-          </p>
+          <div className="sec-head">
+            <h3><span className="stepnum">5</span> Record what you expected <span className="muted">(optional)</span></h3>
+            <p>Skip this for a quick look. Fill it in when the result might become a finding you cite later.</p>
+          </div>
           <Collapsible
             title="Record a hypothesis"
             subtitle={advancedIsSet ? advancedSummary : "not recorded"}

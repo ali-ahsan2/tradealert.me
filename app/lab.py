@@ -182,7 +182,8 @@ def lab_strategies(creds: HTTPAuthorizationCredentials | None = Depends(bearer))
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT id, key, label, calibrated, calibrated_at, "
-                        "resolved_outcomes_count FROM strategies ORDER BY sort_order, id")
+                        "resolved_outcomes_count, description, monogram "
+                        "FROM strategies ORDER BY sort_order, id")
             rows = cur.fetchall()
             cur.execute("SELECT COUNT(*) FROM backtest_events WHERE data_complete")
             events_complete = cur.fetchone()[0]
@@ -202,6 +203,9 @@ def lab_strategies(creds: HTTPAuthorizationCredentials | None = Depends(bearer))
                 last = cur.fetchone()
                 out.append({
                     "key": key, "label": label, "calibrated": bool(r[3]),
+                    "resolved_outcomes_count": r[5],
+                    "description": r[6],
+                    "monogram": r[7],
                     "version_number": ver[1] if ver else None,
                     "version_state": ver[9] if ver else None,
                     "effective_from": ver[5].isoformat() if ver and ver[5] else None,
