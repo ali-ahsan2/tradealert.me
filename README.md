@@ -48,6 +48,22 @@ Real data paths: `python ingest.py` and `python refresh.py` for snapshots,
 `python -m app.market_data` for daily bars, `python -m app.events_ingest
 earnings` for dated events, `python -m app.worker` for the scheduled loop.
 
+## Hosted preview
+
+`frontend/preview/` builds the real app into a static page that needs no
+server: a hash router stands in for the history router and a fetch layer
+answers from API responses captured off a seeded local server. Useful for
+sharing a walkthrough of the product on fixture data.
+
+```sh
+python scripts/capture_preview_fixtures.py frontend/preview/fixtures.json   # against a running dev server
+cd frontend && npx vite build --config vite.preview.config.js               # -> frontend/preview-dist/
+cp preview/fixtures.json public/tokens.css public/theme-override.css preview-dist/
+```
+
+Serve `preview-dist/` from any static host and open `preview.html`. Writes
+(pins, notes, alerts) stay in the page; the dataset is fixed.
+
 ## Tests
 
 The tests are live-API checks against a running server on `:8000` with a

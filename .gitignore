@@ -5,3 +5,5 @@ __pycache__/
 wheelhouse/*
 !wheelhouse/.gitkeep
 node_modules/
+frontend/preview-dist/
+frontend/preview/fixtures.json
