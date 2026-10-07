@@ -29,6 +29,16 @@ function relTime(iso) {
   });
 }
 
+function shortDate(iso) {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return iso;
+  return new Date(t).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 function errText(detail) {
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) return detail.map(String).join("\n");
@@ -203,12 +213,12 @@ function Collapsible({ title, subtitle, defaultOpen, children }) {
 }
 
 const SCREEN_INTROS = {
-  strategies: "Every strategy the site can score with. Start here, then open a card to inspect it or test it.",
-  inputs: "What this strategy currently claims to do, filter by filter and weight by weight, and what evidence backs each claim.",
-  versions: "The change history for a strategy. Compare two versions on the same events to see whether a change actually helped.",
-  backtest: "Run one strategy version against a chosen set of past events and see how often it would have called a real move.",
-  findings: "The written record of what backtests have actually shown. A finding is only as strong as the runs linked to it.",
-  log: "Every backtest ever run, in order, so any result can be traced back to the exact query that produced it.",
+  strategies: "Every strategy the site can score with. Open one to inspect or test it.",
+  inputs: "What this strategy claims to do, and what evidence backs each claim. Describes the rules; says nothing about whether they work.",
+  versions: "Each version is a recorded decision. Compare two on the same events to see whether a change actually helped.",
+  backtest: "One audited query: universe, event kinds, hit rule, baselines. Every run is recorded and can be cited by a finding.",
+  findings: "The written record of what backtests have shown. A finding is only as strong as the runs linked to it.",
+  log: "Every backtest ever run, so any result traces back to the query that produced it.",
 };
 
 const WALKTHROUGH_STEPS = [
@@ -408,21 +418,22 @@ function InputsScreen({ strat }) {
     api(`/admin/lab/strategies/${strat}/coverage`));
   return (
     <div className="labstack">
-      <p className="labmeta" style={{ margin: 0 }}>
-        Read-mostly: what the strategy says it does, plus what the ledger has compared it against.
-      </p>
       <Load data={data} err={err} loading={loading}>
         {(data) => (
           <>
         <div className="card">
-          <h3>{data.strategy.label} — inputs</h3>
-          <p className="muted">Version {data.version ? data.version.version_number : "?"} since {data.version ? data.version.effective_from : "—"}</p>
+          <h3>
+            Version {data.version ? data.version.version_number : "?"}
+            {data.version && (
+              <span className="muted" style={{ fontWeight: 400 }}>
+                {" "}· in effect since{" "}
+                <span title={data.version.effective_from}>{shortDate(data.version.effective_from)}</span>
+              </span>
+            )}
+          </h3>
           {data.version && data.version.change_reason && (
-            <p className="muted">{data.version.change_reason}</p>
+            <p className="muted" style={{ marginTop: 0 }}>{data.version.change_reason}</p>
           )}
-          <div className="banner" style={{ marginTop: 12 }}>
-            This screen describes what the strategy does. It says nothing about whether any of it works. Evidence grades come from the Findings ledger.
-          </div>
           {data.score_evidence_note && (
             <div className="banner" style={{ marginTop: 12 }}>{data.score_evidence_note}</div>
           )}
@@ -603,9 +614,6 @@ function VersionsScreen({ strat }) {
     );
   return (
     <div className="labstack">
-      <p className="labmeta" style={{ margin: 0 }}>
-        Version history is a ledger: each version is a recorded decision, not something you can quietly undo.
-      </p>
       <Load data={data} err={err} loading={loading}>
         {(data) => (
           <>
@@ -618,7 +626,11 @@ function VersionsScreen({ strat }) {
               <div className="rel" key={v.id} style={{ marginBottom: 8 }}>
                 <dl className="kv">
                   <dt>version</dt><dd>{v.version_number}</dd>
-                  <dt>effective</dt><dd>{v.effective_from}{v.effective_to ? ` → ${v.effective_to}` : " → now"}</dd>
+                  <dt>effective</dt>
+                  <dd>
+                    <span title={v.effective_from}>{shortDate(v.effective_from)}</span>
+                    {v.effective_to ? <> → <span title={v.effective_to}>{shortDate(v.effective_to)}</span></> : " → now"}
+                  </dd>
                   <dt>by</dt><dd>{v.created_by}</dd>
                 </dl>
                 {v.change_reason && <p className="muted" style={{ margin: 0 }}>{v.change_reason}</p>}
@@ -822,9 +834,6 @@ function BacktestScreen({ strat, onCite }) {
 
   return (
     <>
-      <p className="labmeta" style={{ margin: "0 0 var(--s-4)" }}>
-        A backtest is one audited query: universe → event kinds → hit rule → baselines. The strategy and version decide which recorded inputs it runs on.
-      </p>
       <form onSubmit={run} className="labstack">
         <section className="lab-step">
           <h3><span className="stepnum">1</span> Strategy and version</h3>

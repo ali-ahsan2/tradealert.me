@@ -12,7 +12,9 @@ html[data-surface="lab"] {
      luminance by the boot script in lab.html, since the accent is a runtime
      user setting and can be any color. */
   --on-accent: #06120d;
-  --lab-font-display: "Source Serif 4", Georgia, "Times New Roman", serif;
+  /* The Lab is a dense data tool, not editorial: headings use the UI sans so
+     they share metrics with the tables and forms they label. */
+  --lab-font-display: var(--font-sans);
   --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
     Helvetica, Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas,
@@ -22,14 +24,18 @@ html[data-surface="lab"] {
 html[data-surface="lab"] body {
   background: var(--bg);
   color: var(--ink);
+  font-family: var(--font-sans);
   font-size: var(--fs-base);
 }
 
 html[data-surface="lab"] h1,
 html[data-surface="lab"] h2,
+html[data-surface="lab"] h3,
+html[data-surface="lab"] h4,
 html[data-surface="lab"] .rate-headline {
   font-family: var(--lab-font-display);
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .labbar {
@@ -168,7 +174,7 @@ html[data-surface="lab"] .rate-headline {
 
 select.labcontext-name {
   font: inherit;
-  font-size: var(--fs-md);
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--ink);
   background: var(--surface-sunken);
@@ -184,33 +190,54 @@ select.labcontext-name:focus {
   border-color: var(--info);
 }
 
+/* Sits flush on the container's bottom edge so the active tab's underline
+   reads as the boundary of the panel below it. */
 .labsubnav {
   display: flex;
-  gap: var(--s-1);
+  gap: var(--s-4);
+  margin: 0 calc(-1 * var(--s-4)) calc(-1 * var(--s-4));
+  padding: 0 var(--s-4);
   border-top: 1px solid var(--border);
-  padding-top: var(--s-3);
   flex-wrap: wrap;
 }
 
 .labsubnav button {
+  position: relative;
   border: 0;
-  border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--ink-muted);
   font: inherit;
   font-size: var(--fs-sm);
-  padding: 6px 12px;
+  font-weight: 500;
+  padding: var(--s-3) 2px;
   cursor: pointer;
+}
+
+.labsubnav button::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: transparent;
 }
 
 .labsubnav button:hover {
   color: var(--ink);
 }
 
+.labsubnav button:hover::after {
+  background: var(--border-strong);
+}
+
 .labsubnav button.active {
-  color: var(--ink);
-  border-bottom-color: var(--info);
+  color: var(--info);
   font-weight: 600;
+}
+
+.labsubnav button.active::after {
+  background: var(--info);
 }
 
 .labmeta {
@@ -616,8 +643,10 @@ label.labfield {
 
 .labscreen-intro {
   margin: calc(-1 * var(--s-2)) 0 0;
-  color: var(--ink-faint);
+  max-width: 78ch;
+  color: var(--ink-muted);
   font-size: var(--fs-sm);
+  line-height: 1.5;
 }
 
 .labhelp {
