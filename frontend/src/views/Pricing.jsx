@@ -1,36 +1,63 @@
 import React, { useEffect, useState } from "react";
 import { api, getToken } from "../api.js";
-import { navigate } from "../main.jsx";
+import { Link, navigate, useQuery } from "../lib/router.jsx";
+import { alertsLabel, dollars, industriesLabel, plural } from "../lib/fmt.js";
+import { EVIDENCE } from "../lib/evidence.js";
+import { ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
 
-const CHANNEL_LABEL = {
-  email: "Email",
-  push: "Push",
-  sms: "SMS",
-  webhook: "Webhook",
-};
+const CHANNEL_LABEL = { email: "email", push: "web push", sms: "SMS", webhook: "signed webhook" };
 
-export default function Pricing({ notice }) {
+function deliveryText(t) {
+  return t.channels.map((c) => CHANNEL_LABEL[c] || c).join(" · ");
+}
+
+export default function Pricing() {
+  const q = useQuery();
   const [d, setD] = useState(null);
   const [health, setHealth] = useState(null);
+  const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(null);
-  const [msg, setMsg] = useState(notice || "");
+  const [msg, setMsg] = useState(q.get("billing") === "cancel" ? "Checkout was cancelled. Your plan is unchanged." : "");
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
+    let alive = true;
     api("/entitlements")
-      .then(setD)
-      .catch(() => setD(null));
+      .then((x) => alive && setD(x))
+      .catch((e) => alive && setErr(e));
     api("/billing/health")
-      .then(setHealth)
-      .catch(() => setHealth(null));
-  }, []);
+      .then((h) => alive && setHealth(h))
+      .catch(() => alive && setHealth(null));
+    return () => {
+      alive = false;
+    };
+  }, [reload]);
 
-  if (!d) return <div className="wrap"><div className="table-card empty">Loading…</div></div>;
+  if (err) {
+    return (
+      <div className="wrap wrap-narrow">
+        <ErrorCard error={err} onRetry={() => setReload((n) => n + 1)} title="Couldn't load plans." />
+      </div>
+    );
+  }
+  if (!d) {
+    return (
+      <div className="wrap">
+        <div className="pagehead">
+          <h1>Plans</h1>
+        </div>
+        <Skeleton rows={6} height={48} />
+      </div>
+    );
+  }
 
-  const currentKey = d.current?.key;
+  const tiers = [...d.tiers].sort((a, b) => a.price_monthly_cents - b.price_monthly_cents);
+  const currentKey = d.current && d.current.key;
+  const currentPrice = d.current ? d.current.price_monthly_cents : 0;
 
   const choose = async (key) => {
     if (!getToken()) {
-      navigate("/login");
+      navigate(`/signup?next=${encodeURIComponent("/pricing")}`);
       return;
     }
     if (key === currentKey) return;
@@ -39,13 +66,14 @@ export default function Pricing({ notice }) {
     try {
       if (health && health.dev) {
         await api("/billing/dev/preview", { method: "POST", json: { tier_key: key } });
-        setMsg(`Sandbox preview: moved to ${key}. Billing is disabled here; live checkout activates when Stripe keys are set.`);
+        setMsg(`Sandbox: moved to ${key}. Billing is disabled on this instance; live checkout activates when Stripe keys are set.`);
+        navigate("/settings?billing=success");
       } else if (health && health.configured) {
         const { url } = await api("/billing/checkout", { method: "POST", json: { tier_key: key } });
         window.location.href = url;
         return;
       } else {
-        setMsg("Billing is not configured on this instance. Ask the operator to set STRIPE_SECRET_KEY.");
+        setMsg("Billing is not configured on this instance yet.");
       }
     } catch (e) {
       setMsg(e.detail || String(e.message));
@@ -54,52 +82,189 @@ export default function Pricing({ notice }) {
     }
   };
 
+  const action = (t) => {
+    const isCurrent = t.key === currentKey;
+    if (isCurrent) return <span className="chip chip-cal">Your plan</span>;
+    const up = t.price_monthly_cents > currentPrice;
+    const label = !getToken()
+      ? t.price_monthly_cents === 0
+        ? "Start free"
+        : `Start on ${t.label}`
+      : up
+        ? `Switch to ${t.label}`
+        : `Move down to ${t.label}`;
+    return (
+      <button
+        className={`btn ${up || !getToken() ? "btn-primary" : "btn-secondary"} btn-sm btn-block`}
+        disabled={busy === t.key}
+        onClick={() => choose(t.key)}
+      >
+        {busy === t.key ? "Opening…" : label}
+      </button>
+    );
+  };
+
+  const rows = [
+    ["Price", (t) => (t.price_monthly_cents === 0 ? "$0" : `${dollars(t.price_monthly_cents)}/mo`)],
+    ["Industries followed", (t) => industriesLabel(t.industries_limit)],
+    ["Names shown per industry", (t) => `top ${t.names_shown_limit}`],
+    ["Pinned names", (t) => plural(t.picks_limit, "pick")],
+    ["Alerts", (t) => alertsLabel(t.alerts_limit)],
+    ["Delivery", (t) => deliveryText(t)],
+  ];
+
   return (
     <div className="wrap">
       <div className="pagehead">
-        <h1>Plans</h1>
-        <div className="meta">Board scope, watchlist size, alert volume, and channels.</div>
+        <div>
+          <h1>Plans</h1>
+          <div className="meta">
+            Every plan sees the same scores and the same reports. Plans differ only in how much of the
+            universe you follow, how many names you pin, and how alerts reach you.
+          </div>
+        </div>
       </div>
-      {msg && <p className="note" role="status">{msg}</p>}
-      <div className="tiergrid">
-        {d.tiers.map((t) => {
-          const isCurrent = t.key === currentKey;
-          return (
-            <div key={t.key} className={`tier ${isCurrent ? "current" : ""}`}>
-              <div className="tname">{t.label}</div>
-              <div className="tprice">
-                {t.price_monthly_cents === 0
-                  ? "$0"
-                  : `$${(t.price_monthly_cents / 100).toFixed(0)}`}
-                <span className="per">/month</span>
-              </div>
-              <ul className="tfeats">
-                <li>{t.industries_limit >= 999 ? "All industries" : `${t.industries_limit} industr${t.industries_limit === 1 ? "y" : "ies"}`}</li>
-                <li>{t.names_shown_limit} tickers on the board</li>
-                <li>{t.picks_limit} pinned</li>
-                <li>{t.alerts_limit === 0 ? "No alerts" : t.alerts_limit == null ? "Unlimited alerts" : `${t.alerts_limit} alerts`}</li>
-                <li>Channels {t.channels.map((c) => CHANNEL_LABEL[c] || c).join(" · ")}</li>
-              </ul>
-              {isCurrent ? (
-                <span className="tag">Current plan</span>
-              ) : (
-                <button
-                  className="btn btn-primary"
-                  disabled={busy === t.key}
-                  onClick={() => choose(t.key)}
-                  style={{ width: "100%" }}
-                >
-                  {busy === t.key ? "…" : getToken() ? "Choose" : "Sign in to choose"}
-                </button>
-              )}
+
+      {msg && <Notice tone="info">{msg}</Notice>}
+
+      <div className="table-card plans-desktop">
+        <table className="plans-table">
+          <thead>
+            <tr>
+              <th scope="col">
+                <span className="sr-only">Feature</span>
+              </th>
+              {tiers.map((t) => (
+                <th key={t.key} scope="col" className={`tcol ${t.key === "pro" ? "popular" : ""}`}>
+                  {t.key === "pro" && <div className="tflag">Most popular</div>}
+                  <div className="tname">{t.label}</div>
+                  <div className="tprice">
+                    {t.price_monthly_cents === 0 ? "$0" : dollars(t.price_monthly_cents)}
+                    <span className="per"> /month</span>
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([label, fn]) => (
+              <tr key={label}>
+                <th scope="row">{label}</th>
+                {tiers.map((t) => (
+                  <td key={t.key} className={`tcol ${t.key === "pro" ? "popular" : ""}`}>
+                    {fn(t)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td />
+              {tiers.map((t) => (
+                <td key={t.key} className={`tcol ${t.key === "pro" ? "popular" : ""}`}>
+                  {action(t)}
+                </td>
+              ))}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div className="plans-cards plans-mobile">
+        {tiers.map((t) => (
+          <div key={t.key} className={`card plan ${t.key === "pro" ? "popular" : ""}`}>
+            {t.key === "pro" && <div className="tflag eyebrow">Most popular</div>}
+            <div className="tname">{t.label}</div>
+            <div className="tprice">
+              {t.price_monthly_cents === 0 ? "$0" : dollars(t.price_monthly_cents)}
+              <span className="per"> /month</span>
             </div>
-          );
-        })}
+            <dl>
+              {rows.slice(1).map(([label, fn]) => (
+                <React.Fragment key={label}>
+                  <dt>{label}</dt>
+                  <dd>{fn(t)}</dd>
+                </React.Fragment>
+              ))}
+            </dl>
+            {action(t)}
+          </div>
+        ))}
       </div>
-      <p className="st" style={{ color: "var(--ink-faint)", fontSize: "var(--fs-sm)" }}>
-        Revenue-grade checkout activates at deploy when Stripe keys are set; until then the
-        sandbox preview moves your plan directly.
-      </p>
+
+      <div className="section">
+        <h2>How visibility works</h2>
+        <p className="section-lead">
+          You see the top-ranked names in each industry you follow, plus any name you pin. Pinning a
+          name widens what you can see; it never changes the report you get. A name outside your
+          universe simply has no report page, the same as a name that doesn't exist.
+        </p>
+      </div>
+
+      <div className="section card card-sunken">
+        <h2>What the evidence does and does not say</h2>
+        <p className="muted" style={{ maxWidth: "68ch", marginBottom: 0 }}>
+          Four of the five strategies are provisional. Fast Mover is the one that has been
+          backtested: its hard filters hit on {EVIDENCE.hitRate}% of the {EVIDENCE.events} qualifying
+          events tested ({EVIDENCE.hits} of {EVIDENCE.events}), against {EVIDENCE.earningsRate}% for
+          earnings events generally and {EVIDENCE.randomRate}% on a random day. That sample is small
+          and measures movement, not direction or profit.
+        </p>
+      </div>
+
+      <div className="section faq">
+        <h2>Questions</h2>
+        <details>
+          <summary>What happens when I move to a lower plan?</summary>
+          <p>
+            The change takes effect at the end of the billing period, never mid-cycle. Pinned names
+            above the new limit stay saved but inactive, and re-activate if you move back up. Nothing
+            you authored is deleted.
+          </p>
+        </details>
+        <details>
+          <summary>Why does a ticker show "No report available"?</summary>
+          <p>
+            Either it isn't covered, or it isn't in the industries you follow and you haven't pinned
+            it. The page looks the same in both cases on purpose.
+          </p>
+        </details>
+        <details>
+          <summary>Do I need to verify my email to browse?</summary>
+          <p>
+            No. Verification gates delivery, not browsing: you can read your Board right after signing
+            up, but alerts, digests and paid upgrades wait until the link in your inbox is clicked.
+          </p>
+        </details>
+        <details>
+          <summary>How does cancellation work?</summary>
+          <p>
+            Cancel any time from your account. Access continues to the end of the period you've paid
+            for, then the account returns to Free with your pins and settings intact.
+          </p>
+        </details>
+        <details>
+          <summary>Is a strong score a recommendation?</summary>
+          <p>
+            No. A score ranks names for a human to review. Bands and numbers describe where a name
+            sits on a fixed scale; they are not a probability of success and never a call on
+            direction.
+          </p>
+        </details>
+      </div>
+
+      {health && health.dev && (
+        <p className="footnote">
+          Sandbox instance: choosing a plan moves your account directly. Live checkout activates once
+          Stripe keys are configured.
+        </p>
+      )}
+      {!getToken() && (
+        <p className="footnote">
+          Already have an account? <Link to="/login?next=%2Fpricing">Log in</Link> to change your plan.
+        </p>
+      )}
     </div>
   );
 }

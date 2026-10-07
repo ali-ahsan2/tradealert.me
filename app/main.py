@@ -390,8 +390,24 @@ def runs_latest():
             "status": status, "bands": counts, "universe_active": universe}
 
 
+def _strategy_by_key(conn, key):
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, key, label, monogram, calibrated, resolved_outcomes_count "
+            "FROM strategies WHERE key = %s",
+            (key,),
+        )
+        return cur.fetchone()
+
+
+def _strategy_payload(strat):
+    return {"key": strat[1], "label": strat[2], "monogram": strat[3],
+            "calibrated": bool(strat[4]), "resolved_outcomes_count": strat[5]}
+
+
 @app.get("/api/board")
-def board(band: str = "", creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
+def board(band: str = "", strategy: str = "fast_mover",
+          creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
     conn = get_conn()
     try:
         row = _user_from_token(creds)
@@ -400,6 +416,11 @@ def board(band: str = "", creds: HTTPAuthorizationCredentials | None = Depends(b
         if not run:
             raise HTTPException(404, "not found")
         run_id = run[0]
+        # an unknown strategy key is indistinguishable from an empty board:
+        # the strategy list is public, so nothing leaks either way
+        strat = _strategy_by_key(conn, (strategy or "fast_mover").strip().lower())
+        if not strat:
+            raise HTTPException(404, "not found")
         industries_limit, names_shown_limit = 1, 5
         _provision_free(conn, user_id)
         tier = _tier_for_user(conn, user_id)
@@ -409,7 +430,7 @@ def board(band: str = "", creds: HTTPAuthorizationCredentials | None = Depends(b
             conn, user_id, industries_limit)
         vis, vis_params = scope.visible_sql_and_params(allowed_keys, picks, "i")
         with conn.cursor() as cur:
-            params = [run_id]
+            params = [run_id, strat[0]]
             sql = (
                 "SELECT s.symbol, i.theme, i.instrument_group, "
                 "ind.key, ind.label, ind.benchmark_etf, sc.value, sc.band, "
@@ -418,7 +439,8 @@ def board(band: str = "", creds: HTTPAuthorizationCredentials | None = Depends(b
                 "JOIN instruments i ON i.id = sc.instrument_id "
                 "JOIN tickers s ON s.id = i.ticker_id "
                 "JOIN industries ind ON ind.id = i.industry_id "
-                "WHERE sc.run_id = %s AND sc.value IS NOT NULL "
+                "WHERE sc.run_id = %s AND sc.strategy_id = %s "
+                "AND sc.value IS NOT NULL "
             )
             if band:
                 params.append(band)
@@ -439,6 +461,7 @@ def board(band: str = "", creds: HTTPAuthorizationCredentials | None = Depends(b
     return {
         "as_of": run[1].isoformat(),
         "run_id": run_id,
+        "strategy": _strategy_payload(strat),
         "rows": [
             {"rank": i + 1, "symbol": r[0], "theme": r[1], "group": r[2],
              "industry": {"key": r[3], "label": r[4], "benchmark_etf": r[5]},
@@ -462,7 +485,8 @@ _SNAPSHOT_FIELDS = {
 
 
 @app.get("/api/stock/{symbol}")
-def stock(symbol: str, creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
+def stock(symbol: str, strategy: str = "fast_mover",
+          creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
     sym = symbol.strip().upper()
     if not re.match(r"^[A-Z0-9.\-]{1,12}$", sym):
         raise HTTPException(404, "not found")
@@ -479,10 +503,13 @@ def stock(symbol: str, creds: HTTPAuthorizationCredentials | None = Depends(bear
         industries_limit = tier[3] if tier else 1
         keys, _scope_label, picks = scope.user_scope(conn, user_id, industries_limit)
         vis, vis_params = scope.visible_sql_and_params(keys, picks, "i")
+        strat = _strategy_by_key(conn, (strategy or "fast_mover").strip().lower())
+        if not strat:
+            raise HTTPException(404, "not found")
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT s.id, i.id, i.theme, i.instrument_group, "
-                "ind.key, ind.label, ind.benchmark_etf "
+                "ind.key, ind.label, ind.benchmark_etf, i.lane, i.hook, i.thesis "
                 "FROM tickers s JOIN instruments i ON i.ticker_id = s.id "
                 "JOIN industries ind ON ind.id = i.industry_id "
                 f"WHERE s.symbol = %s AND {vis} "
@@ -497,10 +524,10 @@ def stock(symbol: str, creds: HTTPAuthorizationCredentials | None = Depends(bear
             cur.execute(
                 "SELECT value, band, components_present, components_total, "
                 "shrinkage_applied, shrinkage_from, component_json, haircut_json, "
-                "delta_1d "
+                "delta_1d, hard_filter_json "
                 "FROM scores WHERE run_id = %s AND instrument_id = %s "
-                "AND strategy_id = 1",
-                (run_id, instrument_id),
+                "AND strategy_id = %s",
+                (run_id, instrument_id, strat[0]),
             )
             score = cur.fetchone()
             cur.execute(
@@ -511,11 +538,40 @@ def stock(symbol: str, creds: HTTPAuthorizationCredentials | None = Depends(bear
             )
             snaps = {f: {"value": _as_num(v), "as_of": a.isoformat()}
                      for f, v, a in cur.fetchall() if f in _SNAPSHOT_FIELDS}
+            # every strategy, with this run's score where one exists, so the
+            # report can show the other lenses as chips without a second call
+            cur.execute(
+                "SELECT st.key, st.label, st.monogram, st.calibrated, "
+                "sc.value, sc.band "
+                "FROM strategies st "
+                "LEFT JOIN scores sc ON sc.strategy_id = st.id "
+                "  AND sc.run_id = %s AND sc.instrument_id = %s "
+                "ORDER BY st.sort_order",
+                (run_id, instrument_id),
+            )
+            lenses = [
+                {"key": r[0], "label": r[1], "monogram": r[2],
+                 "calibrated": bool(r[3]),
+                 "value": float(r[4]) if r[4] is not None else None,
+                 "band": r[5]}
+                for r in cur.fetchall()
+            ]
+            cur.execute(
+                "SELECT 1 FROM picks WHERE user_id = %s AND instrument_id = %s "
+                "AND active",
+                (user_id, instrument_id),
+            )
+            pinned = cur.fetchone() is not None
     finally:
         conn.close()
     out = {
         "symbol": sym, "theme": row[2], "group": row[3],
         "industry": {"key": row[4], "label": row[5], "benchmark_etf": row[6]},
+        "lane": row[7], "hook": row[8] or "", "thesis": row[9] or "",
+        "strategy": _strategy_payload(strat),
+        "strategies": lenses,
+        "run": {"id": run_id, "as_of": run[1].isoformat()},
+        "pinned": pinned,
         "snapshot": snaps,
     }
     if score:
@@ -525,12 +581,23 @@ def stock(symbol: str, creds: HTTPAuthorizationCredentials | None = Depends(bear
             "components_present": score[2], "components_total": score[3],
             "shrinkage_applied": shrink,
             "shrinkage_from": float(score[5]) if score[5] is not None else None,
+            "components": [
+                {"key": c.get("k"), "label": c.get("label"),
+                 "weight": c.get("weight"), "score": c.get("score"),
+                 "value": c.get("val"), "backed": bool(c.get("backed", True))}
+                for c in (score[6] or [])
+            ],
             "haircuts": [
                 {"label": h.get("label"), "points": h.get("points"),
                  "evidence_url": h.get("evidence_url")}
-                for h in score[7]
+                for h in (score[7] or [])
             ],
             "delta_1d": float(score[8]) if score[8] is not None else None,
+            "hard_filters": [
+                {"key": f.get("key"), "label": f.get("label"),
+                 "value": f.get("value"), "pass": bool(f.get("pass"))}
+                for f in (score[9] or [])
+            ],
         }
     return out
 

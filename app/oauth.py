@@ -244,7 +244,7 @@ def _store_token_page(provider, token, name):
         '<script>'
         "try{localStorage.setItem('ta_token',"
         f"{json.dumps(token)});}}catch(e){{}}\n"
-        "location.href='/';"
+        "location.href='/board';"
         "</script></body></html>"
     )
 
