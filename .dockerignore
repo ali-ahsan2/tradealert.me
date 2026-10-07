@@ -10,5 +10,6 @@ db/*
 !db/migrations/
 !db/seed_lab.py
 !db/seed_oauth_test.py
+!db/seed_benchmarks.py
 tests
-.vscode!db/seed_benchmarks.py
+.vscode
