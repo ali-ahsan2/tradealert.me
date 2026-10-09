@@ -275,3 +275,16 @@
     justify-content: flex-start;
   }
 }
+
+/* An alert's trigger chip explains itself on tap. The chip is an atomic
+   inline box, which would swallow the explainer's dotted underline, so the
+   hint is drawn on the chip itself. */
+.brief .xp-term .chip {
+  cursor: help;
+  text-decoration: underline dotted var(--ink-faint);
+  text-underline-offset: 3px;
+}
+
+.brief .xp-term[aria-expanded="true"] .chip {
+  text-decoration-color: var(--accent);
+}

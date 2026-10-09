@@ -3,9 +3,10 @@ import { api, cached, toast } from "../api.js";
 import { Link, navigate } from "../lib/router.jsx";
 import { hasChannel, useMe } from "../lib/me.jsx";
 import { industriesLabel, tzGuess, tzList } from "../lib/fmt.js";
+import { useMode } from "../lib/mode.js";
 import { DEFAULT_TRIGGERS, GLOSSARY, TRIGGER_PLAIN } from "../lib/glossary.js";
 import { verdict } from "../lib/plain.js";
-import { Term } from "../components/Explain.jsx";
+import Explain, { Term } from "../components/Explain.jsx";
 import NotifyButton from "../components/NotifyButton.jsx";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Pin from "../components/Pin.jsx";
@@ -37,9 +38,33 @@ function Progress({ step }) {
   );
 }
 
+// The footer sticks above the bottom bar, so without room after it the last
+// cards of a step can never scroll clear of it. It reports its height and
+// the step pads its end by the same amount.
+function StickyFoot({ children, onHeight }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !onHeight) return undefined;
+    const report = () => onHeight(Math.ceil(el.getBoundingClientRect().height));
+    report();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [onHeight]);
+  return (
+    <div className="sticky-foot" ref={ref}>
+      {children}
+    </div>
+  );
+}
+
 export default function Onboarding() {
   const { me, refresh } = useMe();
+  const { full } = useMode();
   const [step, setStep] = useState(1);
+  const [footH, setFootH] = useState(0);
   const [ind, setInd] = useState(null);
   const [picked, setPicked] = useState([]);
   const [limit, setLimit] = useState(1);
@@ -195,6 +220,9 @@ export default function Onboarding() {
       .sort((a, b) => a.price_monthly_cents - b.price_monthly_cents)
       .find((t) => t.industries_limit > limit);
   const atLimit = limit < 999 && picked.length >= limit;
+  // the three words appear on the cards only once a run has counts to show
+  const anyShape = Object.values(shape).some((s) => s && s.scored != null);
+  const stepStyle = footH ? { paddingBottom: footH } : undefined;
   const defaults = DEFAULT_TRIGGERS.map((k) => (TRIGGER_PLAIN[k] ? TRIGGER_PLAIN[k][0].toLowerCase() : k));
 
   if (err) {
@@ -206,7 +234,7 @@ export default function Onboarding() {
   }
 
   const preferences = (
-    <details className="acc ob-pref">
+    <details className="acc ob-pref" open={full}>
       <summary>
         Preferences <span className="sum-note">timezone and delivery</span>
       </summary>
@@ -273,13 +301,18 @@ export default function Onboarding() {
       )}
 
       {step === 1 && (
-        <>
+        <div className="ob-step" style={stepStyle}>
           <div className="ob-head">
             <h1>Pick an industry</h1>
             <p className="muted">
-              Start with one you already follow in the news; you can change it any time. We score every name inside it each trading
-              morning. Your plan follows {industriesLabel(limit)} at a time.
+              Start with one you already follow in the news; you can change it any time. We score every name inside it each morning. Your
+              plan follows {industriesLabel(limit)} at a time.
             </p>
+            {anyShape && (
+              <p className="hint ob-hint">
+                “Scored” means rated this morning; strong and elevated are the two top bands. The next step explains them.
+              </p>
+            )}
           </div>
           {!ind ? (
             <Skeleton rows={5} height={88} />
@@ -289,11 +322,32 @@ export default function Onboarding() {
                 const on = picked.includes(i.key);
                 const s = shape[i.key];
                 const dist = (s && s.distribution) || {};
+                const disabled = !on && atLimit;
+                // a div with the button role, not a button: the explainers
+                // inside are buttons of their own and a button cannot hold one
                 return (
-                  <button key={i.key} type="button" className="indcard" aria-pressed={on} disabled={!on && atLimit} onClick={() => toggle(i.key)}>
+                  <div
+                    key={i.key}
+                    role="button"
+                    tabIndex={disabled ? -1 : 0}
+                    className="indcard"
+                    aria-pressed={on}
+                    aria-disabled={disabled || undefined}
+                    onClick={() => !disabled && toggle(i.key)}
+                    onKeyDown={(e) => {
+                      if (disabled || e.target !== e.currentTarget) return;
+                      if (e.key !== "Enter" && e.key !== " ") return;
+                      e.preventDefault();
+                      toggle(i.key);
+                    }}
+                  >
                     <b>
                       {i.label}
-                      <span className="etf">{i.benchmark_etf}</span>
+                      {i.benchmark_etf && (
+                        <span className="etf">
+                          <Explain term="benchmark">benchmark</Explain> <span className="etf-code">{i.benchmark_etf}</span>
+                        </span>
+                      )}
                     </b>
                     {i.description && <span className="desc">{i.description}</span>}
                     <span className="facts">
@@ -302,26 +356,26 @@ export default function Onboarding() {
                       </span>
                       {s && s.scored != null && (
                         <span>
-                          <span className="n">{s.scored}</span> scored
+                          <span className="n">{s.scored}</span> <Explain term="score">scored</Explain>
                         </span>
                       )}
                       {dist.strong > 0 && (
                         <span>
-                          <span className="n">{dist.strong}</span> strong
+                          <span className="n">{dist.strong}</span> <Explain term="strong">strong</Explain>
                         </span>
                       )}
                       {dist.elevated > 0 && (
                         <span>
-                          <span className="n">{dist.elevated}</span> elevated
+                          <span className="n">{dist.elevated}</span> <Explain term="elevated">elevated</Explain>
                         </span>
                       )}
                     </span>
-                  </button>
+                  </div>
                 );
               })}
             </div>
           )}
-          <div className="sticky-foot">
+          <StickyFoot onHeight={setFootH}>
             <span>
               <b>
                 {picked.length} of {industriesLabel(limit)}
@@ -343,12 +397,12 @@ export default function Onboarding() {
                 Continue
               </button>
             </span>
-          </div>
-        </>
+          </StickyFoot>
+        </div>
       )}
 
       {step === 2 && (
-        <>
+        <div className="ob-step" style={stepStyle}>
           <div className="ob-head">
             <h1>Three words you'll see everywhere</h1>
             <p className="muted">Every screen uses them the same way. Anywhere in the app, tap an underlined word for its meaning.</p>
@@ -394,25 +448,26 @@ export default function Onboarding() {
               <span>{verdict(example, board.strategy, example.symbol).headline}</span>
             </div>
           )}
-          <div className="sticky-foot">
+          <StickyFoot onHeight={setFootH}>
             <button type="button" className="btn-quiet" onClick={() => setStep(1)}>
               ← Back
             </button>
             <button type="button" className="btn btn-primary" onClick={() => setStep(3)}>
               Continue
             </button>
-          </div>
-        </>
+          </StickyFoot>
+        </div>
       )}
 
       {step === 3 && (
-        <>
+        <div className="ob-step" style={stepStyle}>
           <div className="ob-head">
             <h1>Pin one name</h1>
             <p className="muted">
               A pinned name stays on your Home and in your digest. Turn on alerts and we email you when a fact prints on it. Nothing here
               is a recommendation: these are the top-scored names in {focusLabel || "your industry"} on the latest run.
             </p>
+            {!full && <p className="hint ob-hint">Your timezone and where alerts reach you are further down this step, under Preferences.</p>}
           </div>
           {picked.length > 1 && (
             <div className="seg ob-seg" role="group" aria-label="Industry">
@@ -435,7 +490,7 @@ export default function Onboarding() {
                 "Tap Notify me on any name to be emailed when a fact prints.",
               ]}
             >
-              Scores appear after the first daily run completes.
+              Scores appear after the first run completes; the engine runs each morning.
             </Empty>
           ) : (
             <ul className="picklist">
@@ -463,7 +518,7 @@ export default function Onboarding() {
             </ul>
           )}
           {preferences}
-          <div className="sticky-foot">
+          <StickyFoot onHeight={setFootH}>
             <button type="button" className="btn-quiet" onClick={() => setStep(2)}>
               ← Back
             </button>
@@ -475,8 +530,8 @@ export default function Onboarding() {
                 {busy ? "Saving…" : "Open my Home"}
               </button>
             </span>
-          </div>
-        </>
+          </StickyFoot>
+        </div>
       )}
     </div>
   );

@@ -103,8 +103,12 @@
   margin-bottom: var(--s-4);
 }
 
-.sr-next a {
+.sr-next .btn-quiet {
   font-weight: 600;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--s-2);
 }
 
 /* Why this score: one sentence, then the inputs as a list. */
@@ -284,4 +288,37 @@
 
 .sr-foot .btn-quiet {
   min-height: 40px;
+}
+
+/* Why rows on a phone: the label takes its own line and the value and status
+   sit beneath it, so "operator reading 0.70 · not measured data" never
+   squeezes the label into a column of letters. */
+@media (max-width: 480px) {
+  .sr-inputs li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .sr-inputs li .lbl {
+    grid-column: 1 / -1;
+  }
+
+  .sr-inputs .val {
+    text-align: left;
+  }
+
+  .sr-inputs .st {
+    min-width: 0;
+  }
+}
+
+/* The judgment and assumed tags carry an explainer; keep its underline
+   inside the faint tag colour. */
+.sr-inputs .lbl .judg .xp-term,
+.complist .judg .xp-term {
+  color: inherit;
+}
+
+/* Lens cards: the spelt-out provisional chip may need a second line. */
+.lens-card .lc-top {
+  flex-wrap: wrap;
 }

@@ -104,12 +104,15 @@
   min-height: 40px;
 }
 
-.help-term .btn-quiet,
-.help .help-actions .btn-quiet {
+.help-term .btn-quiet {
   display: inline-flex;
   align-items: center;
   min-height: 40px;
   padding: 0 var(--s-3);
+}
+
+.help .help-actions .btn {
+  min-height: 40px;
 }
 
 .help-actions {
@@ -289,4 +292,50 @@
 
 .ob-seg button {
   min-height: 40px;
+}
+
+/* A step pads its end by the sticky footer's measured height (set inline);
+   this is the fallback before the first measurement. */
+.ob-step {
+  padding-bottom: 96px;
+}
+
+.ob-hint {
+  margin: var(--s-2) 0 0;
+  max-width: 60ch;
+}
+
+/* The industry card is a div with the button role (it holds explainers,
+   which are buttons), so the disabled and focus states styles.css gave the
+   button are restated here. */
+.indcard[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.indcard[aria-disabled="true"]:hover {
+  border-color: var(--border);
+}
+
+.indcard:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.indcard b {
+  flex-wrap: wrap;
+}
+
+.indcard .etf {
+  font-family: var(--font-sans);
+  white-space: nowrap;
+}
+
+.indcard .etf-code {
+  font-family: var(--font-mono);
+}
+
+.indcard .facts .xp-term,
+.indcard .etf .xp-term {
+  color: inherit;
 }
