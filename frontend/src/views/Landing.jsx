@@ -118,6 +118,11 @@ function Benefits() {
       title: "It explains, and it shows its record",
       body: "Plain-language reasons on every score, a calendar of what is coming for your names, and the measured move after every past event. Nothing predicted; everything measured.",
     },
+    {
+      icon: "search",
+      title: "It speaks your language",
+      body: "No jargon wall. Every term is a tap away from its definition, every screen opens with one plain sentence about your names, and Simple mode shows only what you need until you ask for more.",
+    },
   ];
   return (
     <section className="ld-benefits" aria-label="What you get">
