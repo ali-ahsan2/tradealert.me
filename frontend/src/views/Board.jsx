@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api, cached, toast } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
@@ -29,7 +29,7 @@ import Pin from "../components/Pin.jsx";
 import Spark, { Move } from "../components/Spark.jsx";
 import Explain from "../components/Explain.jsx";
 import NotifyButton from "../components/NotifyButton.jsx";
-import { Empty, ErrorCard, Monogram, Notice, Skeleton, StatusChip } from "../components/ui.jsx";
+import { AgeChip, Empty, ErrorCard, Monogram, Notice, Skeleton, StatusChip } from "../components/ui.jsx";
 import "./board.css";
 
 // Storage access throws in Safari private browsing; preferences degrade to
@@ -92,16 +92,74 @@ const HELP = {
   delta: "Change in the score since the previous run. 'new' means the name was not scored last run.",
   screen: "Hard-filter verdict stored with the score: every filter passed, or at least one failed. Only Fast Mover stores one.",
   px: "Price change over the last 30 days from daily closes, and the gap to the industry's ETF over the same window.",
-  why: "The theme the engine files this name under, and whether it cleared the strategy's pass-or-fail rules on this run. Open the row for the inputs behind the number.",
+  why: "The engine's one-line reason this name is on the board, and whether it cleared the strategy's pass-or-fail filters on this run. Open the row for the inputs behind the number.",
 };
 
 const BANDS = ["strong", "elevated", "neutral", "weak", "excluded"];
 const MAX_COMPARE = 4;
 
+// The glossary entry behind each stage word the payload carries.
+const LANE_TERM = { Early: "lane_early", Event: "lane_event" };
+const FALLBACK_STRATEGIES = [{ key: "fast_mover", label: "Fast Mover", monogram: "FM", calibrated: true }];
+
+// Whether an element scrolls sideways, and whether it is scrolled to the
+// end, so a fade or a hint shows only while there is something left to
+// reach. Measured from the element, never assumed from the viewport.
+function useSideScroll(deps) {
+  const ref = useRef(null);
+  const [state, setState] = useState({ can: false, end: true });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const measure = () => {
+      const can = el.scrollWidth > el.clientWidth + 1;
+      const end = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1;
+      setState((s) => (s.can === can && s.end === end ? s : { can, end }));
+    };
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    let ro = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(measure);
+      ro.observe(el);
+      Array.from(el.children).forEach((c) => ro.observe(c));
+    } else {
+      window.addEventListener("resize", measure);
+    }
+    return () => {
+      el.removeEventListener("scroll", measure);
+      if (ro) ro.disconnect();
+      else window.removeEventListener("resize", measure);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return [ref, state];
+}
+
+// A filter pill whose word carries its own explainer: the main button
+// toggles the filter, the "?" inside the pill opens the definition. Two
+// buttons side by side, because a button may not contain another.
+function SplitPill({ on, onClick, term, count, children }) {
+  return (
+    <span className={`fchip split ${on ? "on" : ""}`}>
+      <button type="button" className="fchip-main" aria-pressed={on} onClick={onClick}>
+        {children} <span className="mono">{count}</span>
+      </button>
+      <Explain term={term} />
+    </span>
+  );
+}
+
 function nextTierFor(tiers, current) {
   if (!tiers || !current) return null;
   const sorted = [...tiers].sort((a, b) => a.price_monthly_cents - b.price_monthly_cents);
   return sorted.find((t) => t.price_monthly_cents > (current.price_monthly_cents || 0)) || null;
+}
+
+// "up to 10 pinned names", or "the names you pin" when the plan sets no cap.
+function pinsLabel(limit) {
+  if (limit == null || limit >= 999) return "the names you pin";
+  return `up to ${plural(limit, "pinned name")}`;
 }
 
 // "up 6", "down 3", "new", "unchanged": the Simple table's change column.
@@ -201,6 +259,8 @@ export default function Board() {
   const [lane, setLane] = useState(q.get("lane") || "all");
   const [cleared, setCleared] = useState(q.get("cleared") === "1");
   const [priceCols, setPriceCols] = useState(ls.get("ta_board_px") === "1");
+  const [howOpen, setHowOpen] = useState(false);
+  const [tabsRef, tabsScroll] = useSideScroll([strategies]);
 
   useEffect(() => {
     cached("/strategies").then((d) => setStrategies(d.strategies)).catch(() => setStrategies([]));
@@ -310,6 +370,14 @@ export default function Board() {
     ls.set("ta_board_intro_hidden", "1");
     setStrip(false);
   };
+  const openHowto = (e) => {
+    e.preventDefault();
+    setHowOpen(true);
+    requestAnimationFrame(() => {
+      const el = document.getElementById("board-howto");
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
   const toggleDensity = () => {
     const next = !compact;
     setCompact(next);
@@ -378,6 +446,11 @@ export default function Board() {
   const stale = runAge && runAge.hours > 36;
   const nextTier = nextTierFor(tiers, me && me.tier);
   const noun = nounFor(strat);
+  // Counted from the strategies list the page loaded, never hard-coded.
+  const provisionalCount = strategies ? strategies.filter((s) => !s.calibrated).length : null;
+  const calibratedList = strategies ? strategies.filter((s) => s.calibrated) : [];
+  const strongCount = rows.filter((r) => r.band === "strong").length;
+  const elevatedCount = rows.filter((r) => r.band === "elevated").length;
   const scopeLabel =
     industry !== "all"
       ? followed.find((f) => f.key === industry)?.label
@@ -467,14 +540,32 @@ export default function Board() {
         </Notice>
       )}
 
-      <div className="tabs" role="tablist" aria-label="Strategy">
-        {(strategies || [{ key: "fast_mover", label: "Fast Mover", monogram: "FM", calibrated: true }]).map((s) => (
-          <button key={s.key} role="tab" className="tab" aria-selected={s.key === strategy} onClick={() => setStrategy(s.key)}>
-            <Monogram size={20}>{s.monogram}</Monogram>
-            {s.label}
-            {!s.calibrated && <span className="chip chip-prov">Provisional</span>}
-          </button>
-        ))}
+      <div className="lens">
+        <span className="lens-label">
+          <Explain term="strategy">Scoring lens</Explain>:
+        </span>
+        <div
+          className="tabs"
+          role="tablist"
+          aria-label="Scoring lens"
+          ref={tabsRef}
+          data-scroll={tabsScroll.can ? "1" : undefined}
+          data-end={tabsScroll.end ? "1" : undefined}
+        >
+          {(strategies || FALLBACK_STRATEGIES).map((s) => (
+            <span key={s.key} className={`tab ${s.key === strategy ? "on" : ""}`} role="presentation">
+              <button type="button" role="tab" className="tab-main" aria-selected={s.key === strategy} onClick={() => setStrategy(s.key)}>
+                <Monogram size={20}>{s.monogram}</Monogram>
+                {s.label}
+              </button>
+              {!s.calibrated && (
+                <Explain term="provisional" className="chip chip-prov xp-chip">
+                  Provisional
+                </Explain>
+              )}
+            </span>
+          ))}
+        </div>
       </div>
 
       {data && !strat.calibrated && rows.length > 0 && !provHidden[strategy] && (
@@ -490,9 +581,19 @@ export default function Board() {
       {strip && (
         <div className="strip">
           <span>
+            {stale ? (
+              <>
+                Scores update each morning; this one is <AgeChip asOf={data.as_of} words />.
+              </>
+            ) : (
+              "Scores update each morning."
+            )}{" "}
             {simple
-              ? "Scores update each trading morning. Tap a name for its full report, pin it to keep it in view, or turn on alerts to be told when something changes. Tick two to four names to compare them."
-              : "Scores update daily. Click any row for the full evaluation report; the coverage column shows how much data backed each score. Pin a name to add it to your weekly digest; tick names to compare them."}
+              ? "Tap a name for its full report, pin it to keep it in view, or turn on alerts to be told when something changes. Tick two to four names to compare them."
+              : "Click any row for the full evaluation report; the coverage column shows how much data backed each score. Pin a name to add it to your weekly digest; tick names to compare them."}{" "}
+            <a href="#board-howto" className="strip-link" onClick={openHowto}>
+              How to read this board
+            </a>
           </span>
           <button className="btn-quiet" onClick={hideStrip}>
             Got it
@@ -507,20 +608,22 @@ export default function Board() {
               All <span className="mono">{rows.length}</span>
             </button>
             {hasVerdicts && (
-              <>
-                <button type="button" className="fchip" aria-pressed={cleared} onClick={() => setCleared((c) => !c)}>
-                  Cleared the filters <span className="mono">{clearedCount}</span>
-                </button>
-                <Explain term="hard_filter" />
-              </>
+              <SplitPill on={cleared} onClick={() => setCleared((c) => !c)} term="hard_filter" count={clearedCount}>
+                Cleared the filters
+              </SplitPill>
             )}
-            {lanes.length > 1 &&
-              lanes.map((l) => (
-                <button key={l} type="button" className="fchip" aria-pressed={lane === l} onClick={() => setLane(lane === l ? "all" : l)}>
-                  {l} <span className="mono">{laneCounts[l]}</span>
-                </button>
-              ))}
-            {lanes.length > 1 && <Explain term="lane" />}
+            {lanes.length > 1 && (
+              <span className="pillgroup" role="group" aria-label="Stage">
+                <span className="pill-label">
+                  <Explain term="lane">Stage</Explain>
+                </span>
+                {lanes.map((l) => (
+                  <SplitPill key={l} on={lane === l} onClick={() => setLane(lane === l ? "all" : l)} term={LANE_TERM[l] || "lane"} count={laneCounts[l]}>
+                    {l}
+                  </SplitPill>
+                ))}
+              </span>
+            )}
             {earningsSoon > 0 && (
               <Link to="/calendar?days=14" className="fchip" title="Names with a dated earnings print inside 14 days">
                 Earnings in 14 days <span className="mono">{earningsSoon}</span>
@@ -553,9 +656,9 @@ export default function Board() {
         <div className="toolbar">
           {industryControl}
           {lanes.length > 1 && (
-            <div className="seg" role="group" aria-label="Lane">
+            <div className="seg" role="group" aria-label="Stage">
               <button aria-pressed={lane === "all"} onClick={() => setLane("all")}>
-                Any lane
+                Any stage
               </button>
               {lanes.map((l) => (
                 <button key={l} aria-pressed={lane === l} onClick={() => setLane(l)}>
@@ -701,8 +804,8 @@ export default function Board() {
                           <span className="why">
                             <span className="why-t">{r.hook || r.theme || <span className="faint">—</span>}</span>
                             {r.hf_pass != null && (
-                              <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`} title={r.hf_pass ? "Cleared every hard filter" : "Failed a hard filter"}>
-                                {r.hf_pass ? "PASS" : "FAIL"}
+                              <span className="why-f" title={r.hf_pass ? "Cleared every hard filter" : "Failed a hard filter"}>
+                                <span className="faint">filters:</span> <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`}>{r.hf_pass ? "PASS" : "FAIL"}</span>
                               </span>
                             )}
                           </span>
@@ -767,7 +870,7 @@ export default function Board() {
                     )}
                     {priceCols && (
                       <>
-                        <SortTh k="rel30" sort={sort} setSort={setSort} num>
+                        <SortTh k="rel30" sort={sort} setSort={setSort} num term="benchmark">
                           vs ETF
                         </SortTh>
                         <SortTh k="earnings" sort={sort} setSort={setSort}>
@@ -844,7 +947,10 @@ export default function Board() {
                         </td>
                         {priceCols && (
                           <>
-                            <td className={`num c-hide ${tone(r.price && r.price.rel_30d)}`} title={r.price && r.price.benchmark ? `vs ${r.price.benchmark}` : ""}>
+                            <td
+                              className={`num c-hide ${tone(r.price && r.price.rel_30d)}`}
+                              title={r.price && r.price.benchmark ? `vs ${r.price.benchmark}${r.industry && r.industry.label ? ` (${r.industry.label} ETF)` : ""}` : ""}
+                            >
                               {pct(r.price && r.price.rel_30d)}
                             </td>
                             <td className="c-hide">{r.earnings_in == null ? <span className="faint">—</span> : <span className="mono">{inDays(r.earnings_in)}</span>}</td>
@@ -881,9 +987,14 @@ export default function Board() {
           {data.meta.truncated && nextTier && me && me.tier && !upgradeHidden && (
             <div className="upgrade-card">
               <div className="copy">
-                These are the top <b>{data.meta.shown}</b> names in {scopeLabel}; more were scored than your plan lists. On <b>{nextTier.label}</b> we would
-                watch and explain the top {nextTier.names_shown_limit}, follow {industriesLabel(nextTier.industries_limit)}, and keep{" "}
-                {plural(nextTier.picks_limit, "pick")} with {alertsLabel(nextTier.alerts_limit)}.
+                Of the <b>{data.meta.shown}</b> names this list reaches in {scopeLabel}, <b>{strongCount}</b> {strongCount === 1 ? "is" : "are"} strong and{" "}
+                <b>{elevatedCount}</b> elevated; more were scored {runWhen(data.as_of, tz)} than the list shows. On <b>{nextTier.label}</b> we would tell you
+                which of up to {nextTier.names_shown_limit} names changed band each morning, across {industriesLabel(nextTier.industries_limit)}
+                {nextTier.alerts_limit === 0 ? (
+                  <>, with {pinsLabel(nextTier.picks_limit)} kept in view.</>
+                ) : (
+                  <>, and send {alertsLabel(nextTier.alerts_limit)} on {pinsLabel(nextTier.picks_limit)}.</>
+                )}
               </div>
               <div className="actions">
                 <Link to="/pricing" className="btn btn-primary btn-sm">
@@ -912,7 +1023,7 @@ export default function Board() {
         </>
       )}
 
-      <details className="howto">
+      <details className="howto" id="board-howto" open={howOpen} onToggle={(e) => setHowOpen(e.currentTarget.open)}>
         <summary>How to read this board</summary>
         <div className="howbody">
           <dl>
@@ -928,9 +1039,28 @@ export default function Board() {
             </dd>
             <dt>Provisional</dt>
             <dd>
-              Four of the five strategies have working inputs but weights that no resolved outcomes back yet. They produce candidates, not
-              signals, until {EVIDENCE.calibrationThreshold} outcomes resolve. Fast Mover is the one calibrated strategy: {EVIDENCE.hits} of{" "}
-              {EVIDENCE.events} filter-passing events moved.
+              {strategies && strategies.length > 0 ? (
+                provisionalCount === 0 ? (
+                  <>Every one of the {strategies.length} strategies has weights backed by resolved outcomes.</>
+                ) : (
+                  <>
+                    {provisionalCount} of the {strategies.length} strategies {provisionalCount === 1 ? "has" : "have"} working inputs but weights that no
+                    resolved outcomes back yet. They produce candidates, not signals, until {EVIDENCE.calibrationThreshold} outcomes resolve.
+                  </>
+                )
+              ) : (
+                <>
+                  A strategy whose weights no resolved outcomes back yet is marked provisional. It produces candidates, not signals, until{" "}
+                  {EVIDENCE.calibrationThreshold} outcomes resolve.
+                </>
+              )}
+              {calibratedList.length === 1 && calibratedList[0].key === "fast_mover" && (
+                <>
+                  {" "}
+                  Fast Mover is the one calibrated strategy: {EVIDENCE.hits} of {EVIDENCE.events} filter-passing events moved.
+                </>
+              )}
+              {calibratedList.length > 1 && <> Calibrated today: {calibratedList.map((s) => s.label).join(", ")}.</>}
             </dd>
             <dt>{simple ? "Since last run" : "Δ run"}</dt>
             <dd>Change in the score since the previous run. "new" means the name was not scored last run.</dd>
@@ -1024,7 +1154,7 @@ function BoardEmpty({ me, strat, onFastMover }) {
   }
   return (
     <Empty title={`No scored names in your followed industries for ${strat.label} on the latest run.`}>
-      Scores regenerate on the daily run. Try another industry in Account settings, or check back after the next run.
+      Scores regenerate each morning. Try another industry in Account settings, or check back after the next run.
     </Empty>
   );
 }
