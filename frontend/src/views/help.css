@@ -1,0 +1,292 @@
+/* Help page and first-run flow (DESIGN_V4 §7, package P5). Additive to
+   styles.css and styles/assist.css; tokens only, so dark mode follows. */
+
+/* ---------- help ---------- */
+
+.help {
+  max-width: 960px;
+}
+
+.help-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-5);
+}
+
+.help-toc a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 var(--s-4);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.help-toc a:hover {
+  text-decoration: none;
+  background: var(--surface-sunken);
+}
+
+.help h2 {
+  font-size: var(--fs-lg);
+  margin: var(--s-6) 0 var(--s-3);
+  scroll-margin-top: 80px;
+}
+
+.help-lead {
+  max-width: 68ch;
+  line-height: 1.6;
+  margin: 0 0 var(--s-3);
+}
+
+.help-how {
+  padding: var(--s-4) var(--s-5);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.help-how .numsteps {
+  color: var(--ink);
+  font-size: var(--fs-base);
+}
+
+.help-how .numsteps b {
+  font-weight: 700;
+}
+
+.help-term p + p,
+.help-term p + .seg,
+.help-term p + ul,
+.help-term p + .kvlist {
+  margin-top: var(--s-2);
+}
+
+.help-term.is-target {
+  outline: 2px solid var(--accent);
+}
+
+.help-see {
+  font-size: var(--fs-xs);
+}
+
+.help-see a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.help-term ul {
+  margin: 0;
+  padding-left: 1.2em;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+}
+
+.help-term .kv {
+  font-size: var(--fs-sm);
+}
+
+.help-term .kv .v {
+  font-family: var(--font-sans);
+}
+
+.help .modeseg {
+  margin-top: var(--s-3);
+}
+
+.help .modeseg button {
+  min-height: 40px;
+}
+
+.help-term .btn-quiet,
+.help .help-actions .btn-quiet {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 var(--s-3);
+}
+
+.help-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+  margin-top: var(--s-3);
+}
+
+/* ---------- onboarding ---------- */
+
+.ob-head h1 {
+  font-size: var(--fs-xl);
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--s-2);
+}
+
+.ob-head .muted {
+  max-width: 60ch;
+  line-height: 1.55;
+}
+
+@media (max-width: 600px) {
+  .ob-head h1 {
+    font-size: var(--fs-lg);
+  }
+}
+
+.indcard .facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--s-3);
+  margin-top: 2px;
+  color: var(--ink-muted);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.indcard .facts .n {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.wordgrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s-3);
+  margin: var(--s-4) 0;
+}
+
+@media (min-width: 700px) {
+  .wordgrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.word {
+  padding: var(--s-4);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.word h2 {
+  font-size: var(--fs-md);
+  margin: 0 0 var(--s-2);
+}
+
+.word p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+}
+
+.word p + p {
+  margin-top: var(--s-2);
+}
+
+.example {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-3);
+  margin: var(--s-3) 0 var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--surface-sunken);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+.example .sym {
+  font-size: var(--fs-base);
+}
+
+.picklist {
+  list-style: none;
+  margin: var(--s-4) 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-3);
+}
+
+.pick {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.pick-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-3);
+  min-width: 0;
+}
+
+.pick-top .theme {
+  flex: 1 1 120px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+}
+
+.pick-why {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+.pick-act {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.pick-act .pin-labelled,
+.pick-act .btn-sm {
+  min-height: 40px;
+}
+
+.pick-act .btn-quiet,
+.sticky-foot .btn-quiet,
+.ob-skip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+}
+
+.ob-pref {
+  margin: var(--s-4) 0;
+}
+
+.ob-pref > summary {
+  min-height: 40px;
+}
+
+.ob-pref .check + .check {
+  margin-top: var(--s-2);
+}
+
+.ob-seg {
+  margin: 0 0 var(--s-3);
+}
+
+.ob-seg button {
+  min-height: 40px;
+}

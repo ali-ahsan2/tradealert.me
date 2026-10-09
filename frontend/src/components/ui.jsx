@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "../lib/router.jsx";
 import { age, shortDate } from "../lib/fmt.js";
+import Icon from "./Icons.jsx";
 
 // Small shared primitives. Each one exists because a screen spec names a
 // state (loading, empty, error, locked) and every screen should render it
@@ -31,12 +32,61 @@ export function ErrorCard({ error, onRetry, title = "Couldn't load this." }) {
   );
 }
 
-export function Empty({ title, children, action }) {
+// An empty state says what is missing and what fills it. `icon` is an Icons
+// name; `steps` is a short numbered list of what to do next. Both optional,
+// so every existing caller renders exactly as before.
+export function Empty({ title, children, action, icon, steps }) {
   return (
     <div className="card state-card">
+      {icon && (
+        <span className="faint" style={{ display: "block", marginBottom: "var(--s-2)" }} aria-hidden="true">
+          <Icon name={icon} size={28} />
+        </span>
+      )}
       <p className="state-title">{title}</p>
       {children && <div className="muted">{children}</div>}
+      {steps && steps.length > 0 && (
+        <div style={{ display: "inline-block", textAlign: "left", marginTop: "var(--s-3)" }}>
+          <Steps items={steps} />
+        </div>
+      )}
       {action}
+    </div>
+  );
+}
+
+// A numbered list of plain sentences: what happens, or what to do, in order.
+export function Steps({ items, className = "" }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <ol
+      className={`numsteps muted ${className}`}
+      style={{ margin: 0, paddingLeft: "1.4em", fontSize: "var(--fs-sm)", lineHeight: 1.6 }}
+    >
+      {items.map((it, i) => (
+        <li key={i} style={{ paddingLeft: "0.2em", marginBottom: i < items.length - 1 ? "var(--s-1)" : 0 }}>
+          {it}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// Label / value rows. `items` is [[label, value], ...] or [{k, v}, ...];
+// a row with a null value is skipped so callers can pass optional facts.
+export function KeyValue({ items, className = "" }) {
+  const rows = (items || [])
+    .map((it) => (Array.isArray(it) ? { k: it[0], v: it[1] } : it))
+    .filter((it) => it && it.v != null && it.v !== "");
+  if (rows.length === 0) return null;
+  return (
+    <div className={`kvlist ${className}`}>
+      {rows.map((it, i) => (
+        <div className="kv" key={i}>
+          <span className="k">{it.k}</span>
+          <span className="v">{it.v}</span>
+        </div>
+      ))}
     </div>
   );
 }
