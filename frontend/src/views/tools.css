@@ -1,0 +1,179 @@
+/* Tools screens in plain words (DESIGN_V4 §7): Alerts, Calendar, Changes,
+   Watchlist. Additions only, on top of styles.css and assist.css; every
+   colour is a token, so dark mode needs nothing here. Grids use
+   minmax(0, 1fr) so a 390px phone never scrolls sideways, and every
+   control inside these containers is at least 40px tall. */
+
+/* A plain row: words on the left, the badge and actions on the right. */
+.tl-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-2) var(--s-4);
+  align-items: center;
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+.tl-row:last-child { border-bottom: 0; }
+.tl-main { min-width: 0; }
+.tl-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.tl-head .sym { flex: none; }
+.tl-co {
+  flex: 1 1 120px;
+  min-width: 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tl-sent {
+  margin: 2px 0 0;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--ink);
+}
+.tl-sent b { font-weight: 600; }
+.tl-meta {
+  margin: 2px 0 0;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.tl-meta .badge { vertical-align: middle; }
+.tl-acts {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.tl-acts .btn,
+.tl-acts .btn-quiet,
+.tl-group .btn-quiet,
+.tl-ev .btn-quiet { min-height: 40px; }
+.tl-acts .pin { min-width: 40px; min-height: 40px; }
+@media (max-width: 640px) {
+  .tl-row { grid-template-columns: minmax(0, 1fr); }
+  .tl-acts { justify-content: flex-start; }
+}
+
+/* Section hint under a card title, one plain sentence. */
+.tl-why { margin: -2px 0 var(--s-3); font-size: var(--fs-sm); color: var(--ink-muted); line-height: 1.5; }
+
+/* Alerts: rules grouped by name, each trigger a chip you can take off. */
+.tl-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-2);
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+.tl-group:last-child { border-bottom: 0; }
+.tl-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.tl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 40px;
+  max-width: 100%;
+  padding: 0 2px 0 var(--s-3);
+  border-radius: var(--r-pill);
+  background: var(--surface-sunken);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.tl-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-chip .x {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--ink-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tl-chip .x:hover { color: var(--ink); background: var(--surface); }
+.tl-chip .x:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tl-rule {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  flex-wrap: wrap;
+  padding: var(--s-2) 0;
+  font-size: var(--fs-sm);
+  border-top: 1px dashed var(--border);
+}
+.tl-rule:first-child { border-top: 0; }
+.tl-rule .chan-chips button { min-height: 32px; }
+
+/* Alerts: the arm form in Simple mode, one trigger per line with its sentence. */
+.tl-trig {
+  display: flex;
+  gap: var(--s-3);
+  align-items: flex-start;
+  min-height: 40px;
+  padding: var(--s-2) 0;
+  cursor: pointer;
+}
+.tl-trig input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+.tl-trig b { display: block; font-weight: 600; font-size: var(--fs-sm); }
+.tl-trig span { display: block; font-size: var(--fs-sm); color: var(--ink-muted); line-height: 1.45; }
+.tl-form .acc { margin-top: var(--s-2); }
+.tl-form .acc > summary { font-size: var(--fs-sm); }
+
+/* Alerts: a plain event card reuses the alert card rows. */
+.tl-ev .tl-title { font-weight: 700; }
+.tl-ev .r4 .xs { margin-left: auto; }
+
+/* Calendar: plain event kind beside the symbol. */
+.tl-kind { font-size: var(--fs-sm); color: var(--ink); }
+.cal-act .tl-acts { justify-content: flex-start; }
+@media (min-width: 900px) { .cal-act .tl-acts { justify-content: flex-end; } }
+
+/* Watchlist: the Simple card. */
+.tl-wl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-2) var(--s-4);
+  align-items: start;
+}
+.tl-side {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.tl-wl .tl-acts {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 640px) {
+  .tl-wl { grid-template-columns: minmax(0, 1fr); }
+  .tl-side { justify-content: flex-start; }
+}
+/* The Full card keeps its layout; its controls grow to a thumb's size. */
+.wl-card .act .btn,
+.wl-card .facts .btn-quiet { min-height: 40px; }
+
+/* Outcome counts in a sentence stay tabular. */
+.tl-sent .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
