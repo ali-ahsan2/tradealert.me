@@ -103,6 +103,7 @@ export default function Calendar() {
 
   const total = d ? d.meta.total : 0;
   const nearest = d ? d.upcoming.find((r) => r.days >= 0) || d.upcoming[0] : null;
+  const noPast = d ? d.upcoming.some((r) => !r.past || !r.past.n) : false;
 
   return (
     <div className="wrap">
@@ -189,7 +190,7 @@ export default function Calendar() {
                           <span className="xs faint">
                             <Link to={`/industries/${r.industry.key}`}>{r.industry.label}</Link>
                             <span className="full-only">{r.lane ? ` · ${r.lane}` : ""}</span>
-                            {r.pinned ? " · pinned" : ""} <AgeChip asOf={r.as_of} prefix="dated " />
+                            {r.pinned ? " · pinned" : ""} <AgeChip asOf={r.as_of} prefix="checked " suffix=" ago" />
                           </span>
                         </div>
                         <div className="cal-score">
@@ -198,19 +199,26 @@ export default function Calendar() {
                           ) : (
                             <span className="chip chip-plain">No score</span>
                           )}
-                          {r.hf_pass != null && <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`}>{r.hf_pass ? "PASS" : "FAIL"}</span>}
+                          {r.hf_pass != null && (
+                            <span className="tl-filt xs">
+                              <Explain term="hard_filter">filters</Explain>: <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`}>{r.hf_pass ? "PASS" : "FAIL"}</span>
+                            </span>
+                          )}
                         </div>
                         <div className="cal-past xs">
-                          {r.past.n > 0 ? (
+                          {r.past && r.past.n >= 10 ? (
                             <>
-                              <Explain text={`A move counts when the stock ${EVIDENCE.hitDefinition}, in the window ${EVIDENCE.window}.`} title="Past earnings">
+                              <Explain
+                                text={`A move counts when the stock ${EVIDENCE.hitDefinition}, in the window ${EVIDENCE.window}. Shown once ten past earnings are measured.`}
+                                title="Past earnings"
+                              >
                                 Moved after {r.past.hits} of its last {r.past.n} earnings
                               </Explain>
                               {r.past.avg_max_move_pct != null ? <span className="full-only"> · avg max {pct(r.past.avg_max_move_pct, 0)}</span> : ""}
                             </>
-                          ) : (
-                            <span className="faint">No measured past reaction on file</span>
-                          )}
+                          ) : r.past && r.past.n > 0 ? (
+                            <span className="faint">{r.past.n} measured, no rate yet</span>
+                          ) : null}
                         </div>
                         <div className="cal-act">
                           <div className="tl-acts">
@@ -232,6 +240,7 @@ export default function Calendar() {
                   </div>
                 </section>
               ))}
+              {noPast && <p className="hint">A row with no past-reaction line has no measured past reaction on file.</p>}
             </div>
           )}
 
@@ -300,7 +309,7 @@ export default function Calendar() {
                           {!r.resolved ? (
                             <span className="faint">window open</span>
                           ) : (
-                            <span className={`verdict ${r.hit ? "pass" : "fail"}`}>
+                            <span className="outcome">
                               {r.hit ? "HIT" : "MISS"}
                               {r.days_to_move != null ? ` · ${r.days_to_move}d` : ""}
                             </span>

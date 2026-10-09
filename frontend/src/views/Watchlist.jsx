@@ -4,6 +4,7 @@ import { Link } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { DAYS, delta, dollars, downloadText, inDays, plural, score as fmtScore, shortDate, signed, toCsv, tone } from "../lib/fmt.js";
 import { GLOSSARY } from "../lib/glossary.js";
+import { bandWord } from "../lib/plain.js";
 import { useMode } from "../lib/mode.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Spark, { Move } from "../components/Spark.jsx";
@@ -32,15 +33,44 @@ function plainDays(n) {
   return n > 0 ? `in ${n} days` : `${-n} days ago`;
 }
 
-// The score since pinning, as one sentence from the stored figures.
+// Which inputs-with-data counts apply to a pick's score: the picks payload
+// carries them; the stats row is the fallback when it does too.
+function coverageOf(p) {
+  const st = p.st || {};
+  const present = p.components_present ?? st.components_present;
+  const total = p.components_total ?? st.components_total;
+  return { present, total, known: present != null && total != null && total > 0 };
+}
+
+// The score since pinning, as one sentence from the stored figures. The
+// current score keeps its ~ on thin coverage; the score at pin has no
+// coverage on record, so it is the stored integer.
 function sincePinSentence(p) {
   if (p.value == null) return "No score on this run.";
-  const now = Math.round(p.value);
+  const { present, total } = coverageOf(p);
+  const now = fmtScore(p.value, present, total);
   if (p.score_at_pin == null) return `Scores ${now} now; no score was on file when you pinned it.`;
-  const was = Math.round(p.score_at_pin);
-  const dlt = now - was;
+  const was = fmtScore(p.score_at_pin);
+  const dlt = Math.round(p.value) - Math.round(p.score_at_pin);
   if (dlt === 0) return `Same score as when you pinned it, ${now}.`;
   return `Score ${dlt > 0 ? "up" : "down"} ${Math.abs(dlt)} point${Math.abs(dlt) === 1 ? "" : "s"} since you pinned it, from ${was} to ${now}.`;
+}
+
+// The badge, only with the coverage it can prove. ScoreBadge draws a full
+// bar when the counts are missing, so without them the band word and the
+// score() figure stand alone with a hint.
+function PickBand({ p }) {
+  if (!p.band) return <span className="chip chip-plain">No run</span>;
+  const { present, total, known } = coverageOf(p);
+  if (known) return <ScoreBadge band={p.band} value={p.value} present={present} total={total} />;
+  return (
+    <span className="tl-nocov" title="The run did not record how many inputs had data for this score">
+      <span>
+        <b>{bandWord(p.band)}</b> <span className="mono">{fmtScore(p.value)}</span>
+      </span>
+      <span className="hint">input count not on file</span>
+    </span>
+  );
 }
 
 function NoteEditor({ pick, onSaved }) {
@@ -276,7 +306,7 @@ export default function Watchlist() {
             </span>
           </div>
           <div className="tile card">
-            <span className="tile-label">Cleared the screen</span>
+            <span className="tile-label">Pass every filter</span>
             <span className="tile-value">{summary.cleared}</span>
             <span className="tile-sub">every Fast Mover hard filter passed</span>
           </div>
@@ -346,6 +376,7 @@ export default function Watchlist() {
         <div className="wl-list">
           {ordered.map((p) => {
             const st = p.st;
+            const i = picks.findIndex((x) => x.symbol === p.symbol);
             return (
               <article className="card tl-wl" key={p.symbol} aria-label={p.symbol}>
                 <div className="tl-main">
@@ -361,7 +392,7 @@ export default function Watchlist() {
                   <p className="tl-meta">
                     {st && st.earnings ? (
                       <>
-                        Earnings <b className={st.earnings.days >= 0 && st.earnings.days <= 14 ? "soon" : ""}>{plainDays(st.earnings.days)}</b> ({st.earnings.date})
+                        Earnings <b className={st.earnings.days >= 0 && st.earnings.days <= 14 ? "soon" : ""}>{plainDays(st.earnings.days)}</b> ({shortDate(st.earnings.date, "UTC")})
                       </>
                     ) : (
                       "No dated event on file"
@@ -385,7 +416,7 @@ export default function Watchlist() {
                       <Move value={st.chg_30d} /> <span className="xs faint">30d</span>
                     </span>
                   )}
-                  {p.band ? <ScoreBadge band={p.band} value={p.value} /> : <span className="chip chip-plain">No run</span>}
+                  <PickBand p={p} />
                 </div>
                 <div className="tl-acts">
                   <NotifyButton symbol={p.symbol} compact />
@@ -395,6 +426,16 @@ export default function Watchlist() {
                   <button className="btn-quiet" onClick={() => unpin(p.symbol)}>
                     Unpin
                   </button>
+                  {sort === "order" && picks.length > 1 && (
+                    <span className="tl-move" role="group" aria-label={`Reorder ${p.symbol}`}>
+                      <button type="button" className="btn-quiet" disabled={busy || i === 0} onClick={() => move(i, -1)} aria-label={`Move ${p.symbol} up`} title="Move up">
+                        ↑
+                      </button>
+                      <button type="button" className="btn-quiet" disabled={busy || i === picks.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${p.symbol} down`} title="Move down">
+                        ↓
+                      </button>
+                    </span>
+                  )}
                   <NoteEditor pick={p} onSaved={saveNote} />
                 </div>
               </article>
@@ -409,6 +450,7 @@ export default function Watchlist() {
             const i = picks.findIndex((x) => x.symbol === p.symbol);
             const since = p.value != null && p.score_at_pin != null ? p.value - p.score_at_pin : null;
             const st = p.st;
+            const cov = coverageOf(p);
             return (
               <article className="card wl-card" key={p.symbol} aria-label={p.symbol}>
                 <div className="order" aria-label="Reorder">
@@ -438,7 +480,7 @@ export default function Watchlist() {
                       <Move value={st.chg_30d} /> <span className="xs faint">30d</span>
                     </span>
                   )}
-                  {p.band ? <ScoreBadge band={p.band} value={p.value} /> : <span className="chip chip-plain">No run</span>}
+                  <PickBand p={p} />
                   <NotifyButton symbol={p.symbol} compact />
                 </div>
                 <div className="facts">
@@ -452,7 +494,7 @@ export default function Watchlist() {
                     )}
                   </span>
                   <span>
-                    Now <b>{fmtScore(p.value)}</b>
+                    Now <b>{fmtScore(p.value, cov.present, cov.total)}</b>
                   </span>
                   <span>
                     Since pinned <b>{since == null ? "—" : delta(since)}</b>
@@ -473,7 +515,7 @@ export default function Watchlist() {
                   )}
                   {st && st.hf_pass != null && (
                     <span>
-                      Screen <b className={`verdict ${st.hf_pass ? "pass" : "fail"}`}>{st.hf_pass ? "PASS" : "FAIL"}</b>
+                      Filters: <b className={`verdict ${st.hf_pass ? "pass" : "fail"}`}>{st.hf_pass ? "PASS" : "FAIL"}</b>
                     </span>
                   )}
                   {st && st.earnings && (
@@ -482,7 +524,7 @@ export default function Watchlist() {
                       <b className={st.earnings.days >= 0 && st.earnings.days <= 14 ? "soon" : ""}>
                         {inDays(st.earnings.days)}
                       </b>
-                      <span className="xs faint"> {st.earnings.date}</span>
+                      <span className="xs faint"> {shortDate(st.earnings.date, "UTC")}</span>
                     </span>
                   )}
                   {st && st.unread > 0 && (
