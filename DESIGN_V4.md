@@ -279,3 +279,44 @@ executed as six parallel packages over shared primitives.
 - **Payload note.** The only backend change in this pass: board rows now
   include `hook`. Everything else is built from endpoints that already
   existed, so the hosted preview mock needed no new routes.
+
+### 7.5 Review round
+
+Three fresh-eyes critiques (newcomer comprehension, honesty and
+positioning, functional completeness) ran against the built screens.
+What changed as a result:
+
+- **Coverage travels with every score.** Picks, the dossier's previous
+  run, search results and the command palette now carry
+  `components_present`/`components_total`, so the `~` and the coverage
+  bar are never dropped on Home, the Watchlist, the palette or the
+  dossier's "what changed" line. Where a figure has no recorded coverage
+  (the score at pin time) it is shown without a bar rather than a full
+  one.
+- **Colour discipline.** Score deltas are uncoloured everywhere,
+  including Compare and Industry. HIT/MISS outcomes are neutral; only
+  hard-filter PASS/FAIL and price moves keep red and green. Stale age
+  chips are warn, not red. The landing page lost green ticks, green hit
+  bars and coloured mock deltas.
+- **Words.** "Advice you can check" became "Claims you can check"; the
+  hero states the record in its own unit (events, not names) and drops
+  the forecast phrasing. The verdict reads "scores 54 on the 0 to 100
+  Fast Mover scale", not "54 of 100". Lanes are "Stage" with Early and
+  Event defined; "assumed" and "judgment input" are tappable terms; age
+  chips can speak in words ("61 days old") and the date-check chip reads
+  "checked 3d ago". Plans say "pins", not "picks", and no longer carry an
+  unrecorded "most popular". One place has one name: Find.
+- **Alerts feed.** Alerts sent to the subscriber come first; the ones
+  that fired across their industries are counted and folded, and a
+  "Watch a name" button sits in the header. Mean moves follow the same
+  n ≥ 10 guard as rates.
+- **Promises.** The next-step card only promises an alert the account
+  can receive and a trigger that is armed; otherwise it says what is
+  always true (the digest carries the latest band). Provisional strategy
+  counts on the plans page and the Board are read from the live list.
+- **Preview.** In-page anchors no longer re-route the hash router; the
+  Help page resolves `#term` under both routers.
+
+Known data gaps, recorded rather than papered over: the ingest carries
+no company names (tickers show symbol and hook), and the score at pin
+time has no stored coverage.
