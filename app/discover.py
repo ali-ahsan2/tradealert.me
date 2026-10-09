@@ -1101,7 +1101,8 @@ def watchlist_stats(creds: HTTPAuthorizationCredentials | None = Depends(bearer)
                 "  WHERE ad.user_id = %s AND ae.instrument_id = i.id AND ad.read_at IS NULL) AS unread, "
                 "(SELECT COUNT(*) FROM alert_rules ar WHERE ar.user_id = %s AND ar.instrument_id = i.id) AS armed, "
                 "(SELECT COUNT(*) FROM alert_events ae WHERE ae.instrument_id = i.id "
-                "  AND ae.fired_at >= now() - interval '30 days') AS fired_30d "
+                "  AND ae.fired_at >= now() - interval '30 days') AS fired_30d, "
+                "sc.components_present, sc.components_total "
                 "FROM picks p JOIN instruments i ON i.id = p.instrument_id "
                 "JOIN tickers t ON t.id = i.ticker_id "
                 "LEFT JOIN scores sc ON sc.instrument_id = i.id AND sc.run_id = %s AND sc.strategy_id = %s "
@@ -1140,6 +1141,7 @@ def watchlist_stats(creds: HTTPAuthorizationCredentials | None = Depends(bearer)
                     "si_pct_float": _f(r[11]), "fee_pct": _f(r[12]), "volx20d": _f(r[13]),
                     "hf_pass": r[14], "value": _f(r[15]), "band": r[16],
                     "unread": r[17], "armed": r[18], "fired_30d": r[19],
+                    "components_present": r[20], "components_total": r[21],
                 })
     finally:
         conn.close()
