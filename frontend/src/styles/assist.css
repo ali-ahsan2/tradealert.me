@@ -81,7 +81,7 @@ div.verdict, section.verdict { margin: 0 0 var(--s-3); }
     background: var(--surface); border-radius: var(--r-pill);
     box-shadow: var(--shadow-lift);
   }
-  .actrow.sticky .btn { flex: 1; justify-content: center; }
+  .actrow.sticky .btn, .actrow.sticky .btn-quiet { flex: 1; justify-content: center; display: inline-flex; }
 }
 
 /* Mode toggle */

@@ -5,11 +5,15 @@ import { getToken } from "../src/api.js";
 // lives at one fixed URL, so every in-app route rides in location.hash
 // ("#/board?strategy=market_shift"). Same exports, same semantics.
 
+let lastRoute = "/";
 function current() {
   const h = window.location.hash || "";
-  // "#/settings#digest": the route is the part before any in-page anchor
+  // "#/settings#digest": the route is the part before any in-page anchor.
+  // A bare "#why" is an in-page anchor on the current route, not a route.
+  if (h && !h.startsWith("#/")) return lastRoute;
   const p = (h.startsWith("#/") ? h.slice(1) : "/").split("#")[0];
-  return p || "/";
+  lastRoute = p || "/";
+  return lastRoute;
 }
 
 export function usePath() {

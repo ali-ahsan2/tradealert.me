@@ -24,14 +24,17 @@ export default function Explain({ term, text, title, children, className = "", s
       setOpen(false);
     };
     const key = (e) => e.key === "Escape" && setOpen(false);
+    const scrolled = () => setOpen(false);
     document.addEventListener("mousedown", close);
     document.addEventListener("touchstart", close, { passive: true });
     document.addEventListener("keydown", key);
-    window.addEventListener("scroll", () => setOpen(false), { once: true, passive: true });
+    // capture phase so a scrolling table or card closes it too
+    document.addEventListener("scroll", scrolled, { capture: true, passive: true });
     return () => {
       document.removeEventListener("mousedown", close);
       document.removeEventListener("touchstart", close);
       document.removeEventListener("keydown", key);
+      document.removeEventListener("scroll", scrolled, { capture: true });
     };
   }, [open]);
 
