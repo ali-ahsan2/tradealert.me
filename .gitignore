@@ -7,3 +7,6 @@ wheelhouse/*
 node_modules/
 frontend/preview-dist/
 frontend/preview/fixtures.json
+
+# agent worktrees
+.claude/worktrees/
