@@ -1,0 +1,287 @@
+/* Stock dossier, verdict first (DESIGN_V4 §6/§7). Additions only, on top of
+   styles.css and assist.css; every colour comes from a token so dark mode
+   follows. Nothing here uses green or red: price moves and PASS/FAIL keep
+   the classes they already have. */
+
+/* Header: name, lens, run stamp, then the price as one small context line. */
+.sr-head {
+  margin-bottom: var(--s-4);
+}
+
+.sr-head .meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.sr-head .meta .monogram {
+  vertical-align: middle;
+}
+
+.sr-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-top: var(--s-2);
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+}
+
+.sr-price .sr-px {
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-price .move {
+  font-size: var(--fs-sm);
+}
+
+/* Verdict card: plain words lead, the full badge sits beside them. */
+.sr-vrow {
+  display: flex;
+  gap: var(--s-4);
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.sr-vrow > .sr-verdict {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.sr-vrow > .badge {
+  flex: none;
+}
+
+/* styles.css gives .verdict (the PASS/FAIL word) a mono face, an xs size
+   and nowrap. The plain-verdict block shares the class name and must not
+   inherit any of that. */
+.sr-verdict.verdict {
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  font-weight: 400;
+  letter-spacing: 0;
+  white-space: normal;
+  border-radius: 0;
+  margin: 0;
+}
+
+.sr-verdict .verdict-h {
+  font-family: var(--font-sans);
+  overflow-wrap: anywhere;
+}
+
+.sr-verdict .verdict-d {
+  white-space: normal;
+}
+
+.sr-verdictcard .hint {
+  margin-top: var(--s-3);
+  max-width: 72ch;
+}
+
+/* Action row: at least 40px tall for a thumb. */
+.sr-actrow {
+  margin: var(--s-4) 0;
+}
+
+.sr-actrow .btn,
+.sr-actrow .pin,
+.sr-actrow .btn-quiet {
+  min-height: 40px;
+}
+
+.sr-actrow .btn-quiet {
+  padding: 0 var(--s-3);
+}
+
+.sr-next {
+  margin-bottom: var(--s-4);
+}
+
+.sr-next a {
+  font-weight: 600;
+}
+
+/* Why this score: one sentence, then the inputs as a list. */
+.sr-why {
+  margin: 0 0 var(--s-3);
+  line-height: 1.55;
+  max-width: 72ch;
+}
+
+.sr-inputs,
+.sr-hf,
+.sr-up {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sr-inputs li,
+.sr-hf li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--s-2) var(--s-3);
+  align-items: baseline;
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-sm);
+}
+
+.sr-inputs li:last-child,
+.sr-hf li:last-child,
+.sr-up li:last-child {
+  border-bottom: 0;
+}
+
+.sr-inputs .lbl,
+.sr-hf .lbl {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sr-inputs .lbl .judg {
+  color: var(--ink-faint);
+  font-size: var(--fs-xs);
+}
+
+.sr-inputs .val,
+.sr-hf .val {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+  font-size: var(--fs-xs);
+  text-align: right;
+}
+
+.sr-inputs .st {
+  min-width: 64px;
+  text-align: right;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.sr-inputs .st-up {
+  color: var(--ink);
+}
+
+.sr-inputs .st-none,
+.sr-inputs .st-judg {
+  color: var(--ink-faint);
+  font-weight: 500;
+}
+
+.sr-inputs li.missing .lbl {
+  color: var(--ink-faint);
+}
+
+.sr-sub {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+  margin: var(--s-4) 0 var(--s-2);
+}
+
+.sr-haircuts {
+  margin-top: var(--s-4);
+}
+
+/* What changed and Coming up */
+.sr-chg {
+  margin: 0 0 var(--s-2);
+  line-height: 1.55;
+  max-width: 72ch;
+}
+
+.sr-chg b {
+  font-weight: 600;
+}
+
+.sr-up li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-sm);
+}
+
+.sr-up .when {
+  font-weight: 700;
+  min-width: 96px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-up .spacer {
+  flex: 1;
+}
+
+.sr-up .btn {
+  min-height: 40px;
+}
+
+/* The kept input-by-input rows: let a long label wrap inside its cell on a
+   phone instead of pushing past the card. */
+.report-main .delta-row > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Detail groups: one card of accordions in the main column, the evidence
+   sidebar as the same accordions. */
+.sr-details > h2,
+.sr-side > h2 {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  margin: 0 0 var(--s-1);
+  font-weight: 600;
+}
+
+.sr-details details.acc:first-of-type,
+.sr-side details.acc:first-of-type {
+  border-top: 0;
+}
+
+.sr-details .acc-body > p:first-child {
+  margin-top: 0;
+}
+
+.sr-side details.acc > summary {
+  padding: var(--s-2) 0;
+  font-size: var(--fs-sm);
+}
+
+.sr-side .kv .k {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sr-side .kv .v {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.sr-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-3);
+  align-items: center;
+  color: var(--ink-muted);
+  font-size: var(--fs-xs);
+  margin-top: var(--s-4);
+  line-height: 1.5;
+}
+
+.sr-foot .btn-quiet {
+  min-height: 40px;
+}
