@@ -1,7 +1,9 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
+import "./styles/assist.css";
 import { applyTheme } from "./lib/theme.js";
+import { applyMode } from "./lib/mode.js";
 import { usePath, RequireAuth, Link } from "./lib/router.jsx";
 import { MeProvider } from "./lib/me.jsx";
 import { Shell } from "./components/Shell.jsx";
@@ -85,4 +87,5 @@ function App() {
 }
 
 applyTheme();
+applyMode();
 createRoot(document.getElementById("root")).render(<App />);
