@@ -536,7 +536,11 @@ export default function Overview() {
   }
 
   const changeRows = changes && (showAllChg ? changes.rows : changes.rows.slice(0, PREVIEW_ROWS));
-  const eventRows = recentEvents && recentEvents.slice(0, 5);
+  // Alerts sent to this account lead; the ones that merely fired across the
+  // subscriber's industries are a count, the same split the Alerts page makes.
+  const sentEvents = recentEvents ? recentEvents.filter((ev) => ev.channels && ev.channels.length) : null;
+  const otherCount = recentEvents && sentEvents ? recentEvents.length - sentEvents.length : 0;
+  const eventRows = recentEvents && (sentEvents.length ? sentEvents : recentEvents).slice(0, 5);
   const unreadNow = recentEvents ? recentEvents.filter((e) => e.read === false).length : a.unread;
   const pickRows = picks && picks.slice(0, PREVIEW_ROWS);
 
@@ -759,9 +763,12 @@ export default function Overview() {
                   })}
                 </ul>
                 <p className="hint">
-                  {recentEvents.length > eventRows.length ? `${recentEvents.length - eventRows.length} more in the last 30 days. ` : ""}
+                  {sentEvents.length > eventRows.length ? `${sentEvents.length - eventRows.length} more were sent to you in the last 30 days. ` : ""}
+                  {sentEvents.length > 0 && otherCount > 0 ? `${otherCount} more fired across your industries on names you were not watching. ` : ""}
                   {unreadNow > 0 ? `${plural(unreadNow, "alert")} unread. ` : ""}
-                  {a.armed > 0 ? `${plural(a.armed, "trigger")} armed.` : "No triggers armed yet; these fired on names in your universe."}
+                  {a.armed > 0
+                    ? `${plural(a.armed, "trigger")} armed.`
+                    : "No triggers armed yet; these fired across your industries on names you were not watching."}
                 </p>
               </>
             )}
