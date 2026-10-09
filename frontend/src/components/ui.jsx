@@ -118,20 +118,31 @@ export function StatusChip({ calibrated, short = false }) {
     <span className="chip chip-cal">Calibrated</span>
   ) : (
     <span className="chip chip-prov" title="Weights not yet backed by resolved outcomes">
-      {short ? "Provisional" : "Provisional — uncalibrated"}
+      {short ? "Provisional · uncalibrated" : "Provisional — uncalibrated"}
     </span>
   );
 }
 
-export function AgeChip({ asOf, prefix = "" }) {
+// `words` spells the age out ("61 days old") where a bare "61d" would read
+// like a code; `suffix` lets a caller write "checked 3d ago".
+export function AgeChip({ asOf, prefix = "", suffix = "", words = false }) {
   const a = age(asOf);
   if (!a) return null;
+  const label = words ? ageWords(a) : a.label;
   return (
     <span className={`agechip ${a.cls}`} title={`as of ${shortDate(asOf)}`}>
       {prefix}
-      {a.label}
+      {label}
+      {suffix}
     </span>
   );
+}
+
+function ageWords(a) {
+  if (a.hours < 1) return "under an hour old";
+  if (a.hours < 48) return `${Math.round(a.hours)} hours old`;
+  const d = Math.round(a.hours / 24);
+  return `${d} day${d === 1 ? "" : "s"} old`;
 }
 
 export function Meter({ used, limit, label }) {

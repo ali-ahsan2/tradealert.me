@@ -65,8 +65,8 @@ def changes(cur, run_id, instrument_id, strategy_id, current_components):
     if not prev:
         return None
     cur.execute(
-        "SELECT value, band, component_json FROM scores "
-        "WHERE run_id = %s AND instrument_id = %s AND strategy_id = %s",
+        "SELECT value, band, component_json, components_present, components_total "
+        "FROM scores WHERE run_id = %s AND instrument_id = %s AND strategy_id = %s",
         (prev[0], instrument_id, strategy_id),
     )
     row = cur.fetchone()
@@ -89,7 +89,9 @@ def changes(cur, run_id, instrument_id, strategy_id, current_components):
         })
     rows.sort(key=lambda r: -abs(r["delta"] if r["delta"] is not None else 0.0))
     return {"prev_run": {"id": prev[0], "as_of": prev[1].isoformat()},
-            "prev_value": _f(row[0]), "prev_band": row[1], "components": rows}
+            "prev_value": _f(row[0]), "prev_band": row[1],
+            "prev_components_present": row[3], "prev_components_total": row[4],
+            "components": rows}
 
 
 def history(cur, instrument_id, strategy_id, limit=60):

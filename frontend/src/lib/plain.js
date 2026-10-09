@@ -50,7 +50,7 @@ export function verdict(score, strategy, symbol) {
   const n = Math.round(score.value);
   const cov = coverage(score.components_present, score.components_total);
   const approx = cov.state === "thin" ? "about " : "";
-  const headline = `${sym} scores ${approx}${n} of 100 on ${stratLabel}, ${bandPhrase(score.band)}.`;
+  const headline = `${sym} scores ${approx}${n} on the 0 to 100 ${stratLabel} scale, ${bandPhrase(score.band)}.`;
   if (score.components_total) {
     if (cov.state === "full") detail.push(`All ${score.components_total} inputs had data.`);
     else detail.push(`${score.components_present} of ${score.components_total} inputs had data${cov.state === "thin" ? ", so read the number as approximate" : ""}.`);
@@ -122,11 +122,15 @@ export function triggerLabel(key) {
 }
 
 // One suggested next step for a name, given what the subscriber already did.
-export function nextStep({ pinned, armed, band, verified, alertsLimit }) {
+export function nextStep({ pinned, armed, band, verified, alertsLimit, armedKeys }) {
   if (!pinned) return { text: "Pin it to keep it in view and in your digest.", kind: "pin" };
-  if (!armed && alertsLimit !== 0 && verified !== false) return { text: "Turn on alerts so you hear the moment something changes.", kind: "notify" };
-  if (band === "strong" || band === "elevated") return { text: "Read the Why section before you do anything: it lists the inputs behind the number.", kind: "why" };
-  return { text: "Nothing to do. We keep watching and will tell you if it changes band.", kind: "wait" };
+  const canAlert = alertsLimit !== 0 && verified !== false;
+  if (!armed && canAlert) return { text: "Turn on alerts so you hear the moment something changes.", kind: "notify" };
+  if (band === "strong" || band === "elevated") return { text: "Read the Why section before you rely on the number: it lists the inputs behind it.", kind: "why" };
+  if (!canAlert) return { text: "Nothing to do. Your digest carries its latest band.", kind: "wait" };
+  const hasBand = armedKeys ? armedKeys.has("band_change") : false;
+  if (!hasBand) return { text: "Nothing to do. Add the 'Score changes band' trigger if you want to hear when it moves band.", kind: "wait" };
+  return { text: "Nothing to do. We keep watching and will tell you when it changes band.", kind: "wait" };
 }
 
 function capital(s) {

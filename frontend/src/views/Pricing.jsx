@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { api, getToken } from "../api.js";
+import { api, cached, getToken } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { alertsLabel, dollars, industriesLabel, plural } from "../lib/fmt.js";
 import { EVIDENCE } from "../lib/evidence.js";
@@ -24,11 +24,28 @@ function utilityText(t) {
       : t.alerts_limit == null || t.alerts_limit >= 999
         ? "unlimited alerts"
         : `${t.alerts_limit} ${t.alerts_limit === 1 ? "alert" : "alerts"}`;
-  const how = t.alerts_limit === 0 ? "" : ` We tell you the moment a catalyst, a borrow-fee double or 3x volume prints on a name you watch${t.channels && t.channels.length > 1 ? `, by ${t.channels.join(", ")}` : ""}.`;
+  const how = t.alerts_limit === 0 ? "" : ` We tell you the moment a catalyst, a borrow-fee double or 3x volume is recorded on a name you watch${t.channels && t.channels.length > 1 ? `, by ${t.channels.join(", ")}` : ""}.`;
   return `We watch ${ind} for you and explain ${names}, with ${pins} and ${alerts}.${how}`;
 }
 
 export default function Pricing() {
+  // Counted from the live strategy list so the sentence cannot go stale at a
+  // calibration event (PRODUCT_DESIGN §3.6).
+  const [strats, setStrats] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    cached("/strategies").then((d) => alive && setStrats(d.strategies || [])).catch(() => alive && setStrats([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const provisionalLine = (() => {
+    if (!strats || !strats.length) return "Most strategies are provisional.";
+    const prov = strats.filter((x) => !x.calibrated).length;
+    if (prov === 0) return "Every strategy is calibrated.";
+    return `${prov} of the ${strats.length} strategies ${prov === 1 ? "is" : "are"} provisional.`;
+  })();
+
   const q = useQuery();
   const [d, setD] = useState(null);
   const [health, setHealth] = useState(null);
@@ -125,7 +142,7 @@ export default function Pricing() {
     ["Price", (t) => (t.price_monthly_cents === 0 ? "$0" : `${dollars(t.price_monthly_cents)}/mo`)],
     ["Industries followed", (t) => industriesLabel(t.industries_limit)],
     ["Names shown per industry", (t) => `top ${t.names_shown_limit}`],
-    ["Pinned names", (t) => plural(t.picks_limit, "pick")],
+    ["Pinned names", (t) => plural(t.picks_limit, "pin")],
     ["Alerts", (t) => alertsLabel(t.alerts_limit)],
     ["Delivery", (t) => deliveryText(t)],
   ];
@@ -153,7 +170,6 @@ export default function Pricing() {
               </th>
               {tiers.map((t) => (
                 <th key={t.key} scope="col" className={`tcol ${t.key === "pro" ? "popular" : ""}`}>
-                  {t.key === "pro" && <div className="tflag">Most popular</div>}
                   <div className="tname">{t.label}</div>
                   <div className="tprice">
                     {t.price_monthly_cents === 0 ? "$0" : dollars(t.price_monthly_cents)}
@@ -192,7 +208,6 @@ export default function Pricing() {
       <div className="plans-cards plans-mobile">
         {tiers.map((t) => (
           <div key={t.key} className={`card plan ${t.key === "pro" ? "popular" : ""}`}>
-            {t.key === "pro" && <div className="tflag eyebrow">Most popular</div>}
             <div className="tname">{t.label}</div>
             <div className="tprice">
               {t.price_monthly_cents === 0 ? "$0" : dollars(t.price_monthly_cents)}
@@ -224,7 +239,7 @@ export default function Pricing() {
       <div className="section card card-sunken">
         <h2>What the evidence does and does not say</h2>
         <p className="muted" style={{ maxWidth: "68ch", marginBottom: 0 }}>
-          Four of the five strategies are provisional. Fast Mover is the one that has been
+          {provisionalLine} Fast Mover is the one that has been
           backtested: its hard filters hit on {EVIDENCE.hitRate}% of the {EVIDENCE.events} qualifying
           events tested ({EVIDENCE.hits} of {EVIDENCE.events}), against {EVIDENCE.earningsRate}% for
           earnings events generally and {EVIDENCE.randomRate}% on a random day. That sample is small

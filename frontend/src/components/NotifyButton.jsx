@@ -166,7 +166,7 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
         >
           <p>{card.message || "Your plan's alert limit is reached."}</p>
           {card.armed > 0 && <p className="muted">{card.armed} of {triggers.length} triggers were armed on {symbol} before the limit.</p>}
-          <p className="muted">Disarm an alert you no longer need, or move to a plan with more.</p>
+          <p className="muted">Disarm an alert you no longer need, or move to a plan that can watch this name as well.</p>
         </Modal>
       )}
     </>

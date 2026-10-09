@@ -647,7 +647,8 @@ def search(q: str = "", creds: HTTPAuthorizationCredentials | None = Depends(bea
         vis, vis_params = scope.visible_sql_and_params(keys, picks, "i")
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT s.symbol, i.theme, ind.key, sc.value, sc.band "
+                "SELECT s.symbol, i.theme, ind.key, sc.value, sc.band, "
+                "sc.components_present, sc.components_total "
                 "FROM tickers s "
                 "JOIN instruments i ON i.ticker_id = s.id "
                 "JOIN industries ind ON ind.id = i.industry_id "
@@ -667,7 +668,7 @@ def search(q: str = "", creds: HTTPAuthorizationCredentials | None = Depends(bea
     return {"results": [
         {"symbol": r[0], "theme": r[1], "industry_key": r[2],
          "value": float(r[3]) if r[3] is not None else None,
-         "band": r[4]} for r in rows
+         "band": r[4], "components_present": r[5], "components_total": r[6]} for r in rows
     ]}
 @app.get("/lab", include_in_schema=False)
 @app.get("/lab/", include_in_schema=False)

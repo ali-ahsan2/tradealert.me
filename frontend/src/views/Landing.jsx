@@ -73,7 +73,7 @@ function Proof() {
   return (
     <section className="ld-proof" aria-labelledby="proof-h">
       <div className="ld-proof-head">
-        <h2 id="proof-h">Advice you can check.</h2>
+        <h2 id="proof-h">Claims you can check.</h2>
         <p className="ld-sub">
           On real data, names that cleared Fast Mover's hard filters moved {EVIDENCE.hitRate}% of the time inside the event window. Earnings events in
           general moved {EVIDENCE.earningsRate}%. A random day, {EVIDENCE.randomRate}%.
@@ -143,7 +143,7 @@ function Tour() {
   const screens = [
     {
       title: "Board",
-      sub: "The names worth your attention today in the industries you follow, each with how much data backed it and what changed overnight.",
+      sub: "The names that fit the setup today in the industries you follow, each with how much data backed it and what changed overnight.",
       body: (
         <ul className="ld-mock-rows">
           {[["strong", 78, "+14"], ["elevated", 59, "+1"], ["elevated", 57, "0"], ["neutral", 51, "−3"]].map(([b, v, dlt], i) => (
@@ -159,7 +159,7 @@ function Tour() {
                   <path d={i % 2 ? "M0,14 L12,10 L24,16 L36,8 L48,11 L60,4" : "M0,6 L12,10 L24,5 L36,12 L48,9 L60,15"} fill="none" stroke="currentColor" strokeWidth="1.6" />
                 </svg>
               </span>
-              <span className={`ld-mock-delta ${dlt.startsWith("+") ? "pos" : dlt.startsWith("−") ? "neg" : ""}`}>{dlt}</span>
+              <span className="ld-mock-delta">{dlt}</span>
             </li>
           ))}
         </ul>
@@ -299,12 +299,12 @@ export default function Landing() {
           <p className="eyebrow">A research assistant for small caps</p>
           <h1>It watches your industries, explains what changed, and alerts you on facts.</h1>
           <p className="ld-lede">
-            Every morning it reads the filings and market data on the names in your industries, tells you which ones are built to move before
-            their next event and why, and messages you when a fact changes: a borrow fee doubling, a dated catalyst, a filing. On real data,{" "}
+            Every morning it reads the filings and market data on the names in your industries, tells you which ones have the setup it looks for ahead of
+            their next dated event and why, and messages you when a fact changes: a borrow fee doubling, a dated catalyst, a filing. On real data,{" "}
             <b>
               {EVIDENCE.hits} of {EVIDENCE.events}
             </b>{" "}
-            names it flagged went on to move.
+            events that cleared its filters went on to move.
           </p>
           <div className="ld-actions">
             <Link to={primary[0]} className="btn btn-primary btn-lg">

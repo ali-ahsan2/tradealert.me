@@ -67,18 +67,39 @@ export const GLOSSARY = {
   },
   fast_mover: {
     term: "Fast Mover",
-    short: "The lead strategy: small, tightly held names with heavy short interest and a dated catalyst, the setup that has moved 20% or traded 3x volume most often in the record.",
+    short: "The lead strategy and the only one with a measured record: small, tightly held names with heavy short interest and a dated catalyst. In the backtest, 26 of the 32 events that cleared its filters moved 20% or traded 3x volume.",
   },
   lane: {
-    term: "Lane",
-    short: "A strategy's grouping of names by how far along the setup is. The lanes are listed in the strategy's own words on its page.",
+    term: "Stage",
+    short: "Where a name is in the setup. Early: no confirmed dated event inside the strategy's window yet, so the engine assumes one further out. Event: a dated event sits inside the window.",
+    see: ["lane_early", "lane_event", "catalyst"],
+  },
+  lane_early: {
+    term: "Early",
+    short: "The setup is forming but no confirmed dated event sits inside the strategy's window yet; the catalyst input is an assumption until a date is filed.",
+  },
+  lane_event: {
+    term: "Event",
+    short: "A dated event such as earnings or a decision sits inside the strategy's look-ahead window.",
+  },
+  assumed: {
+    term: "Assumed",
+    short: "Estimated by the engine, not taken from a filing or a dated announcement. Shown so you know the input is a placeholder.",
+  },
+  judgment: {
+    term: "Judgment input",
+    short: "An operator's reading of news or quality, not a measured figure. It carries weight in the score but is marked so you can discount it.",
+  },
+  age: {
+    term: "Age chip",
+    short: "How long ago the figure beside it was recorded. Fresh is under 36 hours, ageing under four days, older than that is marked stale.",
   },
   group: {
     term: "Group",
     short: "A sub-theme inside an industry, used to sort the board so similar names sit together.",
   },
   delta_run: {
-    term: "Δ run",
+    term: "Since last run (Δ run)",
     short: "How much a score moved since the previous run. A plus or minus number of points, or 'new' when the name was not scored before.",
   },
   run: {
@@ -99,7 +120,7 @@ export const GLOSSARY = {
   },
   float: {
     term: "Float",
-    short: "The number of shares that actually trade, after insiders and locked-up holders are taken out. A small float moves on less volume.",
+    short: "The number of shares that actually trade, after insiders and locked-up holders are taken out. With fewer shares trading, volume is measured against a smaller base.",
   },
   days_to_cover: {
     term: "Days to cover",

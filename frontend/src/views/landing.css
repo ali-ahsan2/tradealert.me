@@ -86,7 +86,7 @@
 }
 
 .ld-ticks .icon {
-  color: var(--pos);
+  color: var(--accent);
 }
 
 /* the live device */
@@ -510,7 +510,7 @@
 }
 
 .ld-rec-bar i.hit {
-  background: var(--pos);
+  background: var(--ink);
 }
 
 .ld-rec-n {
@@ -589,7 +589,7 @@
 }
 
 .ld-plan .icon {
-  color: var(--pos);
+  color: var(--accent);
 }
 
 /* final call */

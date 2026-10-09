@@ -1069,9 +1069,9 @@ select.inline {
 }
 
 .agechip.stale {
-  color: var(--neg);
-  border-color: var(--neg);
-  background: var(--neg-fill);
+  color: var(--warn);
+  border-color: var(--warn);
+  background: var(--warn-fill);
 }
 
 .monogram {

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
-import { coverage, dateTime, delta, deltaTone, score as fmtScore } from "../lib/fmt.js";
+import { coverage, dateTime, delta, score as fmtScore } from "../lib/fmt.js";
 import { SNAPSHOT_LABELS, HARD_FILTER_FORMAT } from "../lib/evidence.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import SearchBar from "../components/SearchBar.jsx";
@@ -153,7 +153,7 @@ export default function Compare() {
                     </div>
                     <div className="cmp-row">
                       <span className="k">Since last run</span>
-                      <span className={`mono ${deltaTone(d.score?.delta_1d)}`}>{d.score ? delta(d.score.delta_1d) : "—"}</span>
+                      <span className="mono">{d.score ? delta(d.score.delta_1d) : "—"}</span>
                     </div>
                     <div className="cmp-row">
                       <span className="k">Coverage</span>
