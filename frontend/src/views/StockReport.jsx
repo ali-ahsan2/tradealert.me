@@ -9,6 +9,8 @@ import ScoreBadge from "../components/ScoreBadge.jsx";
 import Pin from "../components/Pin.jsx";
 import PriceChart from "../components/PriceChart.jsx";
 import Sparkline from "../components/Sparkline.jsx";
+import { Move } from "../components/Spark.jsx";
+import { price as fmtPrice } from "../lib/fmt.js";
 import { AlertItem } from "../components/EventList.jsx";
 import { AgeChip, ErrorCard, Monogram, Skeleton, StatusChip } from "../components/ui.jsx";
 
@@ -58,6 +60,7 @@ export default function StockReport({ symbol }) {
   const [noteBusy, setNoteBusy] = useState(false);
   const [events, setEvents] = useState([]);
   const [fields, setFields] = useState(null);
+  const [series, setSeries] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -152,6 +155,21 @@ export default function StockReport({ symbol }) {
     ([a], [b]) => (SNAPSHOT_ORDER.indexOf(a) + 1 || 99) - (SNAPSHOT_ORDER.indexOf(b) + 1 || 99)
   );
   const missingComponents = fields ? fields.missing_components || [] : [];
+  const snap = d.snapshot || {};
+  const bars = series ? series.bars : [];
+  const lastBar = bars.length ? bars[bars.length - 1] : null;
+  const prevBar = bars.length > 1 ? bars[bars.length - 2] : null;
+  const bar30 = bars.length > 21 ? bars[bars.length - 22] : null;
+  const dayMove = lastBar && prevBar && prevBar.c ? ((lastBar.c - prevBar.c) / prevBar.c) * 100 : null;
+  const move30 = lastBar && bar30 && bar30.c ? ((lastBar.c - bar30.c) / bar30.c) * 100 : null;
+  const benchBars = series && series.benchmark ? series.benchmark.bars : [];
+  const b30 = benchBars.length > 21 ? benchBars[benchBars.length - 22] : null;
+  const bLast = benchBars.length ? benchBars[benchBars.length - 1] : null;
+  const bench30 = bLast && b30 && b30.c ? ((bLast.c - b30.c) / b30.c) * 100 : null;
+  const KEY_STATS = [
+    ["cap_usd_m", "Market cap"], ["float_m", "Float"], ["si_pct_float", "Short interest"], ["fee_pct", "Borrow fee"],
+    ["dtc", "Days to cover"], ["run3m_pct", "3-month move"], ["off_high_pct", "Off 52w high"], ["earnings", "Next earnings"],
+  ].filter(([k]) => snap[k]);
   const fieldSeries = fields ? Object.entries(fields.fields || {}).filter(([, pts]) => pts.length >= 2) : [];
   const sincePin = fields && fields.since_pin;
   const missing = s ? Math.max(0, s.components_total - s.components_present) : 0;
@@ -200,6 +218,27 @@ export default function StockReport({ symbol }) {
             {d.symbol}
             <span className="company">{d.theme}</span>
           </h1>
+          {lastBar && (
+            <div className="pricehead">
+              <div>
+                <div className="px">{fmtPrice(lastBar.c)}</div>
+                <div className="px-moves">
+                  <span>
+                    <Move value={dayMove} /> <span className="xs faint">day</span>
+                  </span>
+                  <span>
+                    <Move value={move30} /> <span className="xs faint">30d</span>
+                  </span>
+                  {bench30 != null && series.benchmark && (
+                    <span>
+                      <Move value={bench30} /> <span className="xs faint">{series.benchmark.symbol} 30d</span>
+                    </span>
+                  )}
+                  <span className="xs faint">close {shortDate(lastBar.d)}</span>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="meta">
             <Link to={`/industries/${d.industry.key}`}>{d.industry.label}</Link> · benchmark{" "}
             <span className="mono">{d.industry.benchmark_etf}</span>
@@ -287,6 +326,8 @@ export default function StockReport({ symbol }) {
 
       <div className="report">
         <div className="report-main stack">
+          <PriceChart symbol={d.symbol} initialDays={90} onData={setSeries} />
+
           <section className="card scoreblock" aria-labelledby="score-h">
             <h2 id="score-h" className="sr-only">
               Score
@@ -541,7 +582,28 @@ export default function StockReport({ symbol }) {
             </section>
           )}
 
-          <PriceChart symbol={d.symbol} />
+          {KEY_STATS.length > 0 && (
+            <section className="card" aria-labelledby="ks-h">
+              <div className="card-title">
+                <h2 id="ks-h">Key stats</h2>
+                <span className="muted small">latest snapshot on file, each with its age</span>
+              </div>
+              <div className="kstats">
+                {KEY_STATS.map(([k, label]) => {
+                  const [, fmt] = SNAPSHOT_LABELS[k] || [k, (x) => x];
+                  return (
+                    <div className="kstat" key={k}>
+                      <span className="k">{label}</span>
+                      <span className="v">
+                        {fmt(snap[k].value)}
+                        <AgeChip asOf={snap[k].as_of} />
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           {fieldSeries.length > 0 && (
             <section className="card" aria-labelledby="fs-h">

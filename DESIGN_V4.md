@@ -1,0 +1,149 @@
+# tradealert.me — Design v4: consumer app, analysis terminal
+
+Supersedes PRODUCT_DESIGN.md §1.3 (color), §1.4 (typography), §4.1–4.3 and
+§4.8 (token block). Everything in PRODUCT_DESIGN.md §2 (confidence and
+uncertainty) and §3 (strategy differentiation) still holds word for word:
+bands are the unit, numbers are the detail, thin coverage carries `~`, red
+and green belong to market outcomes and verdicts, synthetic data never
+reaches a subscriber, and nothing is fabricated.
+
+## 1. Two surfaces, two personalities
+
+**The app** (everything a subscriber sees) looks and moves like a modern
+retail investing app: one big number per screen that answers "how am I
+doing", a chart under it, lists of names with a sparkline and a coloured
+move on every row, soft cards, pill buttons, a left rail on desktop and a
+bottom tab bar on phones. Calm, bright, confident.
+
+**The Lab** (the operator's analysis engine) looks like a trading
+terminal: dark only, flat panels with hairline borders, dense monospace
+tables, amber for the thing you are working on, cyan for links, a command
+bar on top and a status strip at the bottom. Nothing decorative; every
+pixel is a number or a control.
+
+The two share tokens.css and the honesty rules, nothing else.
+
+## 2. The app
+
+### 2.1 Color
+- Page `#f5f6fa`, cards white, hairline borders `#e6e8ef`, ink `#0f1420`.
+  Dark: page `#0b0f17`, cards `#121826`, ink `#eef2f8`. Dark follows the
+  OS or an explicit `data-theme`; there is still no in-product switch.
+- Brand accent is **cobalt** `#2f5cff` (dark `#6d8cff`). It is the only
+  branded colour and it never means up or down.
+- **Green `#0f9d58` and red `#e0393e` mean one thing**: a market move or a
+  pass/fail verdict. A sparkline is green when the window closed above
+  where it opened and red otherwise. Nothing else may use them.
+- Score bands are one cobalt ramp: strong (solid cobalt, white text),
+  elevated (lighter cobalt), neutral (cool grey), weak (warm grey),
+  excluded (outline). Ordered weight, never five strengths of "buy".
+
+### 2.2 Type
+- **Manrope**, self-hosted variable file, for everything on the app.
+  Display numbers 36–56px at weight 800 with `-0.02em` tracking; body 15px
+  at 500; labels 11–12px uppercase with `0.08em` tracking.
+- Every column of digits is `tabular-nums`. Scores stay integers.
+
+### 2.3 Shape and depth
+- Cards: radius 16px, no border, one soft shadow. Inputs and segmented
+  controls: radius 12px. Buttons and chips: pills.
+- Depth is not information. One shadow level for cards that float
+  (hero, dossier header), hairlines for everything that sits in a list.
+
+### 2.4 Layout
+- Desktop (≥900px): a 76px icon rail on the left (brand, Home, Board,
+  Screen, Changes, Calendar, Watchlist, Alerts; account at the bottom)
+  that widens to 220px with labels at ≥1200px. Content column max 1120px
+  with a slim in-page header: title, search pill, tier chip.
+- Phone: a compact top header (brand, search, avatar) and a five-item
+  bottom tab bar (Home, Board, Screen, Watchlist, Alerts) with a filled
+  icon on the active tab.
+
+### 2.5 The hero number
+Every primary screen opens with one number and one chart:
+- **Home**: the subscriber's watchlist as an equal-weight index, rebased to
+  100 at the start of the window, with 1M/3M/1Y pills; when nothing is
+  pinned, the ETFs of the industries they follow. Under it, horizontally
+  scrolling mover cards (symbol, big %, sparkline), then the industries
+  as cards with the ETF sparkline and the band distribution.
+- **Stock**: the last close as the headline, the day and 30-day moves
+  beside it, and the chart full-width directly beneath with 1W/1M/3M/1Y
+  pills (area line by default, candles on request). The score card and
+  a "key stats" grid follow, then the evidence sections.
+- **Board / Screener / Watchlist**: every row carries a 30-day sparkline
+  and a coloured 30-day move beside the band pill, so the list reads at a
+  glance the way a brokerage watchlist does.
+
+### 2.6 Components
+- **Score pill**: band word, integer, coverage ticks; `~` on thin coverage.
+- **Move chip**: `+4.2%` in green or red, tabular, with a small sparkline
+  to its left where there is room.
+- **Stat tile**: label above, large number, one-line sub-text. Used only
+  where the figures are the point of the screen.
+- **Key stats grid**: eight label/value pairs, each with its age chip.
+- **Mover card**: symbol, theme, sparkline, 30-day move; a horizontal
+  scroller on every width.
+
+### 2.7 Landing page
+The landing page sells the product, it does not explain it. It opens with
+one claim and one live visual: the product itself, rendered from public
+data (today's run: how many names scored, how the bands fell), beside a
+single primary action. Then proof as numbers, three benefits as cards with
+a visual each, a product tour as framed screens, a two-plan pricing
+teaser, and a final call to action. Copy is short; the figures are real
+and sourced; no name that a plan would hide is ever shown.
+
+## 3. Honesty rules carried into v4
+- A sparkline is drawn only from stored closes; no interpolation.
+- The hero index is rebased and labelled "relative movement, rebased to
+  100"; the product never shows a dollar figure it does not hold.
+- A move chip is blank, not zero, when no bar exists.
+- Band words and `~` render exactly as before; the pill shape changes,
+  the semantics do not.
+
+## 4. The Lab terminal
+- Dark only, forced by `html[data-surface="lab"]` in tokens.css. Page
+  `#090c11`, panels `#0f131a`, borders `#1c2430`, ink `#d9e0ea`.
+- **Amber `#f5a524`** is the working accent: active tab, selected chip,
+  the control being edited, primary button. **Cyan `#38bdf8`** is for links
+  and chart lines. Green/red keep their meaning.
+- IBM Plex Sans 13–14px for UI; IBM Plex Mono for every number, key, id
+  and timestamp. Panels have 4px radius, 1px borders, no shadow.
+- A **command bar** on top: mark, surface name, screen tabs as underlined
+  terminal tabs, the strategy selector, run and fixture counts, sign out.
+  A **status strip** on the bottom: environment, latest run, fixture
+  events, version state, the keyboard hint.
+- Tables are dense (28px rows), header labels uppercase 11px tracked,
+  numbers right-aligned tabular, hover row highlight, zebra off.
+
+## 5. Functional enhancements shipped with v4
+
+Added alongside the visual uplift because the new layouts asked for them.
+Each one reads data the product already stores.
+
+- **Watchlist index** (`GET /api/me/watchlist/series`): the subscriber's
+  pinned names as an equal-weight index rebased to 100 at the start of a
+  30/90/365-day window, with the ETF of each followed industry as a ghost
+  line. It is the home screen's hero chart and is labelled as relative
+  movement, never a balance.
+- **Sparklines on every row**: `/api/board`, `/api/screen` and
+  `/api/me/watchlist/stats` carry the last 30 closes (`price.closes`,
+  `closes`) and the overview's industry benchmarks carry theirs. Board,
+  Screener, Watchlist, Home movers and industry cards draw them; green or
+  red by the window's direction.
+- **Movers strip** on Home: the biggest 30-day price moves among the
+  subscriber's visible names, up and down, from the screener sorted by
+  30-day change.
+- **Chart-first dossier**: the last close as the headline with day, 30-day
+  and benchmark moves; 1W/1M/3M/1Y/2Y ranges; a close line with a soft fill
+  by default and candles on request; event markers unchanged.
+- **Key stats grid** on the dossier: market cap, float, short interest,
+  borrow fee, days to cover, 3-month move, distance from the 52-week high
+  and next earnings, each with its age chip.
+- **Appearance preference**: Auto, Light or Dark in the account menu,
+  stored per browser and applied as `data-theme`; Auto follows the OS.
+- **Copy link** on the Screener: the address is the screen, so a filter
+  set can be handed to a colleague on the same plan.
+- **Lab status strip**: environment, strategy and fixture counts, the
+  current screen and strategy key, and the rule that synthetic rows never
+  leave the surface, always visible.

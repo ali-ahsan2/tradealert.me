@@ -25,6 +25,7 @@ import { useRowNav } from "../lib/rownav.js";
 import SearchBar from "../components/SearchBar.jsx";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Pin from "../components/Pin.jsx";
+import Spark, { Move } from "../components/Spark.jsx";
 import { Empty, ErrorCard, Help, Monogram, Notice, Skeleton, StatusChip } from "../components/ui.jsx";
 
 // Storage access throws in Safari private browsing; preferences degrade to
@@ -397,7 +398,7 @@ export default function Board() {
           Open in Screener
         </Link>
         <button className="btn-quiet" onClick={togglePriceCols} aria-pressed={priceCols} title={HELP.px}>
-          {priceCols ? "Hide price columns" : "Price columns"}
+          {priceCols ? "Fewer columns" : "More columns"}
         </button>
         <label className="ctl">
           Sort
@@ -500,6 +501,12 @@ export default function Board() {
                   <SortTh k="delta" sort={sort} setSort={setSort} num help={HELP.delta}>
                     Δ run
                   </SortTh>
+                  <th scope="col" className="c-spark">
+                    <span className="sr-only">30-day sparkline</span>
+                  </th>
+                  <SortTh k="px30" sort={sort} setSort={setSort} num help={HELP.px}>
+                    30d
+                  </SortTh>
                   {hasVerdicts && (
                     <th scope="col">
                       Screen
@@ -508,9 +515,6 @@ export default function Board() {
                   )}
                   {priceCols && (
                     <>
-                      <SortTh k="px30" sort={sort} setSort={setSort} num help={HELP.px}>
-                        30d
-                      </SortTh>
                       <SortTh k="rel30" sort={sort} setSort={setSort} num>
                         vs ETF
                       </SortTh>
@@ -580,9 +584,14 @@ export default function Board() {
                           {r.hf_pass == null ? <span className="faint">—</span> : <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`}>{r.hf_pass ? "PASS" : "FAIL"}</span>}
                         </td>
                       )}
+                      <td className="c-spark c-hide">
+                        <Spark closes={r.price && r.price.closes} width={96} height={28} />
+                      </td>
+                      <td className="c-move" data-label="30d">
+                        <Move value={r.price && r.price.chg_30d} />
+                      </td>
                       {priceCols && (
                         <>
-                          <td className={`num c-hide ${tone(r.price && r.price.chg_30d)}`}>{pct(r.price && r.price.chg_30d)}</td>
                           <td className={`num c-hide ${tone(r.price && r.price.rel_30d)}`} title={r.price && r.price.benchmark ? `vs ${r.price.benchmark}` : ""}>
                             {pct(r.price && r.price.rel_30d)}
                           </td>

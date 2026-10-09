@@ -7,6 +7,7 @@ import { nounFor } from "../lib/evidence.js";
 import { useRowNav } from "../lib/rownav.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Pin from "../components/Pin.jsx";
+import Spark, { Move } from "../components/Spark.jsx";
 import { Empty, ErrorCard, Help, Monogram, Skeleton, StatusChip } from "../components/ui.jsx";
 
 // The screener: every filter is a query-string parameter, so a screen is a
@@ -398,6 +399,18 @@ export default function Screen() {
                   Export CSV
                 </button>
               )}
+              <button
+                className="btn-quiet"
+                title="Copy a link to this exact screen"
+                onClick={() => {
+                  const url = window.location.href;
+                  const done = () => toast("Link copied. Anyone on your plan opens this screen with it.");
+                  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done).catch(() => toast(url));
+                  else toast(url);
+                }}
+              >
+                Copy link
+              </button>
             </div>
           )}
 
@@ -555,8 +568,11 @@ export default function Screen() {
                           <td className="num c-hide">{sn.fee_pct == null ? "—" : `${sn.fee_pct}%`}</td>
                           <td className="num c-hide">{sn.volx20d == null ? "—" : `${sn.volx20d}x`}</td>
                           <td className={`num c-hide ${tone(sn.run3m_pct)}`}>{pct(sn.run3m_pct, 0)}</td>
-                          <td className="num c-hide">
-                            <span className={tone(r.price.chg_30d)}>{pct(r.price.chg_30d)}</span>
+                          <td className="c-move" data-label="30d">
+                            <span className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+                              <Spark closes={r.price.closes} width={72} height={24} />
+                              <Move value={r.price.chg_30d} />
+                            </span>
                             {r.price.rel_30d != null && (
                               <span className="xs faint" style={{ display: "block" }} title={`vs ${r.price.benchmark}`}>
                                 {pct(r.price.rel_30d)} vs {r.price.benchmark}

@@ -1,5 +1,8 @@
 # tradealert.me — Product Design Direction
 
+> **Design v4 (2026-10)**: DESIGN_V4.md supersedes §1.3, §1.4, §4.1–4.3 and §4.8 of this
+> document. Sections 2 and 3 (confidence, uncertainty, strategy differentiation) remain the rule.
+
 Status: initial direction, written 2026-09-19. Authority: visual and product design only. Flow and screen specification lives in `UX_SPEC.md` and is not duplicated here. Technical and business facts are taken from `PROJECT_HANDOFF.md` (2026-09-18), which wins on any conflict.
 
 Scope of this document: visual identity, how the platform tells the truth about score confidence, how the five strategies are differentiated, a plain-CSS component starter, and the list of things not to build.

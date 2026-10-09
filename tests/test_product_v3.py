@@ -247,6 +247,28 @@ def test_watchlist_stats_merge_by_symbol():
     assert body["summary"]["count"] == 1
 
 
+# ---- watchlist index (home hero) --------------------------------------
+
+def test_watchlist_series_is_rebased_and_scoped():
+    token = _following(new_user(f"wls2{tag()}@example.com"))
+    status, body = get("/me/watchlist/series?days=90", token)
+    assert status == 200, body
+    assert body["watchlist"]["symbols"] == [] and body["watchlist"]["points"] == []
+    assert all(b["industry_key"] == VISIBLE_INDUSTRY for b in body["benchmarks"])
+    for b in body["benchmarks"]:
+        if b["points"]:
+            assert abs(b["points"][0]["v"] - 100) < 1e-6, "rebased to 100 at the window start"
+    post("/me/picks", {"symbol": VISIBLE}, token)
+    status, body = get("/me/watchlist/series?days=30", token)
+    assert status == 200 and body["watchlist"]["symbols"] == [VISIBLE]
+    pts = body["watchlist"]["points"]
+    if pts:
+        assert abs(pts[0]["v"] - 100) < 1e-6
+        assert body["watchlist"]["change_pct"] == round(pts[-1]["v"] - 100, 2)
+    status, _ = get("/me/watchlist/series?days=3", token)
+    assert status == 422
+
+
 # ---- extensions to existing endpoints ---------------------------------
 
 def test_board_rows_carry_v3_fields():
@@ -256,7 +278,8 @@ def test_board_rows_carry_v3_fields():
     for r in body["rows"]:
         for k in ("lane", "hf_pass", "price", "earnings_in"):
             assert k in r, k
-        assert set(r["price"]) == {"last_close", "chg_30d", "rel_30d", "benchmark"}
+        assert set(r["price"]) == {"last_close", "chg_30d", "rel_30d", "benchmark", "closes"}
+        assert isinstance(r["price"]["closes"], list) and len(r["price"]["closes"]) <= 30
 
 
 def test_industry_shape_is_aggregate_only_outside_plan():

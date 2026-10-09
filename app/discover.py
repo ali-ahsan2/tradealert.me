@@ -121,16 +121,26 @@ def snapshot_lateral(ticker_alias="t", alias="sn"):
             f"ORDER BY s.field, s.as_of DESC) x) {alias} ON TRUE")
 
 
+SPARK_BARS = 30
+
+
 def price_lateral(ticker_alias="t", alias="px"):
-    """Latest close, its date, and the close 30 days back. No parameters."""
+    """Latest close, its date, the close 30 days back, and the last 30 closes
+    oldest-first for a sparkline. No parameters."""
     t = ticker_alias
     return (
         "LEFT JOIN LATERAL (SELECT "
         f" (SELECT close FROM price_bars p WHERE p.ticker_id = {t}.id ORDER BY d DESC LIMIT 1) AS last_close, "
         f" (SELECT d FROM price_bars p WHERE p.ticker_id = {t}.id ORDER BY d DESC LIMIT 1) AS last_d, "
         f" (SELECT close FROM price_bars p WHERE p.ticker_id = {t}.id "
-        "   AND p.d <= CURRENT_DATE - 30 ORDER BY d DESC LIMIT 1) AS c30"
+        "   AND p.d <= CURRENT_DATE - 30 ORDER BY d DESC LIMIT 1) AS c30, "
+        " (SELECT array_agg(z.close ORDER BY z.d) FROM (SELECT close, d FROM price_bars p "
+        f"   WHERE p.ticker_id = {t}.id ORDER BY d DESC LIMIT {SPARK_BARS}) z) AS closes"
         f") {alias} ON TRUE")
+
+
+def _spark(arr):
+    return [round(float(v), 4) for v in arr] if arr else []
 
 
 def benchmarks(cur, industry_ids):
@@ -146,16 +156,18 @@ def benchmarks(cur, industry_ids):
         " (SELECT close FROM price_bars p WHERE p.ticker_id = t.id "
         "   AND d <= CURRENT_DATE - 30 ORDER BY d DESC LIMIT 1), "
         " (SELECT close FROM price_bars p WHERE p.ticker_id = t.id "
-        "   AND d <= CURRENT_DATE - 90 ORDER BY d DESC LIMIT 1) "
+        "   AND d <= CURRENT_DATE - 90 ORDER BY d DESC LIMIT 1), "
+        " (SELECT array_agg(z.close ORDER BY z.d) FROM (SELECT close, d FROM price_bars p "
+        f"   WHERE p.ticker_id = t.id ORDER BY d DESC LIMIT {SPARK_BARS}) z) "
         "FROM reference_assets r JOIN tickers t ON t.id = r.ticker_id "
         "WHERE r.industry_id = ANY(%s) ORDER BY r.industry_id, r.sort_order",
         (ids,),
     )
     out = {}
-    for iid, sym, label, last, last_d, c30, c90 in cur.fetchall():
+    for iid, sym, label, last, last_d, c30, c90, closes in cur.fetchall():
         out[iid] = {"symbol": sym, "label": label, "last_close": _f(last),
                     "last_date": _iso(last_d), "chg_30d": _pct(last, c30),
-                    "chg_90d": _pct(last, c90)}
+                    "chg_90d": _pct(last, c90), "closes": _spark(closes)}
     return out
 
 
@@ -266,7 +278,7 @@ def _base_select(uid_param_first=True):
         f"{_num('off_high_pct')} AS off_high_pct, {_num('px')} AS px, "
         f"{_num('day_pct')} AS day_pct, {_num('dtc')} AS dtc, {_num('growth_pct')} AS growth_pct, "
         f"{_earn()} AS earn_date, sn.earnings_conf, sn.earnings_as_of, sn.si_pct_float_as_of, "
-        "px.last_close, px.last_d, px.c30, (p.id IS NOT NULL) AS pinned "
+        "px.last_close, px.last_d, px.c30, px.closes, (p.id IS NOT NULL) AS pinned "
         "FROM scores sc "
         "JOIN instruments i ON i.id = sc.instrument_id "
         "JOIN tickers t ON t.id = i.ticker_id "
@@ -307,7 +319,7 @@ def _row_payload(r, bench):
             "date": earn.isoformat(), "days": days_to,
             "confidence": r["earnings_conf"], "as_of": _iso(r["earnings_as_of"])},
         "price": {"last_close": _f(r["last_close"]), "last_date": _iso(r["last_d"]),
-                  "chg_30d": chg30,
+                  "chg_30d": chg30, "closes": _spark(r["closes"]),
                   "rel_30d": (round(chg30 - b["chg_30d"], 2)
                               if chg30 is not None and b.get("chg_30d") is not None else None),
                   "benchmark": b.get("symbol")},
@@ -1081,7 +1093,7 @@ def watchlist_stats(creds: HTTPAuthorizationCredentials | None = Depends(bearer)
                 "SELECT t.symbol, i.industry_id, p.pinned_at, p.score_at_pin, "
                 "(SELECT close FROM price_bars b WHERE b.ticker_id = t.id "
                 "  AND b.d <= p.pinned_at::date ORDER BY d DESC LIMIT 1) AS c_pin, "
-                "px.last_close, px.last_d, px.c30, "
+                "px.last_close, px.last_d, px.c30, px.closes, "
                 f"{_earn()} AS earn_date, sn.earnings_conf, {_num('si_pct_float')}, "
                 f"{_num('fee_pct')}, {_num('volx20d')}, "
                 f"{_hf_pass()} AS hf_pass, sc.value, sc.band, "
@@ -1116,17 +1128,18 @@ def watchlist_stats(creds: HTTPAuthorizationCredentials | None = Depends(bearer)
                         c = cur.fetchone()
                         bcache[key] = _f(c[0]) if c else None
                     b_chg = _pct(b["last_close"], bcache[key])
-                earn = r[8]
+                earn = r[9]
                 out.append({
                     "symbol": r[0], "pinned_at": r[2].isoformat(), "score_at_pin": _f(r[3]),
                     "close_at_pin": _f(r[4]), "last_close": _f(r[5]), "last_date": _iso(r[6]),
                     "chg_since_pin": _pct(r[5], r[4]), "benchmark": b["symbol"] if b else None,
                     "benchmark_chg_since_pin": b_chg, "chg_30d": _pct(r[5], r[7]),
+                    "closes": _spark(r[8]),
                     "earnings": None if earn is None else {
-                        "date": earn.isoformat(), "days": (earn - today).days, "confidence": r[9]},
-                    "si_pct_float": _f(r[10]), "fee_pct": _f(r[11]), "volx20d": _f(r[12]),
-                    "hf_pass": r[13], "value": _f(r[14]), "band": r[15],
-                    "unread": r[16], "armed": r[17], "fired_30d": r[18],
+                        "date": earn.isoformat(), "days": (earn - today).days, "confidence": r[10]},
+                    "si_pct_float": _f(r[11]), "fee_pct": _f(r[12]), "volx20d": _f(r[13]),
+                    "hf_pass": r[14], "value": _f(r[15]), "band": r[16],
+                    "unread": r[17], "armed": r[18], "fired_30d": r[19],
                 })
     finally:
         conn.close()
@@ -1148,4 +1161,74 @@ def watchlist_stats(creds: HTTPAuthorizationCredentials | None = Depends(bearer)
             "armed": sum(p["armed"] for p in out),
         },
         "run_as_of": latest[1].isoformat() if latest else None,
+    }
+
+
+# --------------------------------------------------------------------------
+# Watchlist index: the home screen's hero chart
+# --------------------------------------------------------------------------
+
+def _rebased(cur, ticker_ids, days):
+    """Equal-weight index of the given tickers' closes over the window,
+    rebased to 100 at each ticker's first close in the window and averaged
+    per day over the tickers that have a close that day. Returns
+    [{d, v}] oldest first, or [] when nothing is on file."""
+    if not ticker_ids:
+        return []
+    cur.execute(
+        "SELECT ticker_id, d, close FROM price_bars WHERE ticker_id = ANY(%s) "
+        "AND d >= CURRENT_DATE - %s ORDER BY d",
+        (list(ticker_ids), days),
+    )
+    first, by_day = {}, {}
+    for tid, d, close in cur.fetchall():
+        c = float(close)
+        if tid not in first:
+            if not c:
+                continue
+            first[tid] = c
+        by_day.setdefault(d, []).append(c / first[tid] * 100)
+    return [{"d": d.isoformat(), "v": round(sum(vs) / len(vs), 3)} for d, vs in sorted(by_day.items())]
+
+
+@router.get("/api/me/watchlist/series")
+def watchlist_series(days: int = Query(90, ge=7, le=730),
+                     creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
+    """Two rebased series: the subscriber's pinned names as an equal-weight
+    index, and the ETFs of the industries they follow. Rebased to 100 at the
+    start of the window, so the chart shows relative movement, never a
+    dollar figure that the product does not hold."""
+    conn = get_conn()
+    try:
+        uid, tier, keys, picks, vis, vis_params, k = _viewer(conn, creds)
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT t.id, t.symbol FROM picks p JOIN instruments i ON i.id = p.instrument_id "
+                "JOIN tickers t ON t.id = i.ticker_id WHERE p.user_id = %s AND p.active "
+                "ORDER BY p.sort_order, p.pinned_at",
+                (uid,),
+            )
+            pick_rows = cur.fetchall()
+            watch = _rebased(cur, [r[0] for r in pick_rows], days)
+            cur.execute(
+                "SELECT DISTINCT ON (ind.id) ind.id, ind.key, ind.label, t.id, t.symbol, r.label "
+                "FROM industries ind JOIN reference_assets r ON r.industry_id = ind.id "
+                "JOIN tickers t ON t.id = r.ticker_id WHERE ind.key = ANY(%s) "
+                "ORDER BY ind.id, r.sort_order",
+                (keys,),
+            )
+            bench = []
+            for iid, ikey, ilabel, tid, sym, label in cur.fetchall():
+                pts = _rebased(cur, [tid], days)
+                bench.append({"industry_key": ikey, "industry_label": ilabel, "symbol": sym,
+                              "label": label, "points": pts,
+                              "change_pct": round(pts[-1]["v"] - 100, 2) if pts else None})
+    finally:
+        conn.close()
+    return {
+        "days": days,
+        "watchlist": {"symbols": [r[1] for r in pick_rows], "points": watch,
+                      "change_pct": round(watch[-1]["v"] - 100, 2) if watch else None},
+        "benchmarks": bench,
+        "note": "Equal-weight, rebased to 100 at the start of the window; relative movement only.",
     }

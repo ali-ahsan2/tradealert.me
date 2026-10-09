@@ -9,11 +9,13 @@ import { ErrorCard, Skeleton } from "./ui.jsx";
 // a bar that printed, an alert that fired, a dated event and how the name
 // actually moved after it. Nothing decorative.
 
+// label, days fetched, bars kept (the API's floor is 30 days; a week is a slice)
 const RANGES = [
-  ["3M", 90],
-  ["6M", 180],
-  ["1Y", 365],
-  ["2Y", 730],
+  ["1W", 30, 5],
+  ["1M", 30, null],
+  ["3M", 90, null],
+  ["1Y", 365, null],
+  ["2Y", 730, null],
 ];
 
 // One glyph per trigger so a marker stays legible at candle width.
@@ -34,11 +36,13 @@ function token(name, fallback) {
   return v || fallback;
 }
 
-export default function PriceChart({ symbol, initialDays = 365 }) {
+export default function PriceChart({ symbol, initialDays = 90, onData }) {
   const box = useRef(null);
-  const [days, setDays] = useState(initialDays);
+  const [range, setRange] = useState(() => RANGES.find(([, d]) => d === initialDays) || RANGES[2]);
+  const days = range[1];
   const [markers, setMarkers] = useState(true);
-  const [data, setData] = useState(null);
+  const [candles, setCandles] = useState(false);
+  const [raw, setRaw] = useState(null);
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
@@ -48,13 +52,25 @@ export default function PriceChart({ symbol, initialDays = 365 }) {
     setLoading(true);
     setErr(null);
     api(`/stock/${encodeURIComponent(symbol)}/series?days=${days}`)
-      .then((d) => alive && setData(d))
+      .then((d) => {
+        if (!alive) return;
+        setRaw(d);
+        if (onData) onData(d);
+      })
       .catch((e) => alive && setErr(e))
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, days, reload]);
+
+  // a week is the last five bars of the month fetch
+  const data = raw
+    ? range[2]
+      ? { ...raw, bars: raw.bars.slice(-range[2]), benchmark: raw.benchmark ? { ...raw.benchmark, bars: raw.benchmark.bars.slice(-range[2]) } : null }
+      : raw
+    : null;
 
   useEffect(() => {
     if (!box.current || !data || !data.bars.length) return undefined;
@@ -67,33 +83,52 @@ export default function PriceChart({ symbol, initialDays = 365 }) {
         fontSize: 12,
       },
       grid: {
-        vertLines: { color: token("--border", "#d8dce3") },
-        horzLines: { color: token("--border", "#d8dce3") },
+        vertLines: { visible: false },
+        horzLines: { color: token("--chart-grid", "#eef0f5") },
       },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: token("--border", "#d8dce3") },
       timeScale: { borderColor: token("--border", "#d8dce3"), rightOffset: 3 },
       handleScale: { axisPressedMouseMove: true },
     });
-    const pos = token("--pos", "#1f6b4a");
-    const neg = token("--neg", "#9b2c2c");
-    const candles = c.addCandlestickSeries({
-      upColor: pos,
-      downColor: neg,
-      borderUpColor: pos,
-      borderDownColor: neg,
-      wickUpColor: pos,
-      wickDownColor: neg,
-    });
+    const pos = token("--pos", "#0f9d58");
+    const neg = token("--neg", "#e0393e");
+    const up = data.bars[data.bars.length - 1].c >= data.bars[0].c;
+    const lineColor = up ? pos : neg;
+    let main;
+    if (candles) {
+      main = c.addCandlestickSeries({
+        upColor: pos,
+        downColor: neg,
+        borderUpColor: pos,
+        borderDownColor: neg,
+        wickUpColor: pos,
+        wickDownColor: neg,
+      });
+      main.setData(data.bars.map((b) => ({ time: b.d, open: b.o, high: b.h, low: b.l, close: b.c })));
+    } else {
+      // the brokerage view: a close line with a soft fill in the move's colour
+      const hex = (h, a) => {
+        const m = h.replace("#", "");
+        const n = parseInt(m.length === 3 ? m.split("").map((x) => x + x).join("") : m, 16);
+        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+      };
+      main = c.addAreaSeries({
+        lineColor,
+        topColor: hex(lineColor, 0.28),
+        bottomColor: hex(lineColor, 0.02),
+        lineWidth: 2,
+        priceLineVisible: false,
+        lastValueVisible: true,
+      });
+      main.setData(data.bars.map((b) => ({ time: b.d, value: b.c })));
+    }
     const vol = c.addHistogramSeries({
       priceFormat: { type: "volume" },
       priceScaleId: "vol",
-      color: token("--border-strong", "#b4bac6"),
+      color: token("--border", "#e6e8ef"),
     });
-    c.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
-    candles.setData(
-      data.bars.map((b) => ({ time: b.d, open: b.o, high: b.h, low: b.l, close: b.c }))
-    );
+    c.priceScale("vol").applyOptions({ scaleMargins: { top: 0.86, bottom: 0 } });
     vol.setData(data.bars.map((b) => ({ time: b.d, value: b.v })));
 
     if (markers) {
@@ -112,7 +147,7 @@ export default function PriceChart({ symbol, initialDays = 365 }) {
         text: TRIGGER_GLYPH[a.trigger_key] || "!",
       }));
       const all = [...dated, ...alerts].sort((x, y) => (x.time < y.time ? -1 : x.time > y.time ? 1 : 0));
-      candles.setMarkers(all);
+      main.setMarkers(all);
     }
     c.timeScale().fitContent();
     const ro = new ResizeObserver(() => {
@@ -123,7 +158,7 @@ export default function PriceChart({ symbol, initialDays = 365 }) {
       ro.disconnect();
       c.remove();
     };
-  }, [data, markers]);
+  }, [data, markers, candles]);
 
   const stockChg = data ? seriesChange(data.bars) : null;
   const benchChg = data && data.benchmark ? seriesChange(data.benchmark.bars) : null;
@@ -136,12 +171,15 @@ export default function PriceChart({ symbol, initialDays = 365 }) {
         <h2 id="chart-h">Price</h2>
         <div className="row">
           <div className="seg" role="group" aria-label="Range">
-            {RANGES.map(([label, d]) => (
-              <button key={d} aria-pressed={days === d} onClick={() => setDays(d)}>
-                {label}
+            {RANGES.map((r) => (
+              <button key={r[0]} aria-pressed={range[0] === r[0]} onClick={() => setRange(r)}>
+                {r[0]}
               </button>
             ))}
           </div>
+          <button className="btn-quiet" aria-pressed={candles} onClick={() => setCandles((v) => !v)}>
+            {candles ? "Line" : "Candles"}
+          </button>
           <button className="btn-quiet" aria-pressed={markers} onClick={() => setMarkers((m) => !m)}>
             {markers ? "Hide events" : "Show events"}
           </button>
@@ -166,7 +204,7 @@ export default function PriceChart({ symbol, initialDays = 365 }) {
               <span className="faint xs"> {shortDate(lastBar.d)}{lastAge ? ` · ${lastAge.label} old` : ""}</span>
             </span>
             <span>
-              {RANGES.find(([, d]) => d === days)?.[0]} change{" "}
+              {range[0]} change{" "}
               <b className={`mono ${stockChg > 0 ? "pos" : stockChg < 0 ? "neg" : ""}`}>{pct(stockChg)}</b>
             </span>
             {data.benchmark && benchChg != null && (
@@ -179,7 +217,7 @@ export default function PriceChart({ symbol, initialDays = 365 }) {
               </span>
             )}
           </div>
-          <div ref={box} className="chartbox" role="img" aria-label={`${symbol} daily candles over ${days} days`} />
+          <div ref={box} className="chartbox" role="img" aria-label={`${symbol} daily ${candles ? "candles" : "closes"}, ${range[0]}`} />
           <div className="legend xs faint">
             <span>
               <i className="lg-dot pos" /> E = dated event, filled when the name then moved 20% or traded 3x volume

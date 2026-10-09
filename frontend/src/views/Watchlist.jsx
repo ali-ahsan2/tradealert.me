@@ -4,6 +4,7 @@ import { Link } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { DAYS, delta, deltaTone, dollars, downloadText, inDays, plural, score as fmtScore, shortDate, signed, toCsv, tone } from "../lib/fmt.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
+import Spark, { Move } from "../components/Spark.jsx";
 import { Empty, ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
 
 const SORTS = {
@@ -299,7 +300,15 @@ export default function Watchlist() {
                     {p.lane ? ` · lane ${p.lane}` : ""}
                   </span>
                 </div>
-                <div className="act">{p.band ? <ScoreBadge band={p.band} value={p.value} /> : <span className="chip chip-plain">No run</span>}</div>
+                <div className="act">
+                  {st && st.closes && st.closes.length > 1 && (
+                    <span className="wl-spark">
+                      <Spark closes={st.closes} width={120} height={36} />
+                      <Move value={st.chg_30d} /> <span className="xs faint">30d</span>
+                    </span>
+                  )}
+                  {p.band ? <ScoreBadge band={p.band} value={p.value} /> : <span className="chip chip-plain">No run</span>}
+                </div>
                 <div className="facts">
                   <span>
                     Pinned {shortDate(p.pinned_at, tz)}

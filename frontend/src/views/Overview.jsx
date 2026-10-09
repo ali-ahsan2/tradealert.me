@@ -1,16 +1,144 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
 import { Link } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
-import { DAYS, age, dateTime, delta, deltaTone, inDays, pct, plural, score as fmtScore, shortDate, signed, tone } from "../lib/fmt.js";
-import SearchBar from "../components/SearchBar.jsx";
+import { DAYS, age, dateTime, delta, deltaTone, inDays, plural, score as fmtScore, shortDate, signed } from "../lib/fmt.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import BandBar from "../components/BandBar.jsx";
+import Spark, { Move, MoveChip } from "../components/Spark.jsx";
+import Icon from "../components/Icons.jsx";
 import { AgeChip, Empty, ErrorCard, Skeleton } from "../components/ui.jsx";
 
-// The first screen after sign-in: the run, each followed industry's shape,
-// the watchlist, alerts, the next two weeks of dated events and what moved
-// since the previous run. Every number links to the screen that explains it.
+// Home (DESIGN_V4.md §2.5): one number and one chart first, then movers,
+// then the industries, then the lists. The hero index is equal-weight and
+// rebased to 100, labelled as relative movement: the product holds no
+// positions and shows no dollar figure.
+
+const RANGES = [
+  ["1M", 30],
+  ["3M", 90],
+  ["1Y", 365],
+];
+
+function IndexChart({ series, ghost, label }) {
+  const pts = series || [];
+  if (pts.length < 2) return null;
+  const W = 800;
+  const H = 240;
+  const all = pts.concat(ghost || []).map((p) => p.v);
+  const lo = Math.min(...all);
+  const hi = Math.max(...all);
+  const span = hi - lo || 1;
+  const x = (i, n) => (i / (n - 1)) * W;
+  const y = (v) => H - 8 - ((v - lo) / span) * (H - 16);
+  const path = (s) => s.map((p, i) => `${i ? "L" : "M"}${x(i, s.length).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+  const d = path(pts);
+  const up = pts[pts.length - 1].v >= pts[0].v;
+  const base = y(100);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={label}>
+      <line x1="0" x2={W} y1={base} y2={base} stroke="var(--border-strong)" strokeDasharray="0" strokeWidth="1" />
+      {ghost && ghost.length > 1 && <path d={path(ghost)} fill="none" stroke="var(--ink-faint)" strokeWidth="1.5" opacity="0.6" />}
+      <path d={`${d} L${W},${H} L0,${H} Z`} fill={up ? "var(--pos)" : "var(--neg)"} opacity="0.12" />
+      <path d={d} fill="none" stroke={up ? "var(--pos)" : "var(--neg)"} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={W} cy={y(pts[pts.length - 1].v)} r="4" fill={up ? "var(--pos)" : "var(--neg)"} />
+    </svg>
+  );
+}
+
+function Hero({ me }) {
+  const [days, setDays] = useState(90);
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    api(`/me/watchlist/series?days=${days}`)
+      .then((x) => alive && setD(x))
+      .catch((e) => alive && setErr(e));
+    return () => {
+      alive = false;
+    };
+  }, [days]);
+  if (err) return null;
+  if (!d) return <Skeleton rows={1} height={320} />;
+  const hasWatch = d.watchlist.points.length > 1;
+  const bench = d.benchmarks.filter((b) => b.points.length > 1);
+  const main = hasWatch ? d.watchlist.points : bench[0] ? bench[0].points : [];
+  const chg = hasWatch ? d.watchlist.change_pct : bench[0] ? bench[0].change_pct : null;
+  const ghost = hasWatch && bench[0] ? bench[0].points : null;
+  const title = hasWatch ? "Your watchlist" : bench[0] ? bench[0].industry_label : "Your universe";
+  return (
+    <section className="card hero" aria-labelledby="hero-h">
+      <div className="hero-top">
+        <div>
+          <div className="hero-label" id="hero-h">
+            {title} · {RANGES.find(([, v]) => v === days)[0]}
+          </div>
+          <div className="hero-num">
+            {chg == null ? "—" : <Move value={chg} digits={1} />}
+          </div>
+          <div className="hero-sub">
+            {hasWatch ? (
+              <>
+                <span>
+                  {plural(d.watchlist.symbols.length, "pinned name")}, equal-weight
+                </span>
+                {bench[0] && bench[0].change_pct != null && (
+                  <span>
+                    vs {bench[0].symbol} <Move value={bench[0].change_pct} />
+                  </span>
+                )}
+              </>
+            ) : bench[0] ? (
+              <span>
+                {bench[0].symbol} · {bench[0].label}. Pin names to track your own list here.
+              </span>
+            ) : (
+              <span>No bars on file yet.</span>
+            )}
+          </div>
+        </div>
+        <div className="seg" role="group" aria-label="Range">
+          {RANGES.map(([l, v]) => (
+            <button key={v} aria-pressed={days === v} onClick={() => setDays(v)}>
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+      {main.length > 1 ? (
+        <div className="hero-chart">
+          <IndexChart series={main} ghost={ghost} label={`${title}, rebased to 100, ${days} days`} />
+        </div>
+      ) : (
+        <p className="muted small" style={{ marginTop: "var(--s-4)" }}>
+          Nothing to chart yet. <Link to="/board">Pin a few names from the Board</Link> and this becomes your list.
+        </p>
+      )}
+      <div className="hero-foot">
+        <span className="hero-legend">
+          <i /> {hasWatch ? "your watchlist" : title}
+        </span>
+        {ghost && (
+          <span className="hero-legend">
+            <i className="ghost" /> {bench[0].symbol}
+          </span>
+        )}
+        <span>rebased to 100 at the start of the window · relative movement, not a balance</span>
+        {bench.length > 1 && (
+          <span>
+            also following:{" "}
+            {bench.slice(hasWatch ? 1 : 1).map((b) => (
+              <span key={b.symbol} style={{ marginRight: 10 }}>
+                {b.symbol} <Move value={b.change_pct} />
+              </span>
+            ))}
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
 
 function Tile({ label, value, sub, to }) {
   const body = (
@@ -47,6 +175,7 @@ function NameLine({ r, right, href }) {
 export default function Overview() {
   const { me } = useMe();
   const [d, setD] = useState(null);
+  const [screen, setScreen] = useState(null);
   const [err, setErr] = useState(null);
   const [reload, setReload] = useState(0);
 
@@ -56,10 +185,22 @@ export default function Overview() {
     api("/overview")
       .then((x) => alive && setD(x))
       .catch((e) => alive && setErr(e));
+    // movers: the biggest 30-day price moves among the names on the board
+    api("/screen?sort=chg30&limit=40")
+      .then((x) => alive && setScreen(x))
+      .catch(() => alive && setScreen({ rows: [] }));
     return () => {
       alive = false;
     };
   }, [reload]);
+
+  const movers = useMemo(() => {
+    if (!screen) return [];
+    const rows = screen.rows.filter((r) => r.price && r.price.chg_30d != null);
+    const up = rows.slice(0, 6);
+    const down = [...rows].reverse().filter((r) => r.price.chg_30d < 0).slice(0, 4);
+    return [...up, ...down];
+  }, [screen]);
 
   const tz = me && me.settings ? me.settings.timezone : undefined;
   const first = me && (me.name || me.email || "").split("@")[0];
@@ -67,26 +208,20 @@ export default function Overview() {
   if (err) {
     return (
       <div className="wrap wrap-narrow">
-        <ErrorCard error={err} onRetry={() => setReload((n) => n + 1)} title="Couldn't load your overview." />
+        <ErrorCard error={err} onRetry={() => setReload((n) => n + 1)} title="Couldn't load your home screen." />
       </div>
     );
   }
   if (!d) {
     return (
       <div className="wrap">
-        <div className="pagehead">
-          <div>
-            <h1>Overview</h1>
-          </div>
-        </div>
+        <Skeleton rows={1} height={320} />
         <Skeleton rows={2} height={84} />
-        <Skeleton rows={3} height={140} />
       </div>
     );
   }
 
   const run = d.run;
-  const runAge = run ? age(run.as_of) : null;
   const w = d.watchlist;
   const a = d.alerts;
   const c = d.changes;
@@ -96,12 +231,11 @@ export default function Overview() {
     <div className="wrap">
       <div className="pagehead">
         <div>
-          <h1>Overview</h1>
+          <h1>{first ? `Hi ${first}` : "Home"}</h1>
           <div className="meta">
-            {first ? `${first} · ` : ""}
             {run ? (
               <>
-                run {dateTime(run.as_of, tz)} <AgeChip asOf={run.as_of} /> · {run.visible_names} names in your universe · {plural(run.runs_on_record, "run")} on record
+                Run {dateTime(run.as_of, tz)} <AgeChip asOf={run.as_of} /> · {run.visible_names} names in your universe
               </>
             ) : (
               "No completed run yet."
@@ -109,7 +243,12 @@ export default function Overview() {
           </div>
         </div>
         <div className="actions">
-          <SearchBar />
+          <Link to="/screen" className="btn btn-secondary btn-sm">
+            <Icon name="screen" size={16} /> Screen
+          </Link>
+          <Link to="/board" className="btn btn-primary btn-sm">
+            Open the Board <Icon name="arrow" size={16} />
+          </Link>
         </div>
       </div>
 
@@ -117,21 +256,41 @@ export default function Overview() {
 
       {run && (
         <>
+          <Hero me={me} />
+
+          {movers.length > 0 && (
+            <>
+              <div className="section-head">
+                <h2>Movers, 30 days</h2>
+                <span className="muted small">biggest price moves among your names · daily closes</span>
+              </div>
+              <div className="movers-row">
+                {movers.map((r) => (
+                  <Link key={r.symbol} to={`/stock/${r.symbol}`} className="mover-card">
+                    <span className="sym">{r.symbol}</span>
+                    <span className="theme">{r.theme}</span>
+                    <Spark closes={r.price.closes} width={140} height={36} />
+                    <Move value={r.price.chg_30d} />
+                    <span className="xs faint">
+                      {r.band} {fmtScore(r.value, r.components_present, r.components_total)}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </>
+          )}
+
           <div className="tiles">
             <Tile
               label="Watchlist"
               value={w.limit != null ? `${w.count} / ${w.limit}` : w.count}
-              sub={
-                w.count
-                  ? `${w.strong_or_elevated} strong or elevated · mean ${delta(w.mean_delta_since_pin)} since pinned`
-                  : "Pin names from the Board or Screener"
-              }
+              sub={w.count ? `${w.strong_or_elevated} strong or elevated · ${delta(w.mean_delta_since_pin)} since pinned` : "Pin names from the Board"}
               to="/watchlist"
             />
             <Tile
               label="Alerts"
               value={a.limit === 0 ? "—" : a.unread}
-              sub={a.limit === 0 ? "Included from Basic" : `${a.unread === 1 ? "unread" : "unread"} · ${a.fired_7d} fired in 7d on ${a.fired_7d_names} names · ${a.armed} armed`}
+              sub={a.limit === 0 ? "Included from Basic" : `unread · ${a.fired_7d} fired in 7d · ${a.armed} armed`}
               to="/alerts"
             />
             <Tile
@@ -143,17 +302,15 @@ export default function Overview() {
             <Tile
               label="Since previous run"
               value={c ? `${c.summary.band_up}↑ ${c.summary.band_down}↓` : "—"}
-              sub={c ? `band moves · ${c.summary.new} new · mean Δ ${delta(c.summary.mean_delta)} · vs ${shortDate(c.prev_as_of, tz)}` : "One run on record"}
+              sub={c ? `band moves · ${c.summary.new} new · mean Δ ${delta(c.summary.mean_delta)}` : "One run on record"}
               to="/changes"
             />
           </div>
 
-          <section className="section" aria-labelledby="ov-ind">
+          <section className="section" aria-labelledby="ov-ind" style={{ marginTop: 0 }}>
             <div className="section-head">
               <h2 id="ov-ind">Your industries</h2>
-              <span className="muted small">
-                Fast Mover on the latest run · aggregates cover the whole industry; names are your top {Math.min(3, K)}
-              </span>
+              <span className="muted small">Fast Mover on the latest run · names are your top {Math.min(3, K)}</span>
             </div>
             {d.industries.length === 0 ? (
               <Empty
@@ -172,25 +329,20 @@ export default function Overview() {
                       <Link to={`/industries/${ind.key}`} className="ovind-title">
                         {ind.label}
                       </Link>
-                      {ind.benchmark && ind.benchmark.chg_30d != null && (
-                        <span className="xs faint mono" title={`${ind.benchmark.symbol} ${ind.benchmark.label}`}>
-                          {ind.benchmark.symbol} <span className={tone(ind.benchmark.chg_30d)}>{pct(ind.benchmark.chg_30d)}</span> 30d
-                          {ind.benchmark.chg_90d != null && (
-                            <>
-                              {" "}
-                              · <span className={tone(ind.benchmark.chg_90d)}>{pct(ind.benchmark.chg_90d)}</span> 90d
-                            </>
-                          )}
+                      {ind.benchmark && (
+                        <span className="row" style={{ gap: 8 }}>
+                          <Spark closes={ind.benchmark.closes} width={64} height={22} />
+                          <span className="xs faint">{ind.benchmark.symbol}</span>
+                          <MoveChip value={ind.benchmark.chg_30d} />
                         </span>
                       )}
                     </div>
                     <BandBar distribution={ind.distribution} />
                     <div className="ovind-facts xs faint">
-                      <span>{ind.scored} scored of {ind.universe}</span>
+                      <span>{ind.scored} scored</span>
                       <span>mean {ind.mean_score != null ? Math.round(ind.mean_score) : "—"}</span>
                       <span>{ind.cleared} cleared the screen</span>
                       {ind.new > 0 && <span>{ind.new} new</span>}
-                      {ind.mean_delta != null && <span className={deltaTone(ind.mean_delta)}>mean Δ {delta(ind.mean_delta)}</span>}
                     </div>
                     <ul className="namelist">
                       {ind.top.map((r) => (
@@ -209,7 +361,7 @@ export default function Overview() {
                     <div className="ovind-links small">
                       <Link to={`/board?industry=${ind.key}`}>Board</Link>
                       <Link to={`/screen?industries=${ind.key}`}>Screen</Link>
-                      <Link to={`/industries/${ind.key}`}>Industry page</Link>
+                      <Link to={`/industries/${ind.key}`}>Industry</Link>
                     </div>
                   </article>
                 ))}
@@ -233,41 +385,25 @@ export default function Overview() {
                     {c.summary.compared} names compared with {shortDate(c.prev_as_of, tz)}: {c.summary.up} up, {c.summary.down} down, {c.summary.new} new,{" "}
                     {c.summary.cleared} cleared the screen, {c.summary.failed} failed it.
                   </p>
-                  {c.band_up.length > 0 && (
-                    <>
-                      <h4 className="minihead">Band up</h4>
-                      <ul className="namelist">
-                        {c.band_up.map((r) => (
-                          <NameLine
-                            key={r.symbol}
-                            r={r}
-                            right={
-                              <span className="xs">
-                                {r.prev.band} → <b>{r.now.band}</b> <span className={`mono ${deltaTone(r.delta)}`}>{delta(r.delta)}</span>
-                              </span>
-                            }
-                          />
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                  {c.band_down.length > 0 && (
-                    <>
-                      <h4 className="minihead">Band down</h4>
-                      <ul className="namelist">
-                        {c.band_down.map((r) => (
-                          <NameLine
-                            key={r.symbol}
-                            r={r}
-                            right={
-                              <span className="xs">
-                                {r.prev.band} → <b>{r.now.band}</b> <span className={`mono ${deltaTone(r.delta)}`}>{delta(r.delta)}</span>
-                              </span>
-                            }
-                          />
-                        ))}
-                      </ul>
-                    </>
+                  {[["Band up", c.band_up], ["Band down", c.band_down]].map(([title, rows]) =>
+                    rows.length ? (
+                      <React.Fragment key={title}>
+                        <h4 className="minihead">{title}</h4>
+                        <ul className="namelist">
+                          {rows.map((r) => (
+                            <NameLine
+                              key={r.symbol}
+                              r={r}
+                              right={
+                                <span className="xs">
+                                  {r.prev.band} → <b>{r.now.band}</b> <span className={`mono ${deltaTone(r.delta)}`}>{delta(r.delta)}</span>
+                                </span>
+                              }
+                            />
+                          ))}
+                        </ul>
+                      </React.Fragment>
+                    ) : null
                   )}
                   {c.new.length > 0 && (
                     <>
@@ -303,7 +439,6 @@ export default function Overview() {
                         <>
                           <span className="xs faint">
                             {shortDate(r.date)} · {inDays(r.days)}
-                            {r.confidence ? ` · ${r.confidence}` : ""}
                           </span>
                           {r.band && <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} />}
                         </>
@@ -386,8 +521,8 @@ export default function Overview() {
           </div>
 
           <p className="footnote">
-            Scores from the run at {dateTime(run.as_of, tz)}; benchmark moves from daily closes. Research and information only; nothing on this page is
-            a recommendation.
+            Scores from the run at {dateTime(run.as_of, tz)}; price moves from daily closes. Research and information only; nothing on this page is a
+            recommendation.
           </p>
         </>
       )}

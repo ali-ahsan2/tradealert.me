@@ -2,25 +2,44 @@ import React, { useEffect, useRef, useState } from "react";
 import { api, logout } from "../api.js";
 import { Link, navigate, usePath } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
+import { THEMES, getTheme, setTheme } from "../lib/theme.js";
 import { TierChip, ToastHost } from "./ui.jsx";
+import Icon from "./Icons.jsx";
 import CommandPalette from "./CommandPalette.jsx";
 import Shortcuts from "./Shortcuts.jsx";
 
-function Brand() {
+// v4 shell: signed-in subscribers get a left rail on desktop and a bottom
+// tab bar on phones, with a slim in-page header carrying search, plan and
+// account. Visitors get a classic top bar. DESIGN_V4.md §2.4.
+
+const NAV = [
+  ["/overview", "Home", "home"],
+  ["/board", "Board", "board"],
+  ["/screen", "Screen", "screen"],
+  ["/changes", "Changes", "changes"],
+  ["/calendar", "Calendar", "calendar"],
+  ["/watchlist", "Watchlist", "watchlist"],
+  ["/alerts", "Alerts", "alerts"],
+];
+const TABS = ["/overview", "/board", "/screen", "/watchlist", "/alerts"];
+
+function Brand({ compact = false }) {
   return (
-    <Link to="/" className="brand" aria-label="tradealert.me home">
+    <Link to="/" className={`brand ${compact ? "brand-compact" : ""}`} aria-label="tradealert.me home">
       <span className="brand-mark" aria-hidden="true">
-        ta
+        <svg width="18" height="18" viewBox="0 0 20 20">
+          <path d="M3 14l4-5 3 3 3-6 4 4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+        </svg>
       </span>
-      <span>
-        tradealert<span className="brand-tld">.me</span>
-      </span>
+      {!compact && (
+        <span className="brand-word">
+          tradealert<span className="brand-tld">.me</span>
+        </span>
+      )}
     </Link>
   );
 }
 
-// Unread alerts delivered to this subscriber. Polled slowly; refreshed at
-// once when any screen marks something read.
 function useUnread(me) {
   const [count, setCount] = useState(0);
   useEffect(() => {
@@ -45,21 +64,31 @@ function useUnread(me) {
   return count;
 }
 
-function NavLink({ to, children, here, badge }) {
-  const active = here === to || here.startsWith(`${to}/`) || here.startsWith(`${to}?`);
+function isActive(here, to) {
+  return here === to || here.startsWith(`${to}/`) || here.startsWith(`${to}?`);
+}
+
+function ThemeControl() {
+  const [t, setT] = useState(getTheme());
   return (
-    <Link to={to} className="navlink" aria-current={active ? "page" : undefined}>
-      {children}
-      {badge > 0 && (
-        <span className="navbadge" aria-label={`${badge} unread`}>
-          {badge > 99 ? "99+" : badge}
-        </span>
-      )}
-    </Link>
+    <div className="seg seg-sm" role="group" aria-label="Appearance">
+      {THEMES.map(([k, l]) => (
+        <button
+          key={k}
+          aria-pressed={t === k}
+          onClick={() => {
+            setTheme(k);
+            setT(k);
+          }}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
   );
 }
 
-function AccountMenu({ me }) {
+function AccountMenu({ me, align = "right" }) {
   const [open, setOpen] = useState(false);
   const box = useRef(null);
   useEffect(() => {
@@ -73,37 +102,33 @@ function AccountMenu({ me }) {
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
-  const name = me.name || me.email;
+  const name = me.name || me.email || "";
   const item = (to, label) => (
     <Link to={to} role="menuitem" onClick={() => setOpen(false)}>
       {label}
     </Link>
   );
   return (
-    <div className="acct" ref={box}>
-      <button className="acct-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} aria-label={`Account menu for ${name}`}>
-        <span className="acct-initial" aria-hidden="true">
-          {(name || "?").slice(0, 1)}
-        </span>
-        <span className="acct-name">{name}</span>
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-          <path d="M1 3l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" />
-        </svg>
+    <div className={`acct acct-${align}`} ref={box}>
+      <button className="avatar" aria-haspopup="menu" aria-expanded={open} aria-label={`Account menu for ${name}`} onClick={() => setOpen((o) => !o)}>
+        {(name || "?").slice(0, 1).toUpperCase()}
       </button>
       {open && (
         <div className="acct-menu" role="menu">
           <div className="acct-head">
             <div className="acct-email">{me.email}</div>
-            <div className="muted">
+            <div className="muted xs">
               {me.verified ? "Email verified" : "Email not verified"} · {me.tier ? me.tier.label : "Free"} plan
             </div>
           </div>
-          {item("/changes", "Changes since last run")}
-          {item("/calendar", "Catalyst calendar")}
+          <div className="acct-theme">
+            <span className="xs faint">Appearance</span>
+            <ThemeControl />
+          </div>
+          {item("/settings", "Account settings")}
           {item("/strategies", "Strategies and evidence")}
           {item("/digests", "Digests")}
           {item("/compare", "Compare names")}
-          {item("/settings", "Account settings")}
           {item("/pricing", "Plans")}
           {me.is_admin && (
             <a href="/lab" role="menuitem">
@@ -126,81 +151,86 @@ function AccountMenu({ me }) {
   );
 }
 
-export function TopBar({ unread }) {
-  const { me, loading } = useMe();
+function Rail({ me, unread }) {
+  const here = usePath().split("?")[0];
+  return (
+    <nav className="rail" aria-label="Primary">
+      <div className="rail-top">
+        <Brand compact />
+      </div>
+      <div className="rail-items">
+        {NAV.map(([to, label, icon]) => {
+          const active = isActive(here, to);
+          return (
+            <Link key={to} to={to} className="rail-item" aria-current={active ? "page" : undefined} title={label}>
+              <span className="rail-icon">
+                <Icon name={icon} filled={active && ["home", "watchlist", "alerts"].includes(icon)} />
+                {to === "/alerts" && unread > 0 && <span className="dot" aria-label={`${unread} unread`} />}
+              </span>
+              <span className="rail-label">{label}</span>
+            </Link>
+          );
+        })}
+      </div>
+      <div className="rail-bottom">
+        <TierChip tier={me.tier || { key: "free", label: "Free" }} />
+        <AccountMenu me={me} align="left" />
+      </div>
+    </nav>
+  );
+}
+
+function SearchPill({ wide }) {
+  return (
+    <button className={`searchpill ${wide ? "wide" : ""}`} onClick={() => window.dispatchEvent(new Event("palette:open"))} aria-label="Search names or jump to a screen (Command K)">
+      <Icon name="search" size={16} />
+      <span className="searchpill-text">Search names, screens…</span>
+      <kbd className="kbd">⌘K</kbd>
+    </button>
+  );
+}
+
+function AppHeader({ me }) {
+  return (
+    <header className="apphead">
+      <div className="apphead-inner">
+        <div className="apphead-brand">
+          <Brand />
+        </div>
+        <SearchPill wide />
+        <span className="spacer" />
+        <div className="apphead-right">
+          <TierChip tier={me.tier || { key: "free", label: "Free" }} />
+          <AccountMenu me={me} />
+        </div>
+      </div>
+    </header>
+  );
+}
+
+export function TopBar() {
+  const { loading } = useMe();
   const here = usePath().split("?")[0];
   return (
     <header className="topbar">
-      <a className="skip" href="#main">
-        Skip to content
-      </a>
       <div className="topbar-inner">
         <Brand />
-        {me && (
-          <nav className="navlinks" aria-label="Primary">
-            <NavLink to="/overview" here={here}>
-              Overview
-            </NavLink>
-            <NavLink to="/board" here={here}>
-              Board
-            </NavLink>
-            <NavLink to="/screen" here={here}>
-              Screen
-            </NavLink>
-            <NavLink to="/changes" here={here}>
-              Changes
-            </NavLink>
-            <NavLink to="/calendar" here={here}>
-              Calendar
-            </NavLink>
-            <NavLink to="/watchlist" here={here}>
-              Watchlist
-            </NavLink>
-            <NavLink to="/alerts" here={here} badge={unread}>
-              Alerts
-            </NavLink>
-          </nav>
-        )}
-        {!me && !loading && (
-          <nav className="navlinks" aria-label="Primary">
-            <NavLink to="/strategies" here={here}>
-              Strategies
-            </NavLink>
-            <NavLink to="/pricing" here={here}>
-              Plans
-            </NavLink>
-          </nav>
-        )}
+        <nav className="navlinks" aria-label="Primary">
+          <Link to="/strategies" className="navlink" aria-current={isActive(here, "/strategies") ? "page" : undefined}>
+            Strategies
+          </Link>
+          <Link to="/pricing" className="navlink" aria-current={isActive(here, "/pricing") ? "page" : undefined}>
+            Plans
+          </Link>
+        </nav>
         <span className="spacer" />
-        {me && (
-          <button
-            className="palette-btn"
-            onClick={() => window.dispatchEvent(new Event("palette:open"))}
-            aria-label="Search or jump (Command K)"
-            title="Search or jump"
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-              <circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M11 11l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            <span className="palette-hint">Search</span>
-            <kbd className="kbd">⌘K</kbd>
-          </button>
-        )}
-        {me ? (
-          <>
-            <TierChip tier={me.tier || { key: "free", label: "Free" }} />
-            <AccountMenu me={me} />
-          </>
-        ) : loading ? (
-          <span className="muted mono">…</span>
-        ) : (
+        {!loading && (
           <>
             <Link to="/login" className="btn btn-quiet">
               Log in
             </Link>
             <Link to="/signup" className="btn btn-primary btn-sm">
-              Sign up
+              Start free
             </Link>
           </>
         )}
@@ -213,25 +243,20 @@ export function BottomBar({ unread }) {
   const { me } = useMe();
   const here = usePath().split("?")[0];
   if (!me) return null;
-  const item = (to, label, d, badge) => {
-    const active = here === to || here.startsWith(`${to}/`);
-    return (
-      <Link to={to} className="bb-item" aria-current={active ? "page" : undefined}>
-        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-          <path d={d} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-        </svg>
-        <span>{label}</span>
-        {badge > 0 && <span className="navbadge">{badge > 99 ? "99+" : badge}</span>}
-      </Link>
-    );
-  };
   return (
     <nav className="bottombar" aria-label="Primary">
-      {item("/overview", "Overview", "M3 3h6v6H3zM11 3h6v6h-6zM3 11h6v6H3zM11 11h6v6h-6z")}
-      {item("/board", "Board", "M3 4h14v12H3zM3 9h14M8 9v7")}
-      {item("/screen", "Screen", "M3 5h14M5 10h10M7 15h6")}
-      {item("/watchlist", "Watchlist", "M10 2.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 7.8l5-.7z")}
-      {item("/alerts", "Alerts", "M5 13V9a5 5 0 0110 0v4l1.5 2h-13zM8.5 17a1.5 1.5 0 003 0", unread)}
+      {NAV.filter(([to]) => TABS.includes(to)).map(([to, label, icon]) => {
+        const active = isActive(here, to);
+        return (
+          <Link key={to} to={to} className="bb-item" aria-current={active ? "page" : undefined}>
+            <span className="bb-icon">
+              <Icon name={icon} filled={active && ["home", "watchlist", "alerts"].includes(icon)} />
+              {to === "/alerts" && unread > 0 && <span className="navbadge">{unread > 99 ? "99+" : unread}</span>}
+            </span>
+            <span>{label}</span>
+          </Link>
+        );
+      })}
     </nav>
   );
 }
@@ -250,12 +275,11 @@ export function Footer() {
             <Link to="/legal/disclaimer">Disclaimer</Link>
           </nav>
           <span className="spacer" />
-          <span className="mono">© {new Date().getFullYear()} tradealert.me</span>
+          <span className="mono xs">© {new Date().getFullYear()} tradealert.me</span>
         </div>
         <p className="footer-legal">
-          Research and information only. Scores are machine output ranked for a human to review;
-          nothing here is a recommendation to buy or sell any security. Every figure carries its
-          source date. Verify it before you act.
+          Research and information only. Scores are machine output ranked for a human to review; nothing here is a recommendation to buy or
+          sell any security. Every figure carries its source date. Verify it before you act.
         </p>
       </div>
     </footer>
@@ -266,12 +290,18 @@ export function Shell({ children }) {
   const { me } = useMe();
   const unread = useUnread(me);
   return (
-    <div className={`app ${me ? "authed" : ""}`}>
-      <TopBar unread={unread} />
-      <main id="main" className="main" tabIndex={-1}>
-        {children}
-      </main>
-      <Footer />
+    <div className={`app ${me ? "authed" : "anon"}`}>
+      <a className="skip" href="#main">
+        Skip to content
+      </a>
+      {me && <Rail me={me} unread={unread} />}
+      <div className="frame">
+        {me ? <AppHeader me={me} /> : <TopBar />}
+        <main id="main" className="main" tabIndex={-1}>
+          {children}
+        </main>
+        <Footer />
+      </div>
       <BottomBar unread={unread} />
       <ToastHost />
       <CommandPalette />

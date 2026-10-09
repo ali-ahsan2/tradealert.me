@@ -440,7 +440,7 @@ def board(band: str = "", strategy: str = "fast_mover",
                 "ind.key, ind.label, ind.benchmark_etf, sc.value, sc.band, "
                 "sc.components_present, sc.components_total, sc.delta_1d, "
                 f"i.lane, ind.id, {discover._hf_pass()} AS hf_pass, "
-                "px.last_close, px.c30, "
+                "px.last_close, px.c30, px.closes, "
                 "(CASE WHEN e.value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' "
                 " THEN substr(e.value, 1, 10)::date - CURRENT_DATE END) AS earnings_in "
                 "FROM scores sc "
@@ -477,7 +477,8 @@ def board(band: str = "", strategy: str = "fast_mover",
         rel = (round(chg - b["chg_30d"], 2)
                if chg is not None and b.get("chg_30d") is not None else None)
         return {"last_close": float(r[14]) if r[14] is not None else None,
-                "chg_30d": chg, "rel_30d": rel, "benchmark": b.get("symbol")}
+                "chg_30d": chg, "rel_30d": rel, "benchmark": b.get("symbol"),
+                "closes": discover._spark(r[16])}
     return {
         "as_of": run[1].isoformat(),
         "run_id": run_id,
@@ -489,7 +490,7 @@ def board(band: str = "", strategy: str = "fast_mover",
              "components_present": r[8], "components_total": r[9],
              "delta_1d": float(r[10]) if r[10] is not None else None,
              "lane": r[11] or "", "hf_pass": r[13], "price": _price(r),
-             "earnings_in": r[16]}
+             "earnings_in": r[17]}
             for i, r in enumerate(rows)
         ],
         "meta": {"shown": len(rows), "truncated": truncated,

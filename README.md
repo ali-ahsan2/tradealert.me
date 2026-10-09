@@ -6,8 +6,9 @@ dossiers, calendar, alerts, digests) and an operator Lab for strategy
 analysis. FastAPI + Postgres on the back, React + Vite in `frontend/`
 built into `static/`.
 
-The product's rules live in the specs at the repo root: `PRODUCT_DESIGN.md`
-(design system), `UX_SPEC.md` (screens), `BUILD_SPEC.md` (data contract and
+The product's rules live in the specs at the repo root: `DESIGN_V4.md`
+(the current look: consumer app and analysis terminal), `PRODUCT_DESIGN.md`
+(honesty rules and the earlier system), `UX_SPEC.md` (screens), `BUILD_SPEC.md` (data contract and
 honesty rules), `STRATEGY_ANALYSIS_TOOL.md` and `LAB_DASHBOARD_DESIGN.md`
 (the Lab), `SCAFFOLD_SPEC.md` (deployment).
 
