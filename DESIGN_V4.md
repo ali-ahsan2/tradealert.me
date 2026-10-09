@@ -231,3 +231,51 @@ executed as six parallel packages over shared primitives.
   limits saying what you would be told, before the feature rows.
 
 ### 7.4 Screens
+
+- **Home is a brief.** Title, one utility sentence (names scored, band
+  moves since the previous run, alerts waiting, catalysts in 14 days),
+  then What changed → Alerts that fired → Coming up → Your watchlist →
+  one next step. Every row carries a plain sentence ahead of the band
+  pill, with Pin and Notify beside it. The rebased index, movers and
+  industry cards fold under "Markets" (closed in Simple, open in Full).
+  A plan without alerts sees how many fired on how many of its names and
+  what it would have been told, never the tickers.
+- **The dossier opens with the verdict.** Plain headline (score, band
+  phrase, coverage, shrinkage pull, haircuts, provisional status) beside
+  the badge; price is one small context line and the chart sits after the
+  explanation. "Notify me" is the primary action in a row that sticks to
+  the bottom on phones with Pin and Compare. "Why this score" lists each
+  input with its recorded value and whether it lifted or weighed, in
+  words; hard filters stay a PASS/FAIL list. "Coming up" shows the next
+  dated event with a one-tap catalyst alert. Breakdown, key stats, input
+  history, other lenses, peers, alerts and notes fold into Details groups
+  that open in Full; NotAvailable is byte-identical.
+- **Board and Find.** Both open with a utility sentence made only from
+  the payload (names scored, industries, strong/elevated counts, points
+  moved; matched-of-universe and shown counts). Simple Board columns:
+  Name, Score, Why (the instrument's hook, now carried by the board
+  payload), Since last run, Next event, Actions. Board filters are one
+  pill row (All, Cleared the filters, the lanes) with the rest under
+  "More filters". Find's presets become "Find names that…" cards described
+  from their own filters; every input and facet lives under "Advanced
+  filters"; column names come from the plain-field map. Full keeps every
+  column, filter, preset, facet, sort and keyboard key.
+- **Alerts, Coming up, What changed, Watchlist.** Each opens with its own
+  utility sentence. Alert events carry the trigger's plain label and the
+  recorded fact; the arm form pre-ticks the three default triggers with
+  their plain sentence and folds the rest; `?symbol=` prefills and scrolls
+  to it; armed rules are chips grouped by name. Calendar kinds and
+  distances are plain words. Changes rows are one `changeSentence` each.
+  Watchlist cards say how the score moved since you pinned the name.
+  Score deltas and band-move counts are no longer coloured anywhere; red
+  and green remain on price moves and PASS/FAIL only.
+- **First run.** Three screens: pick an industry (with the live counts the
+  API returns), the three words every screen uses with a real example
+  from your own board, pin one name with Pin and Notify beside a plain
+  why. Delivery preferences stay, folded into Preferences. A once-per-
+  browser welcome tour (four coachmarks) runs on Home and can be replayed
+  from the account menu or the help page. Empty states can carry an icon
+  and a numbered "what fills this" list.
+- **Payload note.** The only backend change in this pass: board rows now
+  include `hook`. Everything else is built from endpoints that already
+  existed, so the hosted preview mock needed no new routes.
