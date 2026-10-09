@@ -98,7 +98,9 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
     }
   };
 
-  const cls = `btn ${on ? "btn-secondary" : "btn-primary"} btn-notify ${on ? "on" : ""} ${compact ? "btn-sm" : ""} ${className}`;
+  // In a list the button is quiet (tinted) so forty rows do not shout; as a
+  // dossier's primary action it is the filled accent.
+  const cls = `btn ${on || compact ? "btn-secondary" : "btn-primary"} btn-notify ${on ? "on" : ""} ${compact ? "btn-sm" : ""} ${className}`;
   const text = on ? onLabel : anyArmed && rules ? "Manage alerts" : label;
   const title = on
     ? `Alerts on for ${symbol}: ${plainList.join(", ")}. Tap to manage.`

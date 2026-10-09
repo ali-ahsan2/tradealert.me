@@ -265,3 +265,13 @@
 .brief .footnote {
   margin-top: var(--s-5);
 }
+
+/* Phones: the badge and chips drop under the sentence so the words keep the
+   full width; the actions follow on their own line. */
+@media (max-width: 759px) {
+  .brow-side {
+    grid-column: 1 / -1;
+    justify-self: start;
+    justify-content: flex-start;
+  }
+}

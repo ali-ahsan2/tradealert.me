@@ -442,7 +442,8 @@ def board(band: str = "", strategy: str = "fast_mover",
                 f"i.lane, ind.id, {discover._hf_pass()} AS hf_pass, "
                 "px.last_close, px.c30, px.closes, "
                 "(CASE WHEN e.value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' "
-                " THEN substr(e.value, 1, 10)::date - CURRENT_DATE END) AS earnings_in "
+                " THEN substr(e.value, 1, 10)::date - CURRENT_DATE END) AS earnings_in, "
+                "i.hook "
                 "FROM scores sc "
                 "JOIN instruments i ON i.id = sc.instrument_id "
                 "JOIN tickers s ON s.id = i.ticker_id "
@@ -490,7 +491,7 @@ def board(band: str = "", strategy: str = "fast_mover",
              "components_present": r[8], "components_total": r[9],
              "delta_1d": float(r[10]) if r[10] is not None else None,
              "lane": r[11] or "", "hf_pass": r[13], "price": _price(r),
-             "earnings_in": r[17]}
+             "earnings_in": r[17], "hook": r[18] or ""}
             for i, r in enumerate(rows)
         ],
         "meta": {"shown": len(rows), "truncated": truncated,

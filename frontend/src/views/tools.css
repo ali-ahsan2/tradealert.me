@@ -177,3 +177,13 @@
 
 /* Outcome counts in a sentence stay tabular. */
 .tl-sent .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Calendar rows below the desktop grid: everything after the date stacks in
+   the second column so the badge never runs into the past-reaction line. */
+@media (max-width: 899px) {
+  .cal-row > .cal-score,
+  .cal-row > .cal-past,
+  .cal-row > .cal-act {
+    grid-column: 2;
+  }
+}

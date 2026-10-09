@@ -7,7 +7,7 @@ import { nounFor } from "../lib/evidence.js";
 import { PLAIN_FIELD } from "../lib/glossary.js";
 import { changeSentence } from "../lib/plain.js";
 import { useRowNav } from "../lib/rownav.js";
-import { MODES, useMode } from "../lib/mode.js";
+import { useMode } from "../lib/mode.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Pin from "../components/Pin.jsx";
 import Spark, { Move } from "../components/Spark.jsx";
@@ -145,25 +145,6 @@ function Num({ id, label, value, onChange, step = 1, unit }) {
   );
 }
 
-// Simple / Full, one tap, persisted by lib/mode.js.
-function ModeSwitch() {
-  const { mode, setMode } = useMode();
-  return (
-    <div className="seg modeseg" role="group" aria-label="Simple or full view">
-      {MODES.map(([k, l]) => (
-        <button
-          key={k}
-          type="button"
-          aria-pressed={mode === k}
-          onClick={() => setMode(k)}
-          title={k === "simple" ? "Plain words and the columns a newcomer needs" : "Every column and control"}
-        >
-          {l}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 // A column header: the plain name in Simple, today's short one in Full, and
 // a tap-to-open definition where the word is jargon.
@@ -622,7 +603,6 @@ export default function Screen() {
           <button className="btn btn-secondary btn-sm fpanel-toggle full-only" onClick={() => setAdv((a) => !a)} aria-expanded={adv}>
             Filters{activeCount ? ` · ${activeCount}` : ""}
           </button>
-          <ModeSwitch />
         </div>
       </div>
 

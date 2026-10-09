@@ -22,7 +22,7 @@ import {
 } from "../lib/fmt.js";
 import { EVIDENCE, nounFor } from "../lib/evidence.js";
 import { useRowNav } from "../lib/rownav.js";
-import { MODES, useMode } from "../lib/mode.js";
+import { useMode } from "../lib/mode.js";
 import { changeSentence } from "../lib/plain.js";
 import SearchBar from "../components/SearchBar.jsx";
 import ScoreBadge from "../components/ScoreBadge.jsx";
@@ -135,25 +135,6 @@ function runWhen(iso, tz) {
   return `on ${shortDate(iso, tz)}`;
 }
 
-// Simple / Full, one tap, persisted by lib/mode.js.
-function ModeSwitch() {
-  const { mode, setMode } = useMode();
-  return (
-    <div className="seg modeseg" role="group" aria-label="Simple or full view">
-      {MODES.map(([k, l]) => (
-        <button
-          key={k}
-          type="button"
-          aria-pressed={mode === k}
-          onClick={() => setMode(k)}
-          title={k === "simple" ? "Plain words and the columns a newcomer needs" : "Every column and control"}
-        >
-          {l}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 // One sentence with real figures from the rows the board returned. Nothing
 // here is derived from data the payload does not carry: the board has no
@@ -469,7 +450,6 @@ export default function Board() {
         </div>
         <div className="actions">
           <SearchBar />
-          <ModeSwitch />
         </div>
       </div>
 
@@ -718,9 +698,9 @@ export default function Board() {
                         <td className="c-band">
                           <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} strategy={strat} />
                         </td>
-                        <td className="c-why" title={r.theme || undefined}>
+                        <td className="c-why" title={r.hook || r.theme || undefined}>
                           <span className="why">
-                            <span className="why-t">{r.theme || <span className="faint">—</span>}</span>
+                            <span className="why-t">{r.hook || r.theme || <span className="faint">—</span>}</span>
                             {r.hf_pass != null && (
                               <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`} title={r.hf_pass ? "Cleared every hard filter" : "Failed a hard filter"}>
                                 {r.hf_pass ? "PASS" : "FAIL"}
