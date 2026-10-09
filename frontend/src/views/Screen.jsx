@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api, cached, toast } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
-import { coverage, dateTime, delta, dollars, downloadText, fmtMoney, inDays, pct, shortDate, toCsv, tone } from "../lib/fmt.js";
+import { alertsLabel, coverage, dateTime, delta, dollars, downloadText, fmtMoney, inDays, pct, plural, shortDate, toCsv, tone } from "../lib/fmt.js";
 import { nounFor } from "../lib/evidence.js";
 import { PLAIN_FIELD } from "../lib/glossary.js";
 import { changeSentence } from "../lib/plain.js";
@@ -29,6 +29,8 @@ const PARAMS = [
 
 // `plain` finishes the sentence "Find names that…" and says only what the
 // preset's own filters do; `simpleLabel` is the card title in Simple mode.
+// `rich` is the same sentence with its trader words tappable.
+const SHORTING = " (short sellers borrow shares to bet the price falls)";
 const PRESETS = [
   {
     key: "cleared", label: "Cleared the screen", simpleLabel: "Cleared the filters", desc: "Every hard filter passed",
@@ -63,11 +65,23 @@ const PRESETS = [
   {
     key: "squeeze", label: "Tight float, high short interest", simpleLabel: "Small float, heavily shorted", desc: "Float under 30M shares and short interest over 15%",
     plain: "have under 30M shares that trade and more than 15% of them sold short. A crowded bet against a small float.",
+    rich: (
+      <>
+        have under 30M <Explain term="float">shares that trade</Explain> and more than 15% of them <Explain term="short_interest">sold short</Explain>
+        {SHORTING}. A crowded bet against a small <Explain term="float">float</Explain>.
+      </>
+    ),
     params: { float_max: "30", si_min: "15", sort: "si" },
   },
   {
     key: "fee", label: "Expensive to borrow", simpleLabel: "Are expensive to borrow", desc: "Borrow fee at 20% or more",
     plain: "cost 20% a year or more to borrow. Shares are getting hard to find.",
+    rich: (
+      <>
+        cost 20% a year or more <Explain term="borrow_fee">to borrow</Explain>
+        {SHORTING}. Shares are getting hard to find.
+      </>
+    ),
     params: { fee_min: "20", sort: "fee" },
   },
   {
@@ -109,6 +123,41 @@ function qs(obj) {
 }
 
 const wide = () => typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(min-width: 1000px)").matches;
+
+// Whether an element scrolls sideways, and whether it is scrolled to the
+// end, so the swipe hint and the edge fade show only while there are
+// columns left to reach. Measured from the element, never assumed from
+// the viewport: a phone card list does not scroll and gets neither.
+function useSideScroll(deps) {
+  const ref = useRef(null);
+  const [state, setState] = useState({ can: false, end: true });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const measure = () => {
+      const can = el.scrollWidth > el.clientWidth + 1;
+      const end = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1;
+      setState((s) => (s.can === can && s.end === end ? s : { can, end }));
+    };
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    let ro = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(measure);
+      ro.observe(el);
+      Array.from(el.children).forEach((c) => ro.observe(c));
+    } else {
+      window.addEventListener("resize", measure);
+    }
+    return () => {
+      el.removeEventListener("scroll", measure);
+      if (ro) ro.disconnect();
+      else window.removeEventListener("resize", measure);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return [ref, state];
+}
 
 // "up 6", "down 3", "new", "unchanged": the Simple table's change column.
 function shortChange(d) {
@@ -249,9 +298,19 @@ export default function Screen() {
   const [adv, setAdv] = useState(() => full && wide());
   const [universe, setUniverse] = useState({});
   const asked = useRef(new Set());
+  const [tableRef, tableScroll] = useSideScroll([data, loading, simple]);
 
   useEffect(() => setDraft(filters), [filters]);
   useEffect(() => setAdv(full && wide()), [full]);
+
+  // The tab title matches the nav word and the heading; restored on leave.
+  useEffect(() => {
+    const prev = document.title;
+    document.title = `${simple ? "Find names" : "Screener"} · tradealert.me`;
+    return () => {
+      document.title = prev;
+    };
+  }, [simple]);
 
   useEffect(() => {
     cached("/strategies").then((d) => setStrategies(d.strategies)).catch(() => setStrategies([]));
@@ -501,7 +560,7 @@ export default function Screen() {
       <div className="fgroup two">
         <label className="fnum" htmlFor="f-lane">
           <span>
-            Lane <Explain term="lane" />
+            Stage <Explain term="lane" />
           </span>
           <select id="f-lane" value={draft.lane || ""} onChange={(e) => set("lane", e.target.value)}>
             <option value="">Any</option>
@@ -579,7 +638,7 @@ export default function Screen() {
     <div className="wrap screen-v">
       <div className="pagehead">
         <div>
-          <h1>Screener</h1>
+          <h1>{simple ? "Find names" : "Screener"}</h1>
           {data ? (
             <ScreenUtility data={data} universe={universeFor} activeCount={activeCount} strat={strat} tz={tz} />
           ) : (
@@ -613,11 +672,25 @@ export default function Screen() {
         <div className="find-grid">
           {PRESETS.map((p) => {
             const on = presetOn(p);
+            const toggle = () => (on ? clear() : preset(p));
+            // The whole card toggles; the title is the focusable control.
+            // The explainers in the sentence stop their own taps, so a tap
+            // on a term opens its definition instead of the screen.
             return (
-              <button key={p.key} type="button" className="pcard" aria-pressed={on} onClick={() => (on ? clear() : preset(p))}>
-                <b className="pcard-t">{p.simpleLabel || p.label}</b>
-                <span className="pcard-d">… {p.plain}</span>
-              </button>
+              <div key={p.key} className={`pcard ${on ? "on" : ""}`} onClick={toggle}>
+                <button
+                  type="button"
+                  className="pcard-btn"
+                  aria-pressed={on}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggle();
+                  }}
+                >
+                  <b className="pcard-t">{p.simpleLabel || p.label}</b>
+                </button>
+                <span className="pcard-d">… {p.rich || p.plain}</span>
+              </div>
             );
           })}
         </div>
@@ -713,154 +786,158 @@ export default function Screen() {
                 )
               }
             >
-              {activeCount ? "Loosen one filter, or pick a different card above." : "Scores regenerate each trading morning."}
+              {activeCount ? "Loosen one filter, or pick a different card above." : "Scores regenerate each morning."}
             </Empty>
           )}
 
           {!loading && data && rows.length > 0 && (
             <>
-              <div className={`table-card cards ${simple ? "simple-table" : ""}`}>
-                <table className="data compact screen-table">
-                  <thead>
-                    <tr>
-                      <th scope="col" className="c-sel">
-                        <span className="sr-only">Select for compare</span>
-                      </th>
-                      <th className="rank" scope="col">
-                        #
-                      </th>
-                      <th scope="col">Name</th>
-                      <Th simple={simple} plain="Score" term={simple ? "score" : "band"}>
-                        Band
-                      </Th>
-                      <Th simple={simple} plain="Data" term="coverage" num>
-                        Cov
-                      </Th>
-                      <Th simple={simple} plain="Since last run" term="delta_run" num>
-                        Δ run
-                      </Th>
-                      <Th simple={simple} plain="Filters" text="Hard-filter verdict stored with the score. — means the strategy stores none.">
-                        Screen
-                      </Th>
-                      <Th simple={simple} plain={PLAIN_FIELD.cap_usd_m} term="market_cap" num>
-                        Cap
-                      </Th>
-                      <Th simple={simple} plain={PLAIN_FIELD.si_pct_float} term="short_interest" num>
-                        SI %
-                      </Th>
-                      <Th simple={simple} plain={PLAIN_FIELD.float_m} term="float" num>
-                        Float
-                      </Th>
-                      <Th simple={simple} plain={PLAIN_FIELD.fee_pct} term="borrow_fee" num>
-                        Fee
-                      </Th>
-                      <Th simple={simple} plain={PLAIN_FIELD.volx20d} term="volume_x" num>
-                        Vol×
-                      </Th>
-                      <Th simple={simple} plain={PLAIN_FIELD.run3m_pct} term="run3m" num>
-                        3m
-                      </Th>
-                      <Th simple={simple} plain="30 days" text="Price change over 30 days from daily closes, with the gap to the industry's ETF beneath." num>
-                        30d
-                      </Th>
-                      <Th simple={simple} plain={PLAIN_FIELD.earnings} term="catalyst">
-                        Earnings
-                      </Th>
-                      <th scope="col">
-                        <span className="sr-only">{simple ? "Actions" : "Pin"}</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r, i) => {
-                      const cov = coverage(r.components_present, r.components_total);
-                      const sn = r.snapshot;
-                      return (
-                        <tr key={r.symbol} data-rownav={i} className={`rowlink ${cursor === i ? "cursor" : ""}`} onClick={() => openRow(r)}>
-                          <td className="c-sel c-hide" onClick={(e) => e.stopPropagation()}>
-                            <input type="checkbox" checked={selected.has(r.symbol)} onChange={() => toggleSelect(r.symbol)} aria-label={`Select ${r.symbol} for compare`} />
-                          </td>
-                          <td className="rank c-rank">{r.rank}</td>
-                          <td className="name-cell c-sym">
-                            <Link className="sym" to={`/stock/${r.symbol}`} onClick={(e) => e.stopPropagation()}>
-                              {r.symbol}
-                            </Link>
-                            <span className="theme" title={r.theme}>
-                              {r.theme}
-                            </span>
-                            <span className="xs faint">
-                              {r.industry.label}
-                              {r.lane ? ` · ${r.lane}` : ""}
-                            </span>
-                          </td>
-                          <td className="c-band">
-                            <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} strategy={strat} />
-                          </td>
-                          <td className="num c-cov cov-cell" data-label={simple ? "Data" : "Coverage"} title={`${cov.present} of ${cov.total} inputs had data`}>
-                            <span className="covbar" aria-hidden="true">
-                              {[0, 1, 2].map((k) => (
-                                <span key={k} className={k < cov.segments ? "filled" : ""} />
-                              ))}
-                            </span>
-                            {r.components_present}/{r.components_total}
-                          </td>
-                          {simple ? (
-                            <td className="num c-delta" data-label="Since last run" title={changeSentence(r.delta_1d)}>
-                              {shortChange(r.delta_1d)}
+              {tableScroll.can && <p className="hint tscroll-hint">Swipe sideways for more columns.</p>}
+              <div className={`tscroll-wrap ${tableScroll.can && !tableScroll.end ? "fade" : ""}`}>
+                <div className={`table-card cards ${simple ? "simple-table" : ""}`} ref={tableRef}>
+                  <table className="data compact screen-table">
+                    <thead>
+                      <tr>
+                        <th scope="col" className="c-sel">
+                          <span className="sr-only">Select for compare</span>
+                        </th>
+                        <th className="rank" scope="col">
+                          #
+                        </th>
+                        <th scope="col">Name</th>
+                        <Th simple={simple} plain="Score" term={simple ? "score" : "band"}>
+                          Band
+                        </Th>
+                        <Th simple={simple} plain="Inputs with data" term="coverage" num>
+                          Cov
+                        </Th>
+                        <Th simple={simple} plain="Since last run" term="delta_run" num>
+                          Δ run
+                        </Th>
+                        <Th simple={simple} plain="Passed filters?" text="Hard-filter verdict stored with the score. — means the strategy stores none.">
+                          Screen
+                        </Th>
+                        <Th simple={simple} plain={PLAIN_FIELD.cap_usd_m} term="market_cap" num>
+                          Cap
+                        </Th>
+                        <Th simple={simple} plain={PLAIN_FIELD.si_pct_float} term="short_interest" num>
+                          SI %
+                        </Th>
+                        <Th simple={simple} plain={PLAIN_FIELD.float_m} term="float" num>
+                          Float
+                        </Th>
+                        <Th simple={simple} plain={PLAIN_FIELD.fee_pct} term="borrow_fee" num>
+                          Fee
+                        </Th>
+                        <Th simple={simple} plain={PLAIN_FIELD.volx20d} term="volume_x" num>
+                          Vol×
+                        </Th>
+                        <Th simple={simple} plain={PLAIN_FIELD.run3m_pct} term="run3m" num>
+                          3m
+                        </Th>
+                        <Th simple={simple} plain="30 days" text="Price change over 30 days from daily closes, with the gap to the industry's ETF beneath." num>
+                          30d
+                        </Th>
+                        <Th simple={simple} plain={PLAIN_FIELD.earnings} term="catalyst">
+                          Earnings
+                        </Th>
+                        <th scope="col">
+                          <span className="sr-only">{simple ? "Actions" : "Pin"}</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r, i) => {
+                        const cov = coverage(r.components_present, r.components_total);
+                        const sn = r.snapshot;
+                        return (
+                          <tr key={r.symbol} data-rownav={i} className={`rowlink ${cursor === i ? "cursor" : ""}`} onClick={() => openRow(r)}>
+                            <td className="c-sel c-hide" onClick={(e) => e.stopPropagation()}>
+                              <input type="checkbox" checked={selected.has(r.symbol)} onChange={() => toggleSelect(r.symbol)} aria-label={`Select ${r.symbol} for compare`} />
                             </td>
-                          ) : (
-                            <td className="num c-delta" data-label="Δ">
-                              {delta(r.delta_1d)}
+                            <td className="rank c-rank">{r.rank}</td>
+                            <td className="name-cell c-sym">
+                              <Link className="sym" to={`/stock/${r.symbol}`} onClick={(e) => e.stopPropagation()}>
+                                {r.symbol}
+                              </Link>
+                              <span className="theme" title={r.theme}>
+                                {r.theme}
+                              </span>
+                              <span className="xs faint">
+                                {r.industry.label}
+                                {r.lane ? ` · ${r.lane}` : ""}
+                              </span>
                             </td>
-                          )}
-                          <td className="c-hide">
-                            {r.hf_pass == null ? (
-                              <span className="faint">—</span>
+                            <td className="c-band">
+                              <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} strategy={strat} />
+                            </td>
+                            <td className="num c-cov cov-cell" data-label={simple ? "Inputs with data" : "Coverage"} title={`${cov.present} of ${cov.total} inputs had data`}>
+                              <span className="covbar" aria-hidden="true">
+                                {[0, 1, 2].map((k) => (
+                                  <span key={k} className={k < cov.segments ? "filled" : ""} />
+                                ))}
+                              </span>
+                              {r.components_present}/{r.components_total}
+                            </td>
+                            {simple ? (
+                              <td className="num c-delta" data-label="Since last run" title={changeSentence(r.delta_1d)}>
+                                {shortChange(r.delta_1d)}
+                              </td>
                             ) : (
-                              <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`}>{r.hf_pass ? "✓ PASS" : `✕ ${r.hf_fails} FAIL`}</span>
+                              <td className="num c-delta" data-label="Δ">
+                                {delta(r.delta_1d)}
+                              </td>
                             )}
-                          </td>
-                          <td className="num c-hide">{fmtMoney(sn.cap_usd_m)}</td>
-                          <td className="num c-hide">{sn.si_pct_float == null ? "—" : `${sn.si_pct_float}%`}</td>
-                          <td className="num c-hide">{sn.float_m == null ? "—" : `${sn.float_m}M`}</td>
-                          <td className="num c-hide">{sn.fee_pct == null ? "—" : `${sn.fee_pct}%`}</td>
-                          <td className="num c-hide">{sn.volx20d == null ? "—" : `${sn.volx20d}x`}</td>
-                          <td className={`num c-hide ${tone(sn.run3m_pct)}`}>{pct(sn.run3m_pct, 0)}</td>
-                          <td className="c-move" data-label={simple ? "30 days" : "30d"}>
-                            <span className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
-                              <Spark closes={r.price.closes} width={72} height={24} />
-                              <Move value={r.price.chg_30d} />
-                            </span>
-                            {r.price.rel_30d != null && (
-                              <span className="xs faint" style={{ display: "block" }} title={`vs ${r.price.benchmark}`}>
-                                {pct(r.price.rel_30d)} vs {r.price.benchmark}
-                              </span>
-                            )}
-                          </td>
-                          <td className="c-hide">
-                            {r.earnings ? (
-                              <span className={`chip chip-plain ${r.earnings.days != null && r.earnings.days >= 0 && r.earnings.days <= 14 ? "soon" : ""}`} title={`${r.earnings.date}${r.earnings.confidence ? ` · ${r.earnings.confidence}` : ""}`}>
-                                {inDays(r.earnings.days)}
-                              </span>
-                            ) : (
-                              <span className="faint">—</span>
-                            )}
-                          </td>
-                          {simple ? (
-                            <td className="c-act" onClick={(e) => e.stopPropagation()}>
-                              <span className="act">
-                                {pins && <Pin symbol={r.symbol} pinned={pins.has(r.symbol)} onChange={onPinChange} />}
-                                <NotifyButton symbol={r.symbol} compact />
-                              </span>
+                            <td className="c-hide">
+                              {r.hf_pass == null ? (
+                                <span className="faint">—</span>
+                              ) : (
+                                <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`}>{r.hf_pass ? "✓ PASS" : `✕ ${r.hf_fails} FAIL`}</span>
+                              )}
                             </td>
-                          ) : (
-                            <td className="c-pin">{pins && <Pin symbol={r.symbol} pinned={pins.has(r.symbol)} onChange={onPinChange} />}</td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            <td className="num c-hide">{fmtMoney(sn.cap_usd_m)}</td>
+                            <td className="num c-hide">{sn.si_pct_float == null ? "—" : `${sn.si_pct_float}%`}</td>
+                            <td className="num c-hide">{sn.float_m == null ? "—" : `${sn.float_m}M`}</td>
+                            <td className="num c-hide">{sn.fee_pct == null ? "—" : `${sn.fee_pct}%`}</td>
+                            <td className="num c-hide">{sn.volx20d == null ? "—" : `${sn.volx20d}x`}</td>
+                            <td className={`num c-hide ${tone(sn.run3m_pct)}`}>{pct(sn.run3m_pct, 0)}</td>
+                            <td className="c-move" data-label={simple ? "30 days" : "30d"}>
+                              <span className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+                                <Spark closes={r.price.closes} width={72} height={24} />
+                                <Move value={r.price.chg_30d} />
+                              </span>
+                              {r.price.rel_30d != null && (
+                                <span className="xs faint" style={{ display: "block" }} title={`vs ${r.price.benchmark}${r.industry && r.industry.label ? ` (${r.industry.label} ETF)` : ""}`}>
+                                  {pct(r.price.rel_30d)} vs {r.price.benchmark}
+                                  {r.industry && r.industry.label && <span className="bench-ind"> ({r.industry.label} ETF)</span>}
+                                </span>
+                              )}
+                            </td>
+                            <td className="c-hide">
+                              {r.earnings ? (
+                                <span className={`chip chip-plain ${r.earnings.days != null && r.earnings.days >= 0 && r.earnings.days <= 14 ? "soon" : ""}`} title={`${r.earnings.date}${r.earnings.confidence ? ` · ${r.earnings.confidence}` : ""}`}>
+                                  {inDays(r.earnings.days)}
+                                </span>
+                              ) : (
+                                <span className="faint">—</span>
+                              )}
+                            </td>
+                            {simple ? (
+                              <td className="c-act" onClick={(e) => e.stopPropagation()}>
+                                <span className="act">
+                                  {pins && <Pin symbol={r.symbol} pinned={pins.has(r.symbol)} onChange={onPinChange} />}
+                                  <NotifyButton symbol={r.symbol} compact />
+                                </span>
+                              </td>
+                            ) : (
+                              <td className="c-pin">{pins && <Pin symbol={r.symbol} pinned={pins.has(r.symbol)} onChange={onPinChange} />}</td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               {selected.size > 0 && (
@@ -885,14 +962,23 @@ export default function Screen() {
               {data.meta.truncated && (
                 <div className="upgrade-card">
                   <div className="copy">
-                    <b>{data.meta.matched - data.meta.shown}</b> more {data.meta.matched - data.meta.shown === 1 ? "name matches" : "names match"} this screen than your
-                    plan lists; it shows the top <b>{data.meta.names_shown_limit}</b>
-                    {nextTier ? (
+                    <b>{data.meta.matched - data.meta.shown}</b> more {data.meta.matched - data.meta.shown === 1 ? "name" : "names"} in your universe{" "}
+                    {data.meta.matched - data.meta.shown === 1 ? "matches" : "match"} this screen than this list reaches; your plan lists{" "}
+                    <b>{data.meta.names_shown_limit}</b>.
+                    {nextTier && (
                       <>
-                        . On <b>{nextTier.label}</b> we would list the top {nextTier.names_shown_limit} and tell you what changed on each of them.
+                        {" "}
+                        On <b>{nextTier.label}</b> this list would reach {nextTier.names_shown_limit} names and we would tell you which of them changed band
+                        each morning
+                        {nextTier.alerts_limit === 0 ? (
+                          "."
+                        ) : (
+                          <>
+                            , with {alertsLabel(nextTier.alerts_limit)} on{" "}
+                            {nextTier.picks_limit == null || nextTier.picks_limit >= 999 ? "the names you pin" : `up to ${plural(nextTier.picks_limit, "pinned name")}`}.
+                          </>
+                        )}
                       </>
-                    ) : (
-                      "."
                     )}
                   </div>
                   {nextTier && (
