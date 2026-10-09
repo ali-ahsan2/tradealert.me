@@ -8,7 +8,6 @@ import { DEFAULT_TRIGGERS, GLOSSARY } from "../lib/glossary.js";
 import { triggerLabel, triggerSentence } from "../lib/plain.js";
 import { useMode } from "../lib/mode.js";
 import SearchBar from "../components/SearchBar.jsx";
-import { AlertItem } from "../components/EventList.jsx";
 import NotifyButton, { invalidateRules } from "../components/NotifyButton.jsx";
 import Explain from "../components/Explain.jsx";
 import { Empty, ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
@@ -55,6 +54,23 @@ const SAMPLE_EVENTS = [
 ];
 
 const EVENT_LIMIT = 100;
+// Industry-wide events (names the subscriber was not watching) reveal this
+// many at a time under the fold.
+const OTHERS_PAGE = 20;
+
+// An event was sent to this subscriber when a delivery exists for it; the
+// rest fired across their industries on names they had not armed.
+function wasSent(ev) {
+  return Boolean(ev.channels && ev.channels.length);
+}
+
+// Put the cursor in the ticker field of the arm form.
+function focusSymbol() {
+  const el = document.getElementById("al-symbol");
+  if (!el) return;
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  el.focus({ preventScroll: true });
+}
 
 function buildQuery(params) {
   const qs = new URLSearchParams();
@@ -76,13 +92,19 @@ function channelWord(k) {
   return c ? c[1].toLowerCase() : k;
 }
 
-// The plain event card: the trigger's plain label is the title, the fact
-// the engine recorded is the body. Unread is a dot plus bold, never colour
-// alone; a dilution filing keeps its one allowed coloured line.
-function PlainEvent({ ev, tz, onRead }) {
+// The event card: the trigger's plain label is the title, the fact the
+// engine recorded is the body. Unread is a dot plus bold, never colour
+// alone. A dilution filing carries a small warn-toned "red flag" chip; red
+// and green stay reserved for price moves and PASS/FAIL. Full mode adds the
+// raw trigger label, the theme and the delivery record.
+const DILUTION_NOTE =
+  "The company filed to sell more shares (an S-3 or 424B). More shares means each existing share is a smaller slice, and the score takes a haircut for it.";
+
+function PlainEvent({ ev, tz, onRead, full = false }) {
   const unread = ev.read === false;
   const a = age(ev.fired_at);
   const dilution = DILUTION_TRIGGERS.has(ev.trigger_key);
+  const sent = wasSent(ev);
   const markRead = () => {
     if (!unread || !ev.id) return;
     api("/me/alerts/read", { method: "POST", json: { event_id: ev.id } })
@@ -96,26 +118,44 @@ function PlainEvent({ ev, tz, onRead }) {
         <Link className="sym" to={`/stock/${ev.symbol}`} onClick={markRead}>
           {ev.symbol}
         </Link>
-        <span className="tl-title">{triggerLabel(ev.trigger_key) || ev.trigger}</span>
+        <span className="tl-title">{full ? ev.trigger : triggerLabel(ev.trigger_key) || ev.trigger}</span>
+        {dilution && (
+          <Explain text={DILUTION_NOTE} title="Red flag: dilution filing" className="tl-xchip">
+            <span className="chip tl-flag">Red flag</span>
+          </Explain>
+        )}
         <span className="when" title={dateTime(ev.fired_at, tz)}>
           {a ? `${a.label} ago` : shortDate(ev.fired_at, tz)}
         </span>
       </div>
-      <div className={`r2 ${dilution ? "dilution" : ""} ${unread ? "bold" : ""}`}>{ev.detail || ev.trigger}</div>
+      <div className={`r2 ${unread ? "bold" : ""}`}>{ev.detail || ev.trigger}</div>
+      {full && (
+        <div className="r3">
+          {ev.theme ? `${ev.theme} · ` : ""}
+          {sent
+            ? `delivered by ${ev.channels.join(", ")}${ev.delivered_at ? ` · ${shortDate(ev.delivered_at, tz)}` : ""}`
+            : "not armed on your account; shown because the name is in your universe"}
+        </div>
+      )}
       <div className="r4">
         <Link to={`/stock/${ev.symbol}`} onClick={markRead}>
-          Open {ev.symbol} →
+          Open report →
         </Link>
         {unread && (
           <button className="btn-quiet" onClick={markRead}>
             Mark read
           </button>
         )}
-        <span className="xs faint">
-          {ev.channels && ev.channels.length
-            ? `sent to you by ${ev.channels.map(channelWord).join(", ")}`
-            : `you were not watching ${ev.symbol}; shown because it is in your universe`}
-        </span>
+        {!sent && (
+          <Link to={`/alerts?tab=armed&symbol=${encodeURIComponent(ev.symbol)}`} className="faint">
+            Watch {ev.symbol}
+          </Link>
+        )}
+        {!full && (
+          <span className="xs faint">
+            {sent ? `sent to you by ${ev.channels.map(channelWord).join(", ")}` : `you were not watching ${ev.symbol}; shown because it is in your universe`}
+          </span>
+        )}
       </div>
     </article>
   );
@@ -222,6 +262,15 @@ export default function Alerts() {
     formRef.current.scrollIntoView({ block: narrow ? "start" : "nearest", behavior: "smooth" });
   }, [tab, fSymbol]);
 
+  // "Watch a name" in the header: switch to the arm tab, then put the cursor
+  // in the ticker field once the form is on screen.
+  const wantFocus = useRef(false);
+  useEffect(() => {
+    if (tab !== "armed" || !wantFocus.current) return;
+    wantFocus.current = false;
+    focusSymbol();
+  }, [tab]);
+
   const setFilters = (next) => {
     const merged = { trigger: fTrigger, symbol: fSymbol, unread: fUnread ? 1 : "", days: fDays === 365 ? "" : fDays, ...next };
     // a symbol filter on the history must say so, or the address would read
@@ -230,6 +279,12 @@ export default function Alerts() {
     navigate(`/alerts${buildQuery({ tab: tabOut, ...merged })}`, { replace: true });
   };
   const setTab = (t) => navigate(`/alerts${buildQuery({ tab: t === "history" ? "" : t, symbol: t === "armed" ? fSymbol : "" })}`, { replace: true });
+  const watchAName = () => {
+    setFormErr(null);
+    if (tab === "armed") return focusSymbol();
+    wantFocus.current = true;
+    return setTab("armed");
+  };
 
   const limit = me && me.tier ? me.tier.alerts_limit : null;
   const used = rules ? rules.length : 0;
@@ -237,6 +292,12 @@ export default function Alerts() {
   const atQuota = remaining === 0;
   const tz = me && me.settings ? me.settings.timezone : undefined;
   const unreadCount = useMemo(() => (events || []).filter((e) => e.read === false).length, [events]);
+  // Alerts sent to this subscriber (a name they had armed) come first; the
+  // rest fired across their industries on names they were not watching.
+  const sent = useMemo(() => (events || []).filter(wasSent), [events]);
+  const others = useMemo(() => (events || []).filter((e) => !wasSent(e)), [events]);
+  const [othersShown, setOthersShown] = useState(OTHERS_PAGE);
+  useEffect(() => setOthersShown(OTHERS_PAGE), [events]);
   const firstAlertTier = tiers && [...tiers].sort((a, b) => a.price_monthly_cents - b.price_monthly_cents).find((t) => t.alerts_limit !== 0);
   const extraChannels = CHANNELS.filter(([k]) => k !== "email" && hasChannel(me, k));
   const restTriggers = TRIGGERS.filter(([k]) => !DEFAULT_TRIGGERS.includes(k));
@@ -280,7 +341,7 @@ export default function Alerts() {
     const d = detail || "";
     if (/verify/i.test(d)) return { kind: "verify", text: "Alerts only go to a verified address. Open the link we sent when you signed up, or request a new one from account settings." };
     if (/channel/i.test(d)) return { kind: "channel", text: `${d.charAt(0).toUpperCase()}${d.slice(1)}. Email always works; the other channels come with a plan that includes them.` };
-    if (/plan arms|upgrade/i.test(d)) return { kind: "quota", text: `${armed ? `Armed ${armed}, then: ` : ""}${d}. Disarm an alert you no longer need, or move to a plan with more.` };
+    if (/plan arms|upgrade/i.test(d)) return { kind: "quota", text: `${armed ? `Armed ${armed}, then: ` : ""}${d}. Disarm an alert you no longer need, or move to a plan that can watch this name as well.` };
     return { kind: "other", text: `${armed ? `Armed ${armed}, then: ` : ""}${d || "couldn't arm that alert."}` };
   };
 
@@ -290,7 +351,7 @@ export default function Alerts() {
     const keys = TRIGGERS.map(([k]) => k).filter((k) => picked.has(k));
     if (keys.length === 0) return setFormErr({ kind: "other", text: "Choose at least one trigger." });
     if (remaining !== Infinity && keys.length > remaining) {
-      return setFormErr({ kind: "quota", text: `That is ${plural(keys.length, "alert")}; your plan has ${remaining} left. Untick one, disarm one you no longer need, or move to a plan with more.` });
+      return setFormErr({ kind: "quota", text: `That is ${plural(keys.length, "alert")}; your plan has ${remaining} left. Untick one, turn off one you no longer need, or move to a plan that can watch this name as well.` });
     }
     setBusy(true);
     let armed = 0;
@@ -381,7 +442,7 @@ export default function Alerts() {
         <div className="gate">
           <div className="sample alert-list" aria-hidden="true">
             {SAMPLE_EVENTS.map((ev) => (
-              <AlertItem key={ev.id} ev={ev} />
+              <PlainEvent key={ev.id} ev={ev} />
             ))}
           </div>
           <div className="panel">
@@ -428,15 +489,29 @@ export default function Alerts() {
                     </>
                   ) : (
                     <>
-                      <b>{firedCount >= EVENT_LIMIT ? `${EVENT_LIMIT}+` : firedCount}</b> {firedCount === 1 ? "alert" : "alerts"} fired on {fSymbol ? <b>{fSymbol}</b> : "your names"} in the last{" "}
-                      <b>{windowWord(fDays)}</b>
-                      {fTrigger || fUnread ? " matching this filter" : ""}
-                      {unreadCount > 0 ? (
+                      {sent.length === 0 ? (
                         <>
-                          ; <b>{unreadCount}</b> unread
+                          No alert was sent to you{fSymbol ? <> on <b>{fSymbol}</b></> : ""} in the last <b>{windowWord(fDays)}</b>
+                        </>
+                      ) : (
+                        <>
+                          <b>{sent.length}</b> {sent.length === 1 ? "alert was" : "alerts were"} sent to you{fSymbol ? <> on <b>{fSymbol}</b></> : ""} in the last{" "}
+                          <b>{windowWord(fDays)}</b>
+                          {unreadCount > 0 ? (
+                            <>
+                              {" "}
+                              (<b>{unreadCount}</b> unread)
+                            </>
+                          ) : null}
+                        </>
+                      )}
+                      {fTrigger || fUnread ? " matching this filter" : ""}
+                      {others.length > 0 ? (
+                        <>
+                          ; <b>{others.length}</b> more fired across your industries on names you were not watching
                         </>
                       ) : null}
-                      .
+                      .{firedCount >= EVENT_LIMIT ? ` Only the latest ${EVENT_LIMIT} are counted.` : ""}
                     </>
                   ))}
                 {rules &&
@@ -452,34 +527,37 @@ export default function Alerts() {
             )}
           </p>
         </div>
-        {tab === "history" && unreadCount > 0 && (
-          <div className="actions">
+        <div className="actions">
+          {tab === "history" && unreadCount > 0 && (
             <button className="btn btn-secondary btn-sm" onClick={markAll}>
               Mark all read ({unreadCount})
             </button>
-          </div>
-        )}
+          )}
+          <button type="button" className="btn btn-primary btn-sm" onClick={watchAName}>
+            Watch a name
+          </button>
+        </div>
       </div>
 
-      <div className="tabs" role="tablist" aria-label="Alerts">
+      <div className="tabs tl-tabs" role="tablist" aria-label="Alerts">
         <button role="tab" className="tab" aria-selected={tab === "history"} onClick={() => setTab("history")}>
-          {simple ? "What fired" : "History"}
-          {events ? ` · ${events.length}` : ""}
+          {simple ? "Fired" : "History"}
+          {events ? ` · ${sent.length}` : ""}
           {unreadCount > 0 && <span className="navbadge">{unreadCount}</span>}
         </button>
         <button role="tab" className="tab" aria-selected={tab === "armed"} onClick={() => setTab("armed")}>
-          {simple ? "Alerts on" : "Armed"}
-          {rules ? ` · ${rules.length}` : ""}
+          {simple ? "Watching" : "Armed"}
+          {rules ? ` · ${simple ? names : rules.length}` : ""}
         </button>
         <button role="tab" className="tab" aria-selected={tab === "outcomes"} onClick={() => setTab("outcomes")}>
-          {simple ? "What happened next" : "Outcomes"}
+          {simple ? "What followed" : "Outcomes"}
         </button>
       </div>
 
       {tab === "outcomes" && (
         <>
           <div className="filters-row">
-            <span className="muted small">What price did after each kind of alert fired on the names you can see, measured on daily bars.</span>
+            <span className="muted small">What price did after each kind of alert fired on the names you can see, measured on end-of-day price bars.</span>
             <span className="spacer" />
             <label className="ctl">
               Window
@@ -512,7 +590,7 @@ export default function Alerts() {
                             </span>
                           </div>
                           <p className="tl-sent">
-                            {t.measured > 0 ? (
+                            {enough ? (
                               <>
                                 Five trading days later the average move was <b className={`num ${tone(t.mean_chg_5d)}`}>{signed(t.mean_chg_5d, 1, "%")}</b>
                                 {t.mean_max_5d != null ? (
@@ -520,17 +598,12 @@ export default function Alerts() {
                                     , with an average high of <b className={`num ${tone(t.mean_max_5d)}`}>{signed(t.mean_max_5d, 1, "%")}</b> on the way
                                   </>
                                 ) : null}
-                                .{" "}
+                                . <b className="num">{rate(t.share_up_5d)}</b> closed higher after five days; <b className="num">{rate(t.share_max_10)}</b> touched +10% on the way.
                               </>
+                            ) : t.measured > 0 ? (
+                              <span className="faint">Fewer than ten measured, so no figure yet.</span>
                             ) : (
-                              "No five-day window has closed yet. "
-                            )}
-                            {enough ? (
-                              <>
-                                <b className="num">{rate(t.share_up_5d)}</b> closed higher after five days; <b className="num">{rate(t.share_max_10)}</b> touched +10% on the way.
-                              </>
-                            ) : (
-                              <span className="faint">Fewer than ten measured, so no rate yet.</span>
+                              <span className="faint">No five-day window has closed yet, so no figure yet.</span>
                             )}
                           </p>
                         </div>
@@ -575,6 +648,11 @@ export default function Alerts() {
                     <tbody>
                       {outcomes.triggers.map((t) => {
                         const enough = t.measured >= 10;
+                        const few = (
+                          <span className="faint" title="Fewer than ten measured events; no average or rate is shown">
+                            n &lt; 10
+                          </span>
+                        );
                         return (
                           <tr key={t.key}>
                             <td>
@@ -582,13 +660,13 @@ export default function Alerts() {
                             </td>
                             <td className="num">{t.n}</td>
                             <td className="num">{t.measured}</td>
-                            <td className={`num ${tone(t.mean_chg_1d)}`}>{signed(t.mean_chg_1d, 1, "%")}</td>
-                            <td className={`num ${tone(t.mean_chg_5d)}`} title={t.median_chg_5d != null ? `median ${signed(t.median_chg_5d, 1, "%")}` : ""}>
-                              {signed(t.mean_chg_5d, 1, "%")}
+                            <td className={`num ${enough ? tone(t.mean_chg_1d) : ""}`}>{enough ? signed(t.mean_chg_1d, 1, "%") : few}</td>
+                            <td className={`num ${enough ? tone(t.mean_chg_5d) : ""}`} title={enough && t.median_chg_5d != null ? `median ${signed(t.median_chg_5d, 1, "%")}` : ""}>
+                              {enough ? signed(t.mean_chg_5d, 1, "%") : few}
                             </td>
-                            <td className={`num ${tone(t.mean_max_5d)}`}>{signed(t.mean_max_5d, 1, "%")}</td>
-                            <td className="num">{enough ? rate(t.share_up_5d) : <span className="faint" title="Fewer than ten measured events; no rate is shown">n &lt; 10</span>}</td>
-                            <td className="num">{enough ? rate(t.share_max_10) : <span className="faint">n &lt; 10</span>}</td>
+                            <td className={`num ${enough ? tone(t.mean_max_5d) : ""}`}>{enough ? signed(t.mean_max_5d, 1, "%") : few}</td>
+                            <td className="num">{enough ? rate(t.share_up_5d) : few}</td>
+                            <td className="num">{enough ? rate(t.share_max_10) : few}</td>
                           </tr>
                         );
                       })}
@@ -735,9 +813,40 @@ export default function Alerts() {
             </Empty>
           )}
           {events && events.length > 0 && (
-            <div className="alert-list">
-              {events.map((ev) => (simple ? <PlainEvent key={ev.id} ev={ev} tz={tz} onRead={onRead} /> : <AlertItem key={ev.id} ev={ev} tz={tz} onRead={onRead} />))}
-            </div>
+            <>
+              {sent.length > 0 ? (
+                <div className="alert-list">
+                  {sent.map((ev) => (
+                    <PlainEvent key={ev.id} ev={ev} tz={tz} onRead={onRead} full={full} />
+                  ))}
+                </div>
+              ) : (
+                <Empty title={hasFilters ? "No alert sent to you matches this filter." : "Nothing was sent to you in this window."}>
+                  We only send an alert for a name you are watching. {plural(others.length, "alert")} fired on names in your industries that you were not
+                  watching; they are listed below.
+                </Empty>
+              )}
+              {others.length > 0 && (
+                <details className="acc tl-also" open={sent.length === 0}>
+                  <summary>
+                    Also fired in your industries ({others.length})
+                    <span className="sum-note">names you were not watching</span>
+                  </summary>
+                  <div className="acc-body">
+                    <div className="alert-list">
+                      {others.slice(0, othersShown).map((ev) => (
+                        <PlainEvent key={ev.id} ev={ev} tz={tz} onRead={onRead} full={full} />
+                      ))}
+                    </div>
+                    {others.length > othersShown && (
+                      <button type="button" className="btn-quiet" style={{ marginTop: "var(--s-3)", minHeight: 40 }} onClick={() => setOthersShown((n) => n + OTHERS_PAGE)}>
+                        Show {Math.min(OTHERS_PAGE, others.length - othersShown)} more ({others.length - othersShown} left)
+                      </button>
+                    )}
+                  </div>
+                </details>
+              )}
+            </>
           )}
         </>
       )}
@@ -749,7 +858,7 @@ export default function Alerts() {
               <span>
                 Alerts: <b>{limit == null ? `${used} on · unlimited` : `${used} of ${limit} used`}</b> · {me && me.tier ? me.tier.label : ""}
               </span>
-              {atQuota && <Link to="/pricing">See plans for more</Link>}
+              {atQuota && <Link to="/pricing">See plans</Link>}
             </div>
             {!rules && <Skeleton rows={4} height={44} />}
             {rules && rules.length === 0 && (
@@ -838,15 +947,22 @@ export default function Alerts() {
             {me && !me.verified ? <Notice tone="warn">Alerts only go to a verified address. Open the link we sent when you signed up, or request a new one from account settings.</Notice> : null}
             <form onSubmit={arm}>
               <div className="field">
-                <label htmlFor="al-symbol">{simple ? "Which name?" : "Name"}</label>
-                <SearchBar placeholder="Find a name in your universe" onPick={(r) => setSymbol(r.symbol)} />
+                <span className="field-label">{simple ? "Which name?" : "Name"}</span>
+                <SearchBar placeholder="Find a name" onPick={(r) => setSymbol(r.symbol)} />
+                <p className="hint" style={{ margin: "var(--s-1) 0 0" }}>
+                  Search looks only inside your <Explain term="universe">universe</Explain>.
+                </p>
+                <label htmlFor="al-symbol" className="tl-or">
+                  or type the ticker
+                </label>
                 <input
                   id="al-symbol"
                   className="input mono"
                   value={symbol}
                   required
-                  placeholder="Symbol"
-                  style={{ textTransform: "uppercase", marginTop: "var(--s-2)" }}
+                  placeholder="ticker"
+                  autoComplete="off"
+                  style={{ textTransform: "uppercase" }}
                   onChange={(e) => setSymbol(e.target.value.toUpperCase())}
                 />
               </div>
@@ -882,7 +998,7 @@ export default function Alerts() {
                 )}
                 {remaining !== Infinity && picked.size > remaining && (
                   <p className="hint">
-                    That is {plural(picked.size, "alert")} and your plan has {remaining} left. Untick {picked.size - remaining}, turn one off, or <Link to="/pricing">see plans</Link> with more.
+                    That is {plural(picked.size, "alert")} and your plan has {remaining} left. Untick {picked.size - remaining}, turn one off, or <Link to="/pricing">move to a plan that can watch this name as well</Link>.
                   </p>
                 )}
               </div>
@@ -946,7 +1062,7 @@ export default function Alerts() {
               </button>
               {atQuota && (
                 <p className="help" style={{ marginTop: "var(--s-2)" }}>
-                  You're using all {limit} alerts on {me.tier.label}. Turn one off, or <Link to="/pricing">see plans</Link> with more.
+                  You're using all {limit} alerts on {me.tier.label}. Turn one off, or <Link to="/pricing">move to a plan that can watch this name as well</Link>.
                 </p>
               )}
             </form>

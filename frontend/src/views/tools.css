@@ -187,3 +187,104 @@
     grid-column: 2;
   }
 }
+
+/* ---- Review follow-up (DESIGN_V4 §7) ------------------------------------- */
+
+/* Tab strips wrap instead of clipping mid-word, and every pill is a thumb's
+   height. Used by Alerts and the Changes lens row. Doubled selectors beat
+   the base .tabs rule whatever the bundle order. */
+.tabs.tl-tabs {
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  overflow: visible;
+  scroll-snap-type: none;
+}
+.tabs.tl-tabs .tab {
+  height: auto;
+  min-height: 40px;
+}
+.tabs.tl-tabs .tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Changes: "Scoring lens:" leads the strategy pills. */
+.tl-lens {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-4);
+}
+.tl-lens .tabs { margin-bottom: 0; }
+.tl-lens-l {
+  flex: none;
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+}
+
+/* A chip that explains itself: the chip is the control, so no underline. */
+.tl-xchip .xp-term { text-decoration: none; }
+.tl-xchip .chip { cursor: help; }
+
+/* Alerts: a dilution filing is a red flag in the warn tone, never --neg. */
+.tl-flag {
+  color: var(--warn);
+  background: var(--warn-fill);
+  border: 1px solid transparent;
+}
+/* The shared alert card (dossier) coloured its dilution line --neg; red
+   stays reserved for price moves and FAIL. */
+.card.alert .r2.dilution { color: var(--warn); }
+
+/* Alerts: industry-wide events fold under the ones sent to you. */
+.tl-also { margin-top: var(--s-4); }
+.tl-also > summary { flex-wrap: wrap; }
+.tl-also .alert-list { margin-top: var(--s-2); }
+
+/* Alerts arm form: the second way to name a stock. */
+.tl-or {
+  display: block;
+  margin: var(--s-3) 0 var(--s-1);
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+}
+
+/* Calendar: PASS/FAIL carries its label. */
+.tl-filt {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+/* Watchlist: a score whose input count is not on file shows no coverage bar. */
+.tl-nocov {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.3;
+  font-size: var(--fs-sm);
+}
+.tl-nocov b { font-weight: 600; }
+.tl-nocov .hint { margin: 0; }
+
+/* Watchlist Simple: reorder arrows beside the actions. */
+.tl-move { display: inline-flex; gap: 2px; }
+.tl-move .btn-quiet {
+  min-width: 40px;
+  min-height: 40px;
+  justify-content: center;
+}
+
+/* Watchlist Full card on a phone: two columns, the actions on their own row. */
+@media (max-width: 640px) {
+  .card.wl-card { grid-template-columns: auto minmax(0, 1fr); }
+  .card.wl-card .act {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}

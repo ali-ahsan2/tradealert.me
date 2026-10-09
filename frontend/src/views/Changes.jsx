@@ -10,6 +10,7 @@ import ScoreBadge from "../components/ScoreBadge.jsx";
 import BandBar from "../components/BandBar.jsx";
 import Pin from "../components/Pin.jsx";
 import NotifyButton from "../components/NotifyButton.jsx";
+import Explain from "../components/Explain.jsx";
 import { Empty, ErrorCard, Monogram, Notice, Skeleton, StatusChip } from "../components/ui.jsx";
 import "./tools.css";
 
@@ -106,7 +107,7 @@ function ChangeList({ title, hint, list, kind, vs, k, pinned, onPin }) {
                 )}
                 {kind === "filter" && (
                   <>
-                    {" · "}
+                    {" · filters: "}
                     <span className={`verdict ${r.prev && r.prev.hf_pass ? "pass" : "fail"}`}>{r.prev && r.prev.hf_pass ? "PASS" : "FAIL"}</span> →{" "}
                     <span className={`verdict ${r.now && r.now.hf_pass ? "pass" : "fail"}`}>{r.now && r.now.hf_pass ? "PASS" : "FAIL"}</span>
                   </>
@@ -227,14 +228,40 @@ export default function Changes() {
         </div>
       </div>
 
-      <div className="tabs" role="tablist" aria-label="Strategy">
-        {(strategies || [{ key: "fast_mover", label: "Fast Mover", monogram: "FM", calibrated: true }]).map((st) => (
-          <button key={st.key} role="tab" className="tab" aria-selected={st.key === strategy} onClick={() => go(st.key, vs)}>
-            <Monogram size={20}>{st.monogram}</Monogram>
-            {st.label}
-            {!st.calibrated && <span className="chip chip-prov">Provisional</span>}
-          </button>
-        ))}
+      {/* The lens row: a label says what the pills are, the pills wrap rather
+          than clip mid-word, and the Provisional chip explains itself. Each
+          tab is a div because the chip inside it is a button of its own. */}
+      <div className="tl-lens">
+        <span className="tl-lens-l">
+          <Explain term="strategy">Scoring lens</Explain>:
+        </span>
+        <div className="tabs tl-tabs" role="tablist" aria-label="Scoring lens">
+          {(strategies || [{ key: "fast_mover", label: "Fast Mover", monogram: "FM", calibrated: true }]).map((st) => (
+            <div
+              key={st.key}
+              role="tab"
+              tabIndex={0}
+              className="tab"
+              aria-selected={st.key === strategy}
+              onClick={() => go(st.key, vs)}
+              onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  go(st.key, vs);
+                }
+              }}
+            >
+              <Monogram size={20}>{st.monogram}</Monogram>
+              {st.label}
+              {!st.calibrated && (
+                <Explain term="provisional" className="tl-xchip">
+                  <span className="chip chip-prov">Provisional</span>
+                </Explain>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       {err && err.status !== 404 && <ErrorCard error={err} onRetry={() => setReload((n) => n + 1)} title="Couldn't load changes." />}
@@ -294,7 +321,7 @@ export default function Changes() {
 
           <section className="card" aria-labelledby="dist-h">
             <div className="card-title">
-              <h2 id="dist-h">{simple ? "How the bands fell, before and after" : "Band distribution, before and after"}</h2>
+              <h2 id="dist-h">{simple ? "How names were spread across the bands, before and after" : "Band distribution, before and after"}</h2>
             </div>
             <div className="distpair">
               <div>
