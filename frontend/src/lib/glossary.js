@@ -104,7 +104,7 @@ export const GLOSSARY = {
   },
   run: {
     term: "Run",
-    short: "One pass of the engine over every stock in your industries. Runs happen each trading morning, and every figure on screen is stamped with the run it came from.",
+    short: "One pass of the engine over every stock in your industries. Runs happen each morning, and every figure on screen is stamped with the run it came from.",
   },
   catalyst: {
     term: "Catalyst",

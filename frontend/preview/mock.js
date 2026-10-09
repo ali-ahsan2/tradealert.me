@@ -186,7 +186,7 @@ function write(method, path, payload) {
     const row = wide && wide.rows.find((r) => r.symbol === sym);
     if (!row) return notFound();
     if (!picks.picks.some((p) => p.symbol === sym)) {
-      picks.picks.push({ id: Date.now(), symbol: sym, theme: row.theme, lane: row.lane, industry: row.industry, score_at_pin: row.value, pinned_at: new Date().toISOString(), value: row.value, band: row.band, delta_1d: row.delta_1d, note: "" });
+      picks.picks.push({ id: Date.now(), symbol: sym, theme: row.theme, lane: row.lane, industry: row.industry, score_at_pin: row.value, pinned_at: new Date().toISOString(), value: row.value, band: row.band, delta_1d: row.delta_1d, note: "", components_present: row.components_present, components_total: row.components_total });
       const d = hit(`/stock/${sym}?strategy=fast_mover`);
       if (d) d.pinned = true;
     }
