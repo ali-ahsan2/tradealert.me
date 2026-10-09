@@ -8,7 +8,6 @@ import {
   coverage,
   dateTime,
   delta,
-  deltaTone,
   dollars,
   downloadText,
   inDays,
@@ -829,7 +828,7 @@ export default function Board() {
                           </span>
                           {r.components_present}/{r.components_total}
                         </td>
-                        <td className={`num c-delta ${deltaTone(r.delta_1d)}`} data-label="Δ">
+                        <td className="num c-delta" data-label="Δ">
                           {delta(r.delta_1d)}
                         </td>
                         {hasVerdicts && (
@@ -969,7 +968,7 @@ function MoverCard({ title, rows, fresh }) {
               <span className="muted small" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {r.theme}
               </span>
-              <span className={`mono r ${fresh ? "" : deltaTone(r.delta_1d)}`}>{fresh ? fmtScore(r.value) : delta(r.delta_1d)}</span>
+              <span className="mono r">{fresh ? fmtScore(r.value) : delta(r.delta_1d)}</span>
             </li>
           ))}
         </ul>

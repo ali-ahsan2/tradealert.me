@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api, cached, toast } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
-import { coverage, dateTime, delta, deltaTone, dollars, downloadText, fmtMoney, inDays, pct, shortDate, toCsv, tone } from "../lib/fmt.js";
+import { coverage, dateTime, delta, dollars, downloadText, fmtMoney, inDays, pct, shortDate, toCsv, tone } from "../lib/fmt.js";
 import { nounFor } from "../lib/evidence.js";
 import { PLAIN_FIELD } from "../lib/glossary.js";
 import { changeSentence } from "../lib/plain.js";
@@ -809,7 +809,7 @@ export default function Screen() {
                               {shortChange(r.delta_1d)}
                             </td>
                           ) : (
-                            <td className={`num c-delta ${deltaTone(r.delta_1d)}`} data-label="Δ">
+                            <td className="num c-delta" data-label="Δ">
                               {delta(r.delta_1d)}
                             </td>
                           )}
