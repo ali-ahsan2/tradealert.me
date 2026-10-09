@@ -1,0 +1,231 @@
+/* Board and Screener, easy by default (DESIGN_V4 §7). Imported by both
+   views. Pure additions on top of styles.css and assist.css: the Simple
+   tables, the pill row, the "Find names that…" cards, the Advanced-filters
+   accordion. Colours come from tokens only, so dark mode follows. */
+
+/* Mode switch in the page header: a 40px tap target in a segmented pill. */
+.modeseg button {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: var(--fs-sm);
+}
+
+/* Simple filter pills on the Board. */
+.pillrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+
+.pillrow .fchip {
+  min-height: 40px;
+  padding: 0 var(--s-4);
+  font-size: var(--fs-sm);
+}
+
+.pillrow .xp {
+  margin-right: var(--s-2);
+}
+
+/* "More filters": the Full-mode controls, folded away in Simple. */
+.morefilters {
+  margin-bottom: var(--s-4);
+}
+
+.morefilters > summary {
+  min-height: 44px;
+}
+
+.morefilters > .acc-body .toolbar {
+  margin-bottom: var(--s-2);
+}
+
+/* Simple tables: plain columns, one-line "why", bigger targets. */
+.simple-table .name-cell .ind {
+  display: block;
+  margin-top: 2px;
+}
+
+.simple-table td.c-why {
+  max-width: 36ch;
+}
+
+.simple-table .why {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  max-width: 100%;
+  min-width: 0;
+}
+
+.simple-table .why-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.simple-table td.c-delta,
+.simple-table td.c-next,
+.simple-table td.c-act {
+  white-space: nowrap;
+}
+
+.simple-table td.c-delta {
+  font-family: var(--font-sans);
+}
+
+.simple-table .act {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+
+.simple-table .pin {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.simple-table .btn-notify.btn-sm {
+  min-height: 40px;
+}
+
+@media (max-width: 899px) {
+  .table-card.cards.simple-table td.c-why {
+    order: 6;
+    flex-basis: 100%;
+    max-width: none;
+    font-size: var(--fs-sm);
+    color: var(--ink-muted);
+  }
+
+  .table-card.cards.simple-table td.c-delta,
+  .table-card.cards.simple-table td.c-next {
+    order: 7;
+    font-size: var(--fs-xs);
+    color: var(--ink-muted);
+    text-align: left;
+  }
+
+  .table-card.cards.simple-table td.c-move {
+    order: 7;
+  }
+
+  .table-card.cards.simple-table td.c-act {
+    order: 8;
+    margin-left: auto;
+  }
+}
+
+/* A header explainer must not be clipped by the table card's scroll box
+   while it is open; it closes on the first scroll anyway. */
+.table-card:has(.xp-pop) {
+  overflow: visible;
+}
+
+/* Screener, Simple: "Find names that…" cards built from the presets. */
+.find {
+  margin-bottom: var(--s-4);
+}
+
+.find-h {
+  font-size: var(--fs-md);
+  margin: 0 0 var(--s-2);
+}
+
+.find-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
+  gap: var(--s-2);
+}
+
+.pcard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 64px;
+  padding: var(--s-3) var(--s-4);
+  text-align: left;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid transparent;
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  font: inherit;
+}
+
+.pcard:hover {
+  border-color: var(--border-strong);
+}
+
+.pcard:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pcard[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent), var(--shadow);
+}
+
+.pcard-t {
+  font-weight: 700;
+  font-size: var(--fs-sm);
+}
+
+.pcard-d {
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+
+/* Advanced filters accordion. In Full on a wide screen it is the sticky
+   left column it always was; in Simple it sits above the results. */
+.adv > summary {
+  min-height: 44px;
+}
+
+.adv .fpanel {
+  display: block;
+}
+
+.screen.screen-simple {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.screen-simple .fpanel {
+  position: static;
+  max-height: none;
+  overflow: visible;
+}
+
+.screen-simple .fpanel-foot {
+  position: static;
+}
+
+.adv .facets {
+  margin: 0;
+}
+
+.adv .fpanel-head {
+  gap: var(--s-3);
+  align-items: center;
+}
+
+.adv .fpanel-head .btn-quiet {
+  margin-left: auto;
+}
+
+@media (min-width: 1000px) {
+  .screen:not(.screen-simple) > .adv {
+    border-top: 0;
+  }
+
+  .screen:not(.screen-simple) > .adv > .acc-body {
+    padding: 0;
+  }
+}
