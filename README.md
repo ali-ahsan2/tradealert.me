@@ -7,7 +7,9 @@ analysis. FastAPI + Postgres on the back, React + Vite in `frontend/`
 built into `static/`.
 
 The product's rules live in the specs at the repo root: `DESIGN_V4.md`
-(the current look: consumer app and analysis terminal), `PRODUCT_DESIGN.md`
+(the current look: consumer app and analysis terminal; §6 positioning as an
+assistant that watches, explains and alerts; §7 the newcomer-ease pass with
+Simple/Full mode, the glossary and `/help`), `PRODUCT_DESIGN.md`
 (honesty rules and the earlier system), `UX_SPEC.md` (screens), `BUILD_SPEC.md` (data contract and
 honesty rules), `STRATEGY_ANALYSIS_TOOL.md` and `LAB_DASHBOARD_DESIGN.md`
 (the Lab), `SCAFFOLD_SPEC.md` (deployment).
