@@ -354,21 +354,21 @@ export default function Onboarding() {
             <p className="muted">Every screen uses them the same way. Anywhere in the app, tap an underlined word for its meaning.</p>
           </div>
           <div className="wordgrid">
-            <section className="word" aria-labelledby="w-score">
+            <section className="obword" aria-labelledby="w-score">
               <h2 id="w-score">{GLOSSARY.score.term}</h2>
               <p>{GLOSSARY.score.short}</p>
               <p>
                 Two things decide how much to trust it: <Term k="coverage" /> and <Term k="shrinkage" />.
               </p>
             </section>
-            <section className="word" aria-labelledby="w-band">
+            <section className="obword" aria-labelledby="w-band">
               <h2 id="w-band">{GLOSSARY.band.term}</h2>
               <p>{GLOSSARY.band.short}</p>
               <p>
                 In order: <Term k="strong" />, <Term k="elevated" />, <Term k="neutral" />, <Term k="weak" />, <Term k="excluded" />.
               </p>
             </section>
-            <section className="word" aria-labelledby="w-alert">
+            <section className="obword" aria-labelledby="w-alert">
               <h2 id="w-alert">{GLOSSARY.alert.term}</h2>
               <p>{GLOSSARY.alert.short}</p>
               <p>

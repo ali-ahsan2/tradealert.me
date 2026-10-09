@@ -45,7 +45,8 @@ html[data-mode="full"] .simple-only { display: none !important; }
 th .xp-pop, .tile .xp-pop { font-weight: 400; }
 
 /* Plain verdict ---------------------------------------------------------- */
-.verdict { margin: 0 0 var(--s-3); }
+/* block-level only: styles.css uses span.verdict for the PASS/FAIL word */
+div.verdict, section.verdict { margin: 0 0 var(--s-3); }
 .verdict-h { font-size: var(--fs-xl); font-weight: 700; line-height: 1.25; letter-spacing: -.01em; margin: 0 0 var(--s-2); }
 .verdict-d { margin: 0; color: var(--ink-muted); font-size: var(--fs-sm); line-height: 1.5; }
 .verdict-d + .verdict-d { margin-top: 2px; }

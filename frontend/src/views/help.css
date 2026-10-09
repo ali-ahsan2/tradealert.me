@@ -167,7 +167,7 @@
   }
 }
 
-.word {
+.obword {
   padding: var(--s-4);
   border-radius: var(--r-lg);
   background: var(--surface);
@@ -175,19 +175,19 @@
   min-width: 0;
 }
 
-.word h2 {
+.obword h2 {
   font-size: var(--fs-md);
   margin: 0 0 var(--s-2);
 }
 
-.word p {
+.obword p {
   margin: 0;
   color: var(--ink-muted);
   font-size: var(--fs-sm);
   line-height: 1.55;
 }
 
-.word p + p {
+.obword p + p {
   margin-top: var(--s-2);
 }
 
