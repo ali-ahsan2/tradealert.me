@@ -127,3 +127,10 @@ details.acc > .acc-body { padding: 0 0 var(--s-4); }
 
 /* Hints: a short muted line under a control or table. */
 .hint { font-size: var(--fs-xs); color: var(--ink-muted); margin: var(--s-1) 0 0; line-height: 1.45; }
+
+/* Mode toggle in the header hides on narrow phones (it lives in the account menu too). */
+@media (max-width: 640px) { .apphead .modeseg-head { display: none; } }
+
+/* Plans: what you would be told, under each price. */
+.tutil { margin: var(--s-2) 0 0; font-size: var(--fs-xs); font-weight: 400; line-height: 1.45; color: var(--ink-muted); text-align: left; max-width: 26ch; }
+.plan .tutil { max-width: none; margin-bottom: var(--s-3); }

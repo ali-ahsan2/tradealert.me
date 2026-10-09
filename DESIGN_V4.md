@@ -175,3 +175,59 @@ What this changes in v4:
   demoted, not deleted.
 - **The landing page** pitches the assistant: it watches, it explains, it
   alerts. The proof numbers stay exactly as published.
+
+## 7. Newcomer ease: the same product, readable by anyone
+
+Owner's correction, binding alongside §6: v4 looked capable but not easy.
+This pass re-imagines the subscriber side for someone who has never traded
+while keeping every function reachable. The method was a master plan
+executed as six parallel packages over shared primitives.
+
+### 7.1 Principles
+
+- **Plain words first, the term second.** Every screen reads in ordinary
+  English. Where a term of art remains (band, coverage, shrinkage, borrow
+  fee), it is underlined and a tap opens its definition. Definitions live
+  in one glossary so a word means the same thing everywhere.
+- **One sentence of utility under every title**, built from the
+  subscriber's own live figures. If a figure cannot be derived from the
+  data on screen it is left out, never estimated.
+- **Simple and Full.** Simple is the default: plain labels, the columns a
+  newcomer needs, advanced controls folded behind "More" or "Advanced".
+  Full shows every column and control. The choice persists per browser,
+  is one tap away in the header and the account menu, and nothing is
+  removed in either mode.
+- **Verdict before chart.** A name opens with what the number means, why,
+  and what you can do about it. Price is context below.
+- **One obvious action.** "Notify me" arms three default triggers with one
+  tap and answers every refusal (unverified email, a plan without alerts,
+  a plan at its limit) by saying what we would watch before any mention
+  of a plan.
+- **Honesty unchanged.** Integer scores, `~` on thin coverage, band words
+  as the claim, red and green only on price moves and PASS/FAIL, rates
+  only at n ≥ 10, nothing fabricated. Plain language never softens a fact
+  into a forecast; "advise" means explain and suggest a product action.
+
+### 7.2 Shared primitives
+
+| Piece | What it is |
+| --- | --- |
+| `lib/glossary.js` | One definition per product term (`GLOSSARY`), plain trigger phrases (`TRIGGER_PLAIN`), the three default triggers, plain field names for Simple mode (`PLAIN_FIELD`) and the field → term map. |
+| `lib/plain.js` | Sentences from the engine's own fields: `verdict()` (headline + detail lines incl. coverage and shrinkage), `whySentence()`, `changeSentence()`, `triggerSentence()`, `nextStep()`. Nothing in it predicts. |
+| `lib/mode.js` | Simple/Full preference (`ta_mode`), `useMode()`, `data-mode` on `<html>` so CSS can hide `.full-only` or `.simple-only`. |
+| `components/Explain.jsx` | Tap-to-open definition on any term (dotted underline) or a small "?" without children. Touch friendly, keyboard friendly, links to `/help#term`. |
+| `components/NotifyButton.jsx` | One-tap alerts on a name over email with shared rule cache; verify / plan / quota cards framed on utility. |
+| `styles/assist.css` | The assist layer: utility line, verdict block, next-step card, sticky action row on phones, accordion sections, tour sheet, help grid, mode toggle. |
+| `/help` | "How tradealert works": five steps, "Is this advice?", the glossary with anchors, the mode toggle explained. |
+
+### 7.3 Navigation and shell
+
+- Rail and tab labels in plain words: Home, Board, Find, What changed,
+  Coming up, Watchlist, Alerts. The command palette uses the same words.
+- Simple/Full toggle in the header (≥ 640px) and in the account menu with
+  Appearance; "How it works and glossary" and "Take the tour again" in the
+  account menu; "How it works" in the footer.
+- Plans page: under each price, one sentence built from the plan's own
+  limits saying what you would be told, before the feature rows.
+
+### 7.4 Screens

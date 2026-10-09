@@ -11,6 +11,23 @@ function deliveryText(t) {
   return t.channels.map((c) => CHANNEL_LABEL[c] || c).join(" · ");
 }
 
+
+// One sentence per plan saying what you would be told, built from the plan's
+// own limits. Utility first; the price is a number next to it.
+function utilityText(t) {
+  const ind = t.industries_limit >= 999 ? "every industry" : `${t.industries_limit} ${t.industries_limit === 1 ? "industry" : "industries"}`;
+  const names = `the top ${t.names_shown_limit} names each morning`;
+  const pins = t.picks_limit >= 999 ? "unlimited pins" : `${t.picks_limit} ${t.picks_limit === 1 ? "pin" : "pins"}`;
+  const alerts =
+    t.alerts_limit === 0
+      ? "no alerts, so you check in yourself"
+      : t.alerts_limit == null || t.alerts_limit >= 999
+        ? "unlimited alerts"
+        : `${t.alerts_limit} ${t.alerts_limit === 1 ? "alert" : "alerts"}`;
+  const how = t.alerts_limit === 0 ? "" : ` We tell you the moment a catalyst, a borrow-fee double or 3x volume prints on a name you watch${t.channels && t.channels.length > 1 ? `, by ${t.channels.join(", ")}` : ""}.`;
+  return `We watch ${ind} for you and explain ${names}, with ${pins} and ${alerts}.${how}`;
+}
+
 export default function Pricing() {
   const q = useQuery();
   const [d, setD] = useState(null);
@@ -142,6 +159,7 @@ export default function Pricing() {
                     {t.price_monthly_cents === 0 ? "$0" : dollars(t.price_monthly_cents)}
                     <span className="per"> /month</span>
                   </div>
+                  <p className="tutil">{utilityText(t)}</p>
                 </th>
               ))}
             </tr>
@@ -180,6 +198,7 @@ export default function Pricing() {
               {t.price_monthly_cents === 0 ? "$0" : dollars(t.price_monthly_cents)}
               <span className="per"> /month</span>
             </div>
+            <p className="tutil">{utilityText(t)}</p>
             <dl>
               {rows.slice(1).map(([label, fn]) => (
                 <React.Fragment key={label}>

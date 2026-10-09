@@ -3,6 +3,7 @@ import { api, logout } from "../api.js";
 import { Link, navigate, usePath } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { THEMES, getTheme, setTheme } from "../lib/theme.js";
+import { MODES, useMode } from "../lib/mode.js";
 import { TierChip, ToastHost } from "./ui.jsx";
 import Icon from "./Icons.jsx";
 import CommandPalette from "./CommandPalette.jsx";
@@ -12,12 +13,13 @@ import Shortcuts from "./Shortcuts.jsx";
 // tab bar on phones, with a slim in-page header carrying search, plan and
 // account. Visitors get a classic top bar. DESIGN_V4.md §2.4.
 
+// Plain words in the navigation: what the screen is for, not what it is.
 const NAV = [
   ["/overview", "Home", "home"],
   ["/board", "Board", "board"],
-  ["/screen", "Screen", "screen"],
-  ["/changes", "Changes", "changes"],
-  ["/calendar", "Calendar", "calendar"],
+  ["/screen", "Find", "screen"],
+  ["/changes", "What changed", "changes"],
+  ["/calendar", "Coming up", "calendar"],
   ["/watchlist", "Watchlist", "watchlist"],
   ["/alerts", "Alerts", "alerts"],
 ];
@@ -88,6 +90,21 @@ function ThemeControl() {
   );
 }
 
+// Simple shows plain labels and the essentials; Full shows every column and
+// control. The choice persists and nothing is removed either way.
+export function ModeControl({ className = "" }) {
+  const { mode, setMode } = useMode();
+  return (
+    <div className={`seg seg-sm modeseg ${className}`} role="group" aria-label="Detail level">
+      {MODES.map(([k, l]) => (
+        <button key={k} aria-pressed={mode === k} onClick={() => setMode(k)} title={k === "simple" ? "Plain labels and the essentials" : "Every column and control"}>
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function AccountMenu({ me, align = "right" }) {
   const [open, setOpen] = useState(false);
   const box = useRef(null);
@@ -122,9 +139,23 @@ function AccountMenu({ me, align = "right" }) {
             </div>
           </div>
           <div className="acct-theme">
+            <span className="xs faint">Detail</span>
+            <ModeControl />
+          </div>
+          <div className="acct-theme">
             <span className="xs faint">Appearance</span>
             <ThemeControl />
           </div>
+          {item("/help", "How it works and glossary")}
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              window.dispatchEvent(new Event("ta:tour:restart"));
+            }}
+          >
+            Take the tour again
+          </button>
           {item("/settings", "Account settings")}
           {item("/strategies", "Strategies and evidence")}
           {item("/digests", "Digests")}
@@ -200,6 +231,7 @@ function AppHeader({ me }) {
         <SearchPill wide />
         <span className="spacer" />
         <div className="apphead-right">
+          <ModeControl className="modeseg-head" />
           <TierChip tier={me.tier || { key: "free", label: "Free" }} />
           <AccountMenu me={me} />
         </div>
@@ -268,6 +300,7 @@ export function Footer() {
         <div className="footer-row">
           <span className="footer-word">tradealert.me</span>
           <nav className="footer-nav" aria-label="Legal">
+            <Link to="/help">How it works</Link>
             <Link to="/strategies">Strategies</Link>
             <Link to="/pricing">Plans</Link>
             <Link to="/legal/terms">Terms</Link>
