@@ -128,8 +128,9 @@ export function nextStep({ pinned, armed, band, verified, alertsLimit, armedKeys
   if (!armed && canAlert) return { text: "Turn on alerts so you hear the moment something changes.", kind: "notify" };
   if (band === "strong" || band === "elevated") return { text: "Read the Why section before you rely on the number: it lists the inputs behind it.", kind: "why" };
   if (!canAlert) return { text: "Nothing to do. Your digest carries its latest band.", kind: "wait" };
-  const hasBand = armedKeys ? armedKeys.has("band_change") : false;
-  if (!hasBand) return { text: "Nothing to do. Add the 'Score changes band' trigger if you want to hear when it moves band.", kind: "wait" };
+  // Unknown rules (still loading): say only what is always true.
+  if (!armedKeys) return { text: "Nothing to do. We keep watching; your digest carries its latest band.", kind: "wait" };
+  if (!armedKeys.has("band_change")) return { text: "Nothing to do. Add the 'Score changes band' trigger if you want to hear when it moves band.", kind: "wait" };
   return { text: "Nothing to do. We keep watching and will tell you when it changes band.", kind: "wait" };
 }
 
