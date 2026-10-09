@@ -70,13 +70,36 @@ function termFor(key, label) {
 
 // A component's desirability runs 0 to 1 and is multiplied by its weight, so
 // above the halfway mark it added more than half its weight, below it less.
-// Stated in words, never in colour.
+// Stated in words, never in colour. A judgment input is the operator's
+// reading, so its figure is "not measured data" rather than "no data".
 function inputStatus(c) {
+  if (c.backed === false) return ["judg", c.value != null ? "not measured data" : "no data"];
   if (c.score == null) return ["none", "no data"];
-  if (c.backed === false) return ["judg", "no data · judgment"];
   if (c.score > 0.5) return ["up", "lifted"];
   if (c.score < 0.5) return ["down", "weighed"];
   return ["even", "even"];
+}
+
+// nextStep() reads the triggers armed on the name to pick its "nothing to
+// do" sentence. Until the rules have loaded the set is unknown, so the card
+// says only what is always true instead of the band-change hint.
+function armedSet(rules) {
+  return rules ? new Set(rules.map((r) => r.trigger_key)) : undefined;
+}
+
+function stepFor(args) {
+  const s = nextStep(args);
+  if (s.kind === "wait" && args.armedKeys === undefined && args.alertsLimit !== 0 && args.verified !== false) {
+    return { text: "Nothing to do. We keep watching; your digest carries its latest band.", kind: "wait" };
+  }
+  return s;
+}
+
+// "XLE" reads as "XLE (Energy ETF)" when the series payload names the fund.
+function benchName(code, bench) {
+  if (!code) return "";
+  if (!bench || bench.symbol !== code || !bench.label) return code;
+  return `${code} (${bench.label}${/\bETF\b/i.test(bench.label) ? "" : " ETF"})`;
 }
 
 // Whole days from today (UTC calendar date) to an ISO date string.
@@ -237,16 +260,23 @@ export default function StockReport({ symbol }) {
   const armedN = rules ? rules.length : null;
   const v = verdict(s, strat, d.symbol);
   const why = whySentence(components);
-  const step = nextStep({
+  const step = stepFor({
     pinned,
     armed: Boolean(armedN),
     band: s ? s.band : null,
     verified: me ? me.verified : undefined,
     alertsLimit: me && me.tier ? me.tier.alerts_limit : undefined,
+    armedKeys: armedSet(rules),
   });
   const earnIso = snap.earnings && typeof snap.earnings.value === "string" ? snap.earnings.value : null;
   const earnDays = earnIso ? daysUntil(earnIso) : null;
   const earnConf = snap.earnings_conf ? String(snap.earnings_conf.value) : "";
+  // a confirmed date on file while the score still carries an assumed
+  // catalyst: the engine picks the date up on its next run
+  const earnConfirmed = Boolean(earnIso) && /^confirmed$/i.test(earnConf.trim());
+  const catalystAssumed = components.some(
+    (c) => (c.key === "cat" || termFor(c.key, c.label) === "catalyst") && typeof c.value === "string" && c.value.includes("(assumed)")
+  );
   const anyChangedInput = Boolean(changes && changes.components.some((c) => c.status !== "kept" || (c.delta != null && Math.abs(c.delta) >= 0.01)));
   const detailLabel = (k) => (SNAPSHOT_LABELS[k] ? SNAPSHOT_LABELS[k][0] : k);
 
@@ -293,7 +323,9 @@ export default function StockReport({ symbol }) {
             <span aria-hidden="true">·</span>
             <span>
               <Explain term="strategy">lens</Explain>{" "}
-              <Monogram size={18}>{strat.monogram}</Monogram>{" "}
+              <span className="full-only">
+                <Monogram size={18}>{strat.monogram}</Monogram>{" "}
+              </span>
               <Link to={`/strategies/${strat.key}`} style={{ color: "inherit", fontWeight: 600 }}>
                 {strat.label}
               </Link>
@@ -309,7 +341,7 @@ export default function StockReport({ symbol }) {
               <span className="full-only">
                 {d.lane ? (
                   <>
-                    · <Explain term="lane">lane</Explain> {d.lane}
+                    · <Explain term="lane">stage</Explain> {d.lane}
                   </>
                 ) : null}
                 {d.group ? (
@@ -332,10 +364,10 @@ export default function StockReport({ symbol }) {
               </span>
               {bench30 != null && series.benchmark && (
                 <span>
-                  <Move value={bench30} />{" "}
                   <span className="xs faint">
-                    <Explain term="benchmark">{series.benchmark.symbol}</Explain> 30d
-                  </span>
+                    vs <Explain term="benchmark">{benchName(series.benchmark.symbol, series.benchmark)}</Explain>
+                  </span>{" "}
+                  <Move value={bench30} /> <span className="xs faint">30d</span>
                 </span>
               )}
               <span className="xs faint">close {shortDate(lastBar.d)}</span>
@@ -431,7 +463,8 @@ export default function StockReport({ symbol }) {
               </button>
             )}
             <Link to={compareHref} className="btn-quiet">
-              Compare
+              <span className="simple-only">Compare with another name</span>
+              <span className="full-only">Compare</span>
             </Link>
           </div>
 
@@ -441,7 +474,16 @@ export default function StockReport({ symbol }) {
             {step.kind === "why" && (
               <>
                 <span className="spacer" />
-                <a href="#why">Read why ↓</a>
+                <button
+                  type="button"
+                  className="btn-quiet"
+                  onClick={() => {
+                    const el = document.getElementById("why");
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                >
+                  Read why ↓
+                </button>
               </>
             )}
           </div>
@@ -461,23 +503,27 @@ export default function StockReport({ symbol }) {
                 {components.map((c) => {
                   const [kind, word] = inputStatus(c);
                   const term = termFor(c.key, c.label);
+                  const judgment = c.backed === false;
                   const assumed = typeof c.value === "string" && c.value.includes("(assumed)");
                   return (
                     <li key={c.key}>
                       <span className="lbl">
                         {term && GLOSSARY[term] ? <Explain term={term}>{c.label}</Explain> : c.label}
-                        {assumed && c.backed !== false && <span className="judg"> · assumed</span>}
-                      </span>
-                      <span className="val">{c.value != null ? String(c.value) : "—"}</span>
-                      <span className={`st st-${kind}`}>
-                        {kind === "judg" ? (
-                          <Explain text="Set by the operator's research pass rather than read from a data feed. It counts in the score; it is not a measured input.">
-                            {word}
-                          </Explain>
-                        ) : (
-                          word
+                        {judgment && (
+                          <span className="judg">
+                            {" "}
+                            · <Explain term="judgment">judgment input</Explain>
+                          </span>
+                        )}
+                        {assumed && !judgment && (
+                          <span className="judg">
+                            {" "}
+                            · <Explain term="assumed">assumed</Explain>
+                          </span>
                         )}
                       </span>
+                      <span className="val">{c.value == null ? "—" : judgment ? `operator reading ${String(c.value)}` : String(c.value)}</span>
+                      <span className={`st st-${kind}`}>{word}</span>
                     </li>
                   );
                 })}
@@ -497,6 +543,9 @@ export default function StockReport({ symbol }) {
                     );
                   })}
               </ul>
+            )}
+            {catalystAssumed && earnConfirmed && (
+              <p className="hint">The catalyst input is an assumption until the engine's next run picks up the confirmed date.</p>
             )}
             {components.length > 0 && (
               <p className="hint">
@@ -565,7 +614,7 @@ export default function StockReport({ symbol }) {
                 {changes && changes.prev_value != null ? (
                   <>
                     {" "}
-                    Score <b>{fmtScore(changes.prev_value)}</b> ({changes.prev_band}) → <b>{fmtScore(s.value, s.components_present, s.components_total)}</b> ({s.band}).
+                    Score <b>{fmtScore(changes.prev_value, changes.prev_components_present, changes.prev_components_total)}</b> ({changes.prev_band}) → <b>{fmtScore(s.value, s.components_present, s.components_total)}</b> ({s.band}).
                   </>
                 ) : null}
               </p>
@@ -573,7 +622,12 @@ export default function StockReport({ symbol }) {
                 <div className="hist">
                   <Sparkline points={history} label={`${strat.label} score over ${history.length} runs`} />
                   <div className="hist-meta">
-                    {plural(history.length, "run")} on record · from {fmtScore(history[0].value)} to {fmtScore(history[history.length - 1].value)}
+                    {plural(history.length, "run")} on record · from {fmtScore(history[0].value, history[0].components_present, history[0].components_total)} to{" "}
+                    {fmtScore(
+                      history[history.length - 1].value,
+                      history[history.length - 1].components_present,
+                      history[history.length - 1].components_total
+                    )}
                     {bandChanges ? ` · ${plural(bandChanges, "band change")}` : " · no band change"}
                   </div>
                 </div>
@@ -585,7 +639,8 @@ export default function StockReport({ symbol }) {
                     {sincePin.score_at_pin != null ? (
                       <>
                         {" "}
-                        · score <b>{fmtScore(sincePin.score_at_pin)}</b> → <b>{fmtScore(s.value)}</b> ({delta(s.value - sincePin.score_at_pin)})
+                        · score <b>{fmtScore(sincePin.score_at_pin)}</b> → <b>{fmtScore(s.value, s.components_present, s.components_total)}</b> (
+                        {delta(s.value - sincePin.score_at_pin)})
                       </>
                     ) : null}
                   </span>
@@ -595,7 +650,8 @@ export default function StockReport({ symbol }) {
                       {sincePin.benchmark_chg_pct != null && (
                         <>
                           {" "}
-                          vs {sincePin.benchmark} <span className={tone(sincePin.benchmark_chg_pct)}>{signed(sincePin.benchmark_chg_pct, 1, "%")}</span>
+                          vs {benchName(sincePin.benchmark, series && series.benchmark)}{" "}
+                          <span className={tone(sincePin.benchmark_chg_pct)}>{signed(sincePin.benchmark_chg_pct, 1, "%")}</span>
                         </>
                       )}
                       {sincePin.last_date ? ` · close ${shortDate(sincePin.last_date)}` : ""}
@@ -649,7 +705,7 @@ export default function StockReport({ symbol }) {
                   <span className="when">{earnDays == null ? shortDate(earnIso) : inDays(earnDays)}</span>
                   <span>
                     <Explain term="catalyst">Earnings</Explain> {shortDate(earnIso)}
-                    {earnConf ? <span className="muted"> · date {earnConf}</span> : null} <AgeChip asOf={snap.earnings.as_of} prefix="dated " />
+                    {earnConf ? <span className="muted"> · date {earnConf}</span> : null} <AgeChip asOf={snap.earnings.as_of} prefix="checked " suffix=" ago" />
                   </span>
                   <span className="spacer" />
                   <NotifyButton symbol={d.symbol} triggers={["catalyst_dated"]} label="Alert me before it" onLabel="Alert set" compact />
@@ -704,7 +760,7 @@ export default function StockReport({ symbol }) {
                               {r.hit == null ? (
                                 <span className="faint">open</span>
                               ) : (
-                                <span className={`verdict ${r.hit ? "pass" : "fail"}`}>
+                                <span className="outcome">
                                   {r.hit ? "HIT" : "MISS"}
                                   {r.days_to_move != null ? ` · ${r.days_to_move}d` : ""}
                                 </span>
@@ -750,8 +806,18 @@ export default function StockReport({ symbol }) {
                           <div key={c.key} className="comp">
                             <div className="lbl">
                               {c.label}
-                              {judgment && <span className="judg"> · judgment</span>}
-                              {!judgment && assumed && <span className="judg"> · assumed</span>}
+                              {judgment && (
+                                <span className="judg">
+                                  {" "}
+                                  · <Explain term="judgment">judgment input</Explain>
+                                </span>
+                              )}
+                              {!judgment && assumed && (
+                                <span className="judg">
+                                  {" "}
+                                  · <Explain term="assumed">assumed</Explain>
+                                </span>
+                              )}
                               {c.value != null && <span className="val">{String(c.value)}</span>}
                             </div>
                             <div className="track" aria-hidden="true">
@@ -884,9 +950,11 @@ export default function StockReport({ symbol }) {
                     return (
                       <button key={l.key} className="lens-card" aria-pressed={l.key === strat.key} onClick={() => navigate(lensHref(l.key), { replace: true })}>
                         <div className="lc-top">
-                          <Monogram size={18}>{l.monogram}</Monogram>
+                          <span className="full-only">
+                            <Monogram size={18}>{l.monogram}</Monogram>
+                          </span>
                           {l.label}
-                          {!l.calibrated && <span className="chip chip-prov">Prov.</span>}
+                          {!l.calibrated && <StatusChip calibrated={false} short />}
                         </div>
                         <div className="lc-score">
                           {l.value != null ? (
@@ -1093,13 +1161,13 @@ export default function StockReport({ symbol }) {
                 {d.lane ? (
                   <>
                     {" "}
-                    · <Link to={`/screen?lane=${encodeURIComponent(d.lane)}`}>{d.lane}-lane names</Link>
+                    · <Link to={`/screen?lane=${encodeURIComponent(d.lane)}`}>{d.lane}-stage names</Link>
                   </>
                 ) : null}
                 {hardFilters.length > 0 && hardFilters.every((f) => f.pass) ? (
                   <>
                     {" "}
-                    · <Link to="/screen?hf=pass">Everything that cleared the screen</Link>
+                    · <Link to="/screen?hf=pass">Everything that passed every filter</Link>
                   </>
                 ) : null}{" "}
                 · <Link to="/calendar">Calendar</Link> · <Link to={compareHref}>Compare</Link>
@@ -1132,7 +1200,7 @@ export default function StockReport({ symbol }) {
               {d.lane && (
                 <div className="kv">
                   <span className="k">
-                    <Explain term="lane">Lane</Explain>
+                    <Explain term="lane">Stage</Explain>
                   </span>
                   <span className="v">{d.lane}</span>
                 </div>

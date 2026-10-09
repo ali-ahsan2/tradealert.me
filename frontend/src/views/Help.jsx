@@ -15,6 +15,8 @@ import "./help.css";
 // Every definition comes from lib/glossary.js; the only performance figures
 // are the EVIDENCE values, quoted as stored.
 
+// Every GLOSSARY key belongs to one group; anything unassigned falls into
+// "Other terms", which should stay empty.
 const GROUPS = [
   {
     id: "scores",
@@ -22,7 +24,7 @@ const GROUPS = [
     keys: [
       "score", "band", "strong", "elevated", "neutral", "weak", "excluded", "coverage", "tilde",
       "shrinkage", "hard_filter", "haircut", "delta_run", "run", "strategy", "fast_mover",
-      "calibrated", "provisional", "signal", "candidate", "lane", "group",
+      "calibrated", "provisional", "signal", "candidate", "lane", "lane_early", "lane_event", "group",
     ],
   },
   {
@@ -30,16 +32,17 @@ const GROUPS = [
     title: "Inputs",
     keys: [
       "catalyst", "short_interest", "borrow_fee", "float", "days_to_cover", "volume_x",
-      "market_cap", "run3m", "off_high", "benchmark", "rebased",
+      "market_cap", "run3m", "off_high", "assumed", "judgment",
     ],
   },
+  { id: "screens", title: "Reading the screens", keys: ["age", "benchmark", "rebased"] },
   { id: "alerts", title: "Alerts and watching", keys: ["alert", "trigger", "pin", "digest", "rate"] },
   { id: "plans", title: "Plans and limits", keys: ["industry", "universe", "names_shown"] },
 ];
 
 const HOW = [
   <>
-    <b>We watch your industries every trading morning.</b> One run scores every stock in the industries you follow, and every figure on
+    <b>We watch your industries each morning.</b> One run scores every stock in the industries you follow, and every figure on
     screen is stamped with the run it came from.
   </>,
   <>
@@ -59,11 +62,15 @@ const HOW = [
   </>,
 ];
 
+// The term is whatever follows the last "#": "#coverage" in production and
+// "#/help#coverage" under the hosted preview's hash router.
 function currentHash() {
+  const raw = window.location.hash || "";
+  const h = raw.slice(raw.lastIndexOf("#") + 1);
   try {
-    return decodeURIComponent((window.location.hash || "").slice(1));
+    return decodeURIComponent(h);
   } catch {
-    return (window.location.hash || "").slice(1);
+    return h;
   }
 }
 
@@ -251,10 +258,10 @@ export default function Help() {
         <Steps items={HOW} />
       </div>
       <div className="help-actions">
-        <button type="button" className="btn-quiet" onClick={() => restartTour()}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => restartTour()}>
           Replay the welcome tour
         </button>
-        <Link to="/strategies" className="btn-quiet">
+        <Link to="/strategies" className="btn btn-secondary btn-sm">
           Strategies and evidence
         </Link>
       </div>
@@ -279,7 +286,7 @@ export default function Help() {
             {g.id === "scores" && <EvidenceCard />}
             {g.id === "alerts" && <TriggersCard />}
             {g.id === "plans" && <PlanCard me={me} />}
-            {g.id === "plans" && <ModeCard />}
+            {g.id === "screens" && <ModeCard />}
           </div>
         </section>
       ))}

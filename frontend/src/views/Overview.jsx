@@ -4,6 +4,7 @@ import { Link } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { useMode } from "../lib/mode.js";
 import { DAYS, age, dateTime, delta, inDays, plural, score as fmtScore, shortDate, signed, tone } from "../lib/fmt.js";
+import { TRIGGER_PLAIN } from "../lib/glossary.js";
 import { changeSentence, nextStep, triggerLabel, triggerSentence } from "../lib/plain.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import BandBar from "../components/BandBar.jsx";
@@ -11,7 +12,7 @@ import Spark, { Move, MoveChip } from "../components/Spark.jsx";
 import Icon from "../components/Icons.jsx";
 import Pin from "../components/Pin.jsx";
 import Explain from "../components/Explain.jsx";
-import NotifyButton from "../components/NotifyButton.jsx";
+import NotifyButton, { useRulesFor } from "../components/NotifyButton.jsx";
 import { AgeChip, Empty, ErrorCard, Skeleton } from "../components/ui.jsx";
 import "./overview.css";
 
@@ -251,13 +252,54 @@ function Utility({ d, locked }) {
   );
 }
 
+// Coverage for a pinned name: the pick row carries it; the stats row is the
+// fallback. [present, total], or [undefined, undefined] when neither has it.
+function pickCoverage(p, st) {
+  if (p && p.components_total != null) return [p.components_present, p.components_total];
+  if (st && st.components_total != null) return [st.components_present, st.components_total];
+  return [undefined, undefined];
+}
+
+// A score whose coverage was not recorded: the band word and the integer
+// with no coverage bar, so the pill never claims a coverage it cannot show.
+function BandWord({ band, value }) {
+  return (
+    <span className={`badge ${band} compact`} aria-label={`${band}, score ${fmtScore(value)}, coverage not recorded`} title="Coverage was not recorded for this score">
+      <span className="word">{band}</span>
+      {value != null && <span className="num">{fmtScore(value)}</span>}
+    </span>
+  );
+}
+
+// A stored alert fact that is a key with underscores or a fixture tag is not
+// a sentence; the trigger's plain sentence stands in for it.
+function machineShaped(s) {
+  return !s || /_/.test(s) || /^\W*(dev\s+)?fixture/i.test(s);
+}
+
+// nextStep() reads the triggers armed on the name to pick its "nothing to
+// do" sentence. Until the rules have loaded the set is unknown, so the card
+// says only what is always true instead of the band-change hint.
+function armedSet(rules) {
+  return rules ? new Set(rules.map((r) => r.trigger_key)) : undefined;
+}
+
+function stepFor(args) {
+  const s = nextStep(args);
+  if (s.kind === "wait" && args.armedKeys === undefined && args.alertsLimit !== 0 && args.verified !== false) {
+    return { text: "Nothing to do. We keep watching; your digest carries its latest band.", kind: "wait" };
+  }
+  return s;
+}
+
 // Plain line for a pinned name: score since the pin date, then the next
 // dated event on file. Facts only; no colour on score moves.
 function pinSentence(p, st, tz) {
   const parts = [];
   const when = p.pinned_at ? ` on ${shortDate(p.pinned_at, tz)}` : "";
+  const [cp, ct] = pickCoverage(p, st);
   if (p.value == null) parts.push("No score on this run.");
-  else if (p.score_at_pin == null) parts.push(`Scores ${fmtScore(p.value)} now; no score was recorded when you pinned it.`);
+  else if (p.score_at_pin == null) parts.push(`Scores ${fmtScore(p.value, cp, ct)} now; no score was recorded when you pinned it.`);
   else {
     const r = Math.round(p.value - p.score_at_pin);
     if (r === 0) parts.push(`Unchanged since you pinned it${when}.`);
@@ -406,6 +448,8 @@ export default function Overview() {
     if (!picks || picks.length === 0) return null;
     return [...picks].sort((a, b) => (BAND_RANK[b.band] ?? -1) - (BAND_RANK[a.band] ?? -1) || (b.value ?? -1) - (a.value ?? -1))[0];
   }, [picks]);
+  // the triggers armed on that name, for the next-step sentence
+  const topRules = useRulesFor(topPinned ? topPinned.symbol : null, Boolean(me));
 
   const markRead = (ev) => {
     if (ev.read !== false || !ev.id) return;
@@ -418,7 +462,6 @@ export default function Overview() {
   };
 
   const tz = me && me.settings ? me.settings.timezone : undefined;
-  const first = me && (me.name || me.email || "").split("@")[0];
 
   if (err) {
     return (
@@ -459,12 +502,13 @@ export default function Overview() {
       ),
     };
   } else if (picks) {
-    const s = nextStep({
+    const s = stepFor({
       pinned: picks.length > 0,
       armed: a.armed > 0,
       band: run && topPinned ? topPinned.band : null,
       verified: me ? me.verified : undefined,
       alertsLimit: a.limit,
+      armedKeys: armedSet(topRules),
     });
     if (s.kind === "pin") {
       step = {
@@ -505,8 +549,8 @@ export default function Overview() {
           <div className="meta">
             {run ? (
               <>
-                Run {dateTime(run.as_of, tz)} <AgeChip asOf={run.as_of} />
-                {first ? ` · for ${first}` : ""}
+                Run {dateTime(run.as_of, tz)} <AgeChip asOf={run.as_of} words />
+                {me && me.name ? ` · for ${me.name}` : ""}
               </>
             ) : (
               "No completed run yet."
@@ -515,7 +559,7 @@ export default function Overview() {
         </div>
         <div className="actions">
           <Link to="/screen" className="btn btn-secondary btn-sm">
-            <Icon name="screen" size={16} /> Screen
+            <Icon name="screen" size={16} /> Find names
           </Link>
           <Link to="/board" className="btn btn-primary btn-sm">
             Open the Board <Icon name="arrow" size={16} />
@@ -525,7 +569,7 @@ export default function Overview() {
 
       {!run && (
         <>
-          <Empty title="No scored run yet.">Scores appear after the first daily run completes.</Empty>
+          <Empty title="No scored run yet.">Scores appear after the first run completes; the engine runs each morning.</Empty>
           {step && (
             <div className="nextstep" role="note">
               <span className="nextstep-k">Next step</span>
@@ -607,7 +651,7 @@ export default function Overview() {
                   : ""}
                 {changes.summary.new > 0 ? `${plural(changes.summary.new, "name was", "names were")} scored for the first time on this run. ` : ""}
                 {changes.summary.cleared > 0 || changes.summary.failed > 0
-                  ? `${changes.summary.cleared} cleared the screen and ${changes.summary.failed} failed it. `
+                  ? `${changes.summary.cleared} passed every filter and ${changes.summary.failed} failed one. `
                   : ""}
                 <Link to="/changes">See every change</Link>.
               </p>
@@ -680,12 +724,17 @@ export default function Overview() {
                             <Link className="sym" to={`/stock/${ev.symbol}`} onClick={() => markRead(ev)}>
                               {ev.symbol}
                             </Link>
-                            <span className="chip chip-plain">{triggerLabel(ev.trigger_key)}</span>
+                            <Explain
+                              title={TRIGGER_PLAIN[ev.trigger_key] ? TRIGGER_PLAIN[ev.trigger_key][0] : undefined}
+                              text={TRIGGER_PLAIN[ev.trigger_key] ? `We tell you when ${TRIGGER_PLAIN[ev.trigger_key][1]}.` : undefined}
+                            >
+                              <span className="chip chip-plain">{triggerLabel(ev.trigger_key)}</span>
+                            </Explain>
                             <span className="when" title={dateTime(ev.fired_at, tz)}>
                               {ag ? `${ag.label} ago` : shortDate(ev.fired_at, tz)}
                             </span>
                           </div>
-                          <p className="brow-say">{ev.detail || triggerSentence(ev.trigger_key, ev.symbol)}</p>
+                          <p className="brow-say">{machineShaped(ev.detail) ? triggerSentence(ev.trigger_key, ev.symbol) : ev.detail}</p>
                           <div className="brow-detail full-only">
                             {ev.theme ? <span>{ev.theme}</span> : null}
                             <span>
@@ -775,7 +824,7 @@ export default function Overview() {
             title="Your watchlist"
             note={
               w.count > 0
-                ? `${w.limit != null ? `${w.count} of ${w.limit} pins` : plural(w.count, "pin")} · ${w.strong_or_elevated} strong or elevated · ${w.cleared} clear the screen`
+                ? `${w.limit != null ? `${w.count} of ${w.limit} pins` : plural(w.count, "pin")} · ${w.strong_or_elevated} strong or elevated · ${w.cleared} pass every filter`
                 : null
             }
             more={
@@ -800,7 +849,7 @@ export default function Overview() {
                     Open the Board
                   </Link>
                   <Link to="/screen" className="btn btn-secondary btn-sm">
-                    Screen names
+                    Find names
                   </Link>
                 </div>
               </div>
@@ -809,6 +858,7 @@ export default function Overview() {
                 <ul className="brows">
                   {pickRows.map((p) => {
                     const st = statBySym[p.symbol];
+                    const [cp, ct] = pickCoverage(p, st);
                     return (
                       <li className="brow" key={p.symbol}>
                         <div className="brow-main">
@@ -854,7 +904,15 @@ export default function Overview() {
                               {st.unread} unread
                             </Link>
                           )}
-                          {p.band ? <ScoreBadge band={p.band} value={p.value} /> : <span className="chip chip-plain">No score</span>}
+                          {p.band ? (
+                            ct != null ? (
+                              <ScoreBadge band={p.band} value={p.value} present={cp} total={ct} />
+                            ) : (
+                              <BandWord band={p.band} value={p.value} />
+                            )
+                          ) : (
+                            <span className="chip chip-plain">No score</span>
+                          )}
                         </div>
                         <div className="brow-act">
                           <Pin symbol={p.symbol} pinned={isPinned(p.symbol, true)} onChange={onPin} />
@@ -948,7 +1006,7 @@ export default function Overview() {
                         <div className="ovind-facts xs faint">
                           <span>{ind.scored} scored</span>
                           <span>mean {ind.mean_score != null ? Math.round(ind.mean_score) : "—"}</span>
-                          <span>{ind.cleared} cleared the screen</span>
+                          <span>{ind.cleared} passed every filter</span>
                           {ind.new > 0 && <span>{ind.new} new</span>}
                         </div>
                         <ul className="namelist">
@@ -967,7 +1025,7 @@ export default function Overview() {
                         </ul>
                         <div className="ovind-links small">
                           <Link to={`/board?industry=${ind.key}`}>Board</Link>
-                          <Link to={`/screen?industries=${ind.key}`}>Screen</Link>
+                          <Link to={`/screen?industries=${ind.key}`}>Find</Link>
                           <Link to={`/industries/${ind.key}`}>Industry</Link>
                         </div>
                       </article>
