@@ -147,3 +147,31 @@ Each one reads data the product already stores.
 - **Lab status strip**: environment, strategy and fixture counts, the
   current screen and strategy key, and the rule that synthetic rows never
   leave the surface, always visible.
+
+## 6. Positioning: a helpful tool that advises and alerts
+
+Owner's correction, binding on every screen: the product is a research
+assistant that watches the industries you follow, explains what changed
+and why it matters, and alerts you on facts. It is not a trading portal.
+"Advise" means guidance inside the honesty rules (what matters today, what
+changed, what to look at next, what the evidence does and does not
+support), never a buy or sell.
+
+What this changes in v4:
+- **Home is a daily brief.** It leads with what changed on your names
+  since the last run and why, the alerts that fired, the dated events
+  ahead and one suggested next step. The rebased index and the movers are
+  context further down, not the headline.
+- **Every screen states its utility** in one plain line and proves it
+  with the subscriber's own real figures ("alerts fired on 7 of your names
+  this month", "3 of your pins cleared the screen today"). Upgrade prompts
+  are framed on what you would be told, never on more tickers.
+- **Alerts are the centre of gravity.** "Notify me" is the obvious action
+  on a name, with sensible default triggers, and every trigger is
+  explained in plain words.
+- **Tone** is calm and explanatory. Prices and moves are context; the
+  signal, its reason and its evidence are the headline. Brokerage cues
+  (price-first dossier header, portfolio-style index, "movers") are
+  demoted, not deleted.
+- **The landing page** pitches the assistant: it watches, it explains, it
+  alerts. The proof numbers stay exactly as published.

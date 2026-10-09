@@ -25,7 +25,7 @@ function LiveRun({ run, industries }) {
         <span className="ld-dot" />
         <span className="ld-dot" />
         <span className="ld-dot" />
-        <span className="ld-device-title">Today's run</span>
+        <span className="ld-device-title">This morning's brief</span>
         {a && <span className={`agechip ${a.cls}`}>{a.label}</span>}
       </div>
       <div className="ld-device-body">
@@ -60,7 +60,7 @@ function LiveRun({ run, industries }) {
             {industries.length > 6 && <span className="ld-ind faint">+{industries.length - 6} more</span>}
           </div>
         )}
-        <p className="ld-device-foot">Names and scores are shown after you sign in and choose an industry. The counts above are live.</p>
+        <p className="ld-device-foot">Choose an industry and the brief names them, explains each score and tells you what to watch. The counts above are live.</p>
       </div>
     </div>
   );
@@ -73,7 +73,7 @@ function Proof() {
   return (
     <section className="ld-proof" aria-labelledby="proof-h">
       <div className="ld-proof-head">
-        <h2 id="proof-h">The screen is the evidence.</h2>
+        <h2 id="proof-h">Advice you can check.</h2>
         <p className="ld-sub">
           On real data, names that cleared Fast Mover's hard filters moved {EVIDENCE.hitRate}% of the time inside the event window. Earnings events in
           general moved {EVIDENCE.earningsRate}%. A random day, {EVIDENCE.randomRate}%.
@@ -105,18 +105,18 @@ function Benefits() {
   const items = [
     {
       icon: "board",
-      title: "A ranked board, every morning",
-      body: "Every covered name runs through the same hard filters and scorecard. You get the top of the list, with the working shown: what had data, what was missing, what passed.",
+      title: "It tells you what matters today",
+      body: "A ranked board every morning, with the working shown for every name: what had data, what was missing, what passed. Then what changed since yesterday and why.",
     },
     {
       icon: "alerts",
-      title: "Alerts on facts, not opinions",
-      body: "A borrow fee doubling. Short interest crossing 15%. Volume at 3x. A dated catalyst. An S-3 shelf. Impersonal triggers that fire on a print, by email, push or SMS.",
+      title: "It alerts you on facts, not opinions",
+      body: "A borrow fee doubling. Short interest crossing 15%. Volume at 3x. A dated catalyst. An S-3 shelf. You pick the names; it watches and messages you by email, push or SMS.",
     },
     {
       icon: "calendar",
-      title: "Know what's coming, and what happened",
-      body: "A calendar of dated events for your names with the score beside each, and the measured move after past events. Nothing predicted; everything measured.",
+      title: "It explains, and it shows its record",
+      body: "Plain-language reasons on every score, a calendar of what is coming for your names, and the measured move after every past event. Nothing predicted; everything measured.",
     },
   ];
   return (
@@ -138,7 +138,7 @@ function Tour() {
   const screens = [
     {
       title: "Board",
-      sub: "Ranked names in the industries you follow, with coverage and the change since the last run.",
+      sub: "The names worth your attention today in the industries you follow, each with how much data backed it and what changed overnight.",
       body: (
         <ul className="ld-mock-rows">
           {[["strong", 78, "+14"], ["elevated", 59, "+1"], ["elevated", 57, "0"], ["neutral", 51, "−3"]].map(([b, v, dlt], i) => (
@@ -162,7 +162,7 @@ function Tour() {
     },
     {
       title: "Report",
-      sub: "One name, every input: the price with its events marked, the hard filters with the actual figure against each rule, and the score breakdown.",
+      sub: "One name explained: the plain-language reason for its score, every filter with the actual figure against the rule, and the price with its events marked.",
       body: (
         <div className="ld-mock-report">
           <div className="ld-mock-price">
@@ -187,7 +187,7 @@ function Tour() {
     },
     {
       title: "Alerts",
-      sub: "Impersonal triggers on the names you can see, delivered where you read them, each one a sentence you can verify.",
+      sub: "Say which names to watch; it messages you when a fact changes, each alert a sentence you can verify.",
       body: (
         <ul className="ld-mock-alerts">
           {[["Borrow fee 2x+", "Borrow fee 2.4x its 5-session average"], ["Volume at 3x+", "3.6x the 20-day average by midday"], ["Catalyst dated", "Earnings call dated inside the look-ahead"]].map(([t, d]) => (
@@ -203,8 +203,8 @@ function Tour() {
   ];
   return (
     <section className="ld-tour" aria-labelledby="tour-h">
-      <h2 id="tour-h">Three screens you'll live in.</h2>
-      <p className="ld-sub">Illustrations of the layout. Names appear once you sign in; the figures are examples.</p>
+      <h2 id="tour-h">How it helps, screen by screen.</h2>
+      <p className="ld-sub">Illustrations of the layout. Names appear once you sign in; the figures are examples, not data.</p>
       <div className="ld-tourgrid">
         {screens.map((sc) => (
           <figure className="ld-screen" key={sc.title}>
@@ -236,7 +236,7 @@ function Plans({ tiers }) {
   ];
   return (
     <section className="ld-plans" aria-labelledby="plans-h">
-      <h2 id="plans-h">Start free. Upgrade when the board earns it.</h2>
+      <h2 id="plans-h">Start free. Upgrade when it has earned a place in your morning.</h2>
       <div className="ld-plangrid">
         <div className="ld-plan">
           <div className="ld-plan-name">{free.label}</div>
@@ -291,14 +291,15 @@ export default function Landing() {
     <div className="ld">
       <section className="ld-hero">
         <div className="ld-hero-copy">
-          <p className="eyebrow">Small-cap research, ranked daily</p>
-          <h1>Know which names are built to move before their next event.</h1>
+          <p className="eyebrow">A research assistant for small caps</p>
+          <h1>It watches your industries, explains what changed, and alerts you on facts.</h1>
           <p className="ld-lede">
-            Public filings and market data, run through the same hard filters every day, ranked into a board you can read in a minute.{" "}
+            Every morning it reads the filings and market data on the names in your industries, tells you which ones are built to move before
+            their next event and why, and messages you when a fact changes: a borrow fee doubling, a dated catalyst, a filing. On real data,{" "}
             <b>
               {EVIDENCE.hits} of {EVIDENCE.events}
             </b>{" "}
-            names that cleared the screen moved 20% or traded 3x volume.
+            names it flagged went on to move.
           </p>
           <div className="ld-actions">
             <Link to={primary[0]} className="btn btn-primary btn-lg">
@@ -357,8 +358,8 @@ export default function Landing() {
       <Plans tiers={tiers} />
 
       <section className="ld-cta">
-        <h2>Your first board is a minute away.</h2>
-        <p className="ld-sub">Pick an industry, see today's ranked names, pin the ones worth a second look.</p>
+        <h2>Your first brief is a minute away.</h2>
+        <p className="ld-sub">Pick an industry, read today's brief, and tell it which names to watch for you.</p>
         <Link to={primary[0]} className="btn btn-primary btn-lg">
           {primary[1]} <Icon name="arrow" size={18} />
         </Link>
