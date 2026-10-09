@@ -84,6 +84,8 @@ export default function CommandPalette() {
       label: r.symbol,
       sub: r.theme,
       score: r.value,
+      present: r.components_present,
+      total: r.components_total,
       run: () => navigate(`/stock/${r.symbol}`),
     }));
     return [...names, ...screens];
@@ -138,7 +140,7 @@ export default function CommandPalette() {
               <span className={it.kind === "name" ? "sym" : ""}>{it.label}</span>
               {it.sub && <span className="muted small palette-sub">{it.sub}</span>}
               <span className="spacer" />
-              {it.kind === "name" && <span className="mono muted">{fmtScore(it.score)}</span>}
+              {it.kind === "name" && <span className="mono muted">{fmtScore(it.score, it.present, it.total)}</span>}
               {it.hint && <kbd className="kbd">{it.hint}</kbd>}
             </li>
           ))}
