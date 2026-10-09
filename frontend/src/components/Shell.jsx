@@ -8,6 +8,7 @@ import { TierChip, ToastHost } from "./ui.jsx";
 import Icon from "./Icons.jsx";
 import CommandPalette from "./CommandPalette.jsx";
 import Shortcuts from "./Shortcuts.jsx";
+import Tour, { HOME_TOUR, restartTour } from "./Tour.jsx";
 
 // v4 shell: signed-in subscribers get a left rail on desktop and a bottom
 // tab bar on phones, with a slim in-page header carrying search, plan and
@@ -151,7 +152,8 @@ function AccountMenu({ me, align = "right" }) {
             role="menuitem"
             onClick={() => {
               setOpen(false);
-              window.dispatchEvent(new Event("ta:tour:restart"));
+              if (window.location.pathname !== "/overview") navigate("/overview");
+              restartTour();
             }}
           >
             Take the tour again
@@ -322,6 +324,7 @@ export function Footer() {
 export function Shell({ children }) {
   const { me } = useMe();
   const unread = useUnread(me);
+  const here = usePath().split("?")[0];
   return (
     <div className={`app ${me ? "authed" : "anon"}`}>
       <a className="skip" href="#main">
@@ -336,6 +339,7 @@ export function Shell({ children }) {
         <Footer />
       </div>
       <BottomBar unread={unread} />
+      {me && <Tour steps={HOME_TOUR} enabled={here === "/overview"} />}
       <ToastHost />
       <CommandPalette />
       <Shortcuts />
