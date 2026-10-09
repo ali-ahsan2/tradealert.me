@@ -2273,8 +2273,9 @@ table.hf th.num {
   margin: var(--s-1) 0;
 }
 
+/* a dilution filing is a red flag, stated in the warn tone: red stays for price moves */
 .alert .r2.dilution {
-  color: var(--neg);
+  color: var(--warn);
 }
 
 .alert .r3 {
