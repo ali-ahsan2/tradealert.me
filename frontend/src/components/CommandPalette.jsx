@@ -8,17 +8,18 @@ import { score as fmtScore } from "../lib/fmt.js";
 // "palette:open" event from anywhere.
 
 const SCREENS = [
-  { label: "Overview", to: "/overview", hint: "g o" },
+  { label: "Home · your brief", to: "/overview", hint: "g o" },
   { label: "Board", to: "/board", hint: "g b" },
-  { label: "Screener", to: "/screen", hint: "g x" },
-  { label: "Screener · cleared the screen", to: "/screen?hf=pass" },
-  { label: "Screener · earnings within 14 days", to: "/screen?earnings_within=14&sort=earnings" },
-  { label: "Changes since last run", to: "/changes", hint: "g c" },
-  { label: "Calendar", to: "/calendar", hint: "g l" },
+  { label: "Find names", to: "/screen", hint: "g x" },
+  { label: "Find · names that cleared every hard filter", to: "/screen?hf=pass" },
+  { label: "Find · earnings within 14 days", to: "/screen?earnings_within=14&sort=earnings" },
+  { label: "What changed since the last run", to: "/changes", hint: "g c" },
+  { label: "Coming up · dated events", to: "/calendar", hint: "g l" },
   { label: "Watchlist", to: "/watchlist", hint: "g w" },
   { label: "Alerts", to: "/alerts", hint: "g a" },
-  { label: "Alerts · armed", to: "/alerts?tab=armed" },
-  { label: "Strategies", to: "/strategies", hint: "g t" },
+  { label: "Alerts · the ones you have on", to: "/alerts?tab=armed" },
+  { label: "How it works and glossary", to: "/help" },
+  { label: "Strategies and evidence", to: "/strategies", hint: "g t" },
   { label: "Digests", to: "/digests", hint: "g d" },
   { label: "Compare names", to: "/compare" },
   { label: "Account", to: "/settings", hint: "g s" },
@@ -83,6 +84,8 @@ export default function CommandPalette() {
       label: r.symbol,
       sub: r.theme,
       score: r.value,
+      present: r.components_present,
+      total: r.components_total,
       run: () => navigate(`/stock/${r.symbol}`),
     }));
     return [...names, ...screens];
@@ -137,7 +140,7 @@ export default function CommandPalette() {
               <span className={it.kind === "name" ? "sym" : ""}>{it.label}</span>
               {it.sub && <span className="muted small palette-sub">{it.sub}</span>}
               <span className="spacer" />
-              {it.kind === "name" && <span className="mono muted">{fmtScore(it.score)}</span>}
+              {it.kind === "name" && <span className="mono muted">{fmtScore(it.score, it.present, it.total)}</span>}
               {it.hint && <kbd className="kbd">{it.hint}</kbd>}
             </li>
           ))}

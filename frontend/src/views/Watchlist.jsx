@@ -2,9 +2,20 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api, cached, toast } from "../api.js";
 import { Link } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
-import { DAYS, delta, deltaTone, dollars, downloadText, inDays, plural, score as fmtScore, shortDate, signed, toCsv, tone } from "../lib/fmt.js";
+import { DAYS, delta, dollars, downloadText, inDays, plural, score as fmtScore, shortDate, signed, toCsv, tone } from "../lib/fmt.js";
+import { GLOSSARY } from "../lib/glossary.js";
+import { bandWord } from "../lib/plain.js";
+import { useMode } from "../lib/mode.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
+import Spark, { Move } from "../components/Spark.jsx";
+import NotifyButton from "../components/NotifyButton.jsx";
 import { Empty, ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
+import "./tools.css";
+
+// The names the subscriber pinned, each in plain words: what the score has
+// done since they pinned it, the next dated event, a 30-day sparkline and
+// one tap to be told about it. Full mode keeps the stat tiles, the facts
+// row, reordering, notes, compare and the CSV export.
 
 const SORTS = {
   order: ["Your order", null],
@@ -13,6 +24,54 @@ const SORTS = {
   px: ["Price since pinned", (a, b) => ((b.st && b.st.chg_since_pin) ?? -Infinity) - ((a.st && a.st.chg_since_pin) ?? -Infinity)],
   earnings: ["Next earnings", (a, b) => ((a.st && a.st.earnings && a.st.earnings.days) ?? Infinity) - ((b.st && b.st.earnings && b.st.earnings.days) ?? Infinity)],
 };
+
+function plainDays(n) {
+  if (n == null) return "—";
+  if (n === 0) return "today";
+  if (n === 1) return "tomorrow";
+  if (n === -1) return "yesterday";
+  return n > 0 ? `in ${n} days` : `${-n} days ago`;
+}
+
+// Which inputs-with-data counts apply to a pick's score: the picks payload
+// carries them; the stats row is the fallback when it does too.
+function coverageOf(p) {
+  const st = p.st || {};
+  const present = p.components_present ?? st.components_present;
+  const total = p.components_total ?? st.components_total;
+  return { present, total, known: present != null && total != null && total > 0 };
+}
+
+// The score since pinning, as one sentence from the stored figures. The
+// current score keeps its ~ on thin coverage; the score at pin has no
+// coverage on record, so it is the stored integer.
+function sincePinSentence(p) {
+  if (p.value == null) return "No score on this run.";
+  const { present, total } = coverageOf(p);
+  const now = fmtScore(p.value, present, total);
+  if (p.score_at_pin == null) return `Scores ${now} now; no score was on file when you pinned it.`;
+  const was = fmtScore(p.score_at_pin);
+  const dlt = Math.round(p.value) - Math.round(p.score_at_pin);
+  if (dlt === 0) return `Same score as when you pinned it, ${now}.`;
+  return `Score ${dlt > 0 ? "up" : "down"} ${Math.abs(dlt)} point${Math.abs(dlt) === 1 ? "" : "s"} since you pinned it, from ${was} to ${now}.`;
+}
+
+// The badge, only with the coverage it can prove. ScoreBadge draws a full
+// bar when the counts are missing, so without them the band word and the
+// score() figure stand alone with a hint.
+function PickBand({ p }) {
+  if (!p.band) return <span className="chip chip-plain">No run</span>;
+  const { present, total, known } = coverageOf(p);
+  if (known) return <ScoreBadge band={p.band} value={p.value} present={present} total={total} />;
+  return (
+    <span className="tl-nocov" title="The run did not record how many inputs had data for this score">
+      <span>
+        <b>{bandWord(p.band)}</b> <span className="mono">{fmtScore(p.value)}</span>
+      </span>
+      <span className="hint">input count not on file</span>
+    </span>
+  );
+}
 
 function NoteEditor({ pick, onSaved }) {
   const [open, setOpen] = useState(false);
@@ -58,6 +117,7 @@ function NoteEditor({ pick, onSaved }) {
 
 export default function Watchlist() {
   const { me } = useMe();
+  const { simple } = useMode();
   const [picks, setPicks] = useState(null);
   const [settings, setSettings] = useState(null);
   const [tiers, setTiers] = useState(null);
@@ -86,6 +146,17 @@ export default function Watchlist() {
       alive = false;
     };
   }, [reload]);
+
+  // A Notify button on a card changes the armed count the stats carry;
+  // refresh them when any button on the page arms or disarms.
+  useEffect(() => {
+    const refresh = () =>
+      api("/me/watchlist/stats")
+        .then((d) => setStats(d))
+        .catch(() => {});
+    window.addEventListener("alerts:rules", refresh);
+    return () => window.removeEventListener("alerts:rules", refresh);
+  }, []);
 
   const move = async (i, dir) => {
     setBusy(true);
@@ -149,14 +220,44 @@ export default function Watchlist() {
     tiers && tier ? [...tiers].sort((a, b) => a.price_monthly_cents - b.price_monthly_cents).find((t) => t.price_monthly_cents > tier.price_monthly_cents) : null;
   const tz = me && me.settings ? me.settings.timezone : undefined;
 
+  // Figures for the utility line, from the picks and their stats.
+  const comparable = ordered.filter((p) => p.value != null && p.score_at_pin != null).length;
+  const higher = ordered.filter((p) => p.value != null && p.score_at_pin != null && Math.round(p.value - p.score_at_pin) > 0).length;
+  const lower = ordered.filter((p) => p.value != null && p.score_at_pin != null && Math.round(p.value - p.score_at_pin) < 0).length;
+  const withAlerts = stats ? ordered.filter((p) => p.st && p.st.armed > 0).length : null;
+
+  const saveNote = (sym, note) => setPicks((xs) => xs.map((x) => (x.symbol === sym ? { ...x, note } : x)));
+
   return (
     <div className="wrap">
       <div className="pagehead">
         <div>
           <h1>Watchlist</h1>
-          <div className="meta">
-            {tier ? `${used} of ${limit} picks used · ${tier.label}` : "Your pinned names"} · the on-site twin of your weekly digest
-          </div>
+          <p className="utility">
+            {!picks && !err && "Checking the names you follow…"}
+            {err && "Your watchlist could not be loaded."}
+            {picks &&
+              (picks.length === 0 ? (
+                <>
+                  You follow no names yet{tier && limit != null ? <>; {tier.label} lets you pin up to <b>{limit}</b></> : null}.
+                </>
+              ) : (
+                <>
+                  You follow <b>{used}</b> {used === 1 ? "name" : "names"}
+                  {tier && limit != null ? ` (${used} of ${limit} on ${tier.label})` : ""}.{" "}
+                  {comparable === 0 ? (
+                    <>No score was on file when you pinned them, so there is nothing to compare yet</>
+                  ) : higher + lower > 0 ? (
+                    <>
+                      <b>{higher}</b> score higher than when you pinned {higher === 1 ? "it" : "them"} and <b>{lower}</b> lower
+                    </>
+                  ) : (
+                    <>None has changed score since you pinned it</>
+                  )}
+                  {withAlerts == null ? "." : withAlerts === 0 ? "; none has alerts on yet." : <>; <b>{withAlerts}</b> {withAlerts === 1 ? "has" : "have"} alerts on.</>}
+                </>
+              ))}
+          </p>
         </div>
         <div className="actions">
           {picks && picks.length > 1 && (
@@ -172,16 +273,16 @@ export default function Watchlist() {
             </label>
           )}
           {picks && picks.length > 1 && (
-            <Link to={`/compare?symbols=${picks.slice(0, 4).map((p) => p.symbol).join(",")}`} className="btn btn-secondary btn-sm">
+            <Link to={`/compare?symbols=${picks.slice(0, 4).map((p) => p.symbol).join(",")}`} className="btn btn-secondary btn-sm full-only">
               Compare {Math.min(4, picks.length)}
             </Link>
           )}
           {picks && picks.length > 0 && (
-            <button className="btn-quiet" onClick={exportCsv}>
+            <button className="btn-quiet full-only" onClick={exportCsv}>
               Export CSV
             </button>
           )}
-          <Link to="/screen?pinned=1" className="btn btn-secondary btn-sm">
+          <Link to="/screen?pinned=1" className="btn btn-secondary btn-sm full-only">
             Screen my picks
           </Link>
           <Link to="/board" className="btn btn-secondary btn-sm">
@@ -191,10 +292,10 @@ export default function Watchlist() {
       </div>
 
       {summary && summary.count > 0 && (
-        <div className="tiles">
+        <div className="tiles full-only">
           <div className="tile card">
             <span className="tile-label">Score since pinned</span>
-            <span className={`tile-value ${deltaTone(summary.mean_score_delta_since_pin)}`}>{delta(summary.mean_score_delta_since_pin)}</span>
+            <span className="tile-value">{delta(summary.mean_score_delta_since_pin)}</span>
             <span className="tile-sub">mean across {plural(summary.count, "pick")}</span>
           </div>
           <div className="tile card">
@@ -205,7 +306,7 @@ export default function Watchlist() {
             </span>
           </div>
           <div className="tile card">
-            <span className="tile-label">Cleared the screen</span>
+            <span className="tile-label">Pass every filter</span>
             <span className="tile-value">{summary.cleared}</span>
             <span className="tile-sub">every Fast Mover hard filter passed</span>
           </div>
@@ -239,7 +340,7 @@ export default function Watchlist() {
           {nextTier ? (
             <>
               {" "}
-              Unpin one, or {nextTier.label} includes {plural(nextTier.picks_limit, "pick")} for {dollars(nextTier.price_monthly_cents)}/mo.{" "}
+              Unpin one, or {nextTier.label} follows {plural(nextTier.picks_limit, "name")} for you for {dollars(nextTier.price_monthly_cents)}/mo.{" "}
               <Link to="/pricing">See plans</Link>
             </>
           ) : (
@@ -260,7 +361,7 @@ export default function Watchlist() {
             </Link>
           }
         >
-          Pin names from the Board to track them here and get them in your weekly digest.
+          {GLOSSARY.pin.short} We keep a note of the score on the day you pin a name, so this page can tell you what has changed since.
           {tier && limit != null && (
             <>
               {" "}
@@ -271,12 +372,85 @@ export default function Watchlist() {
         </Empty>
       )}
 
-      {picks && picks.length > 0 && (
+      {picks && picks.length > 0 && simple && (
+        <div className="wl-list">
+          {ordered.map((p) => {
+            const st = p.st;
+            const i = picks.findIndex((x) => x.symbol === p.symbol);
+            return (
+              <article className="card tl-wl" key={p.symbol} aria-label={p.symbol}>
+                <div className="tl-main">
+                  <div className="tl-head">
+                    <Link className="sym" to={`/stock/${p.symbol}`}>
+                      {p.symbol}
+                    </Link>
+                    <span className="tl-co" title={p.theme}>
+                      {p.theme}
+                    </span>
+                  </div>
+                  <p className="tl-sent">{sincePinSentence(p)}</p>
+                  <p className="tl-meta">
+                    {st && st.earnings ? (
+                      <>
+                        Earnings <b className={st.earnings.days >= 0 && st.earnings.days <= 14 ? "soon" : ""}>{plainDays(st.earnings.days)}</b> ({shortDate(st.earnings.date, "UTC")})
+                      </>
+                    ) : (
+                      "No dated event on file"
+                    )}
+                    {" · pinned "}
+                    {shortDate(p.pinned_at, tz)}
+                    {st && st.unread > 0 && (
+                      <>
+                        {" · "}
+                        <Link to={`/alerts?tab=history&symbol=${p.symbol}&unread=1`}>
+                          {st.unread} unread {st.unread === 1 ? "alert" : "alerts"}
+                        </Link>
+                      </>
+                    )}
+                  </p>
+                </div>
+                <div className="tl-side">
+                  {st && st.closes && st.closes.length > 1 && (
+                    <span className="wl-spark">
+                      <Spark closes={st.closes} width={100} height={32} />
+                      <Move value={st.chg_30d} /> <span className="xs faint">30d</span>
+                    </span>
+                  )}
+                  <PickBand p={p} />
+                </div>
+                <div className="tl-acts">
+                  <NotifyButton symbol={p.symbol} compact />
+                  <Link to={`/stock/${p.symbol}`} className="btn btn-secondary btn-sm">
+                    Open report
+                  </Link>
+                  <button className="btn-quiet" onClick={() => unpin(p.symbol)}>
+                    Unpin
+                  </button>
+                  {sort === "order" && picks.length > 1 && (
+                    <span className="tl-move" role="group" aria-label={`Reorder ${p.symbol}`}>
+                      <button type="button" className="btn-quiet" disabled={busy || i === 0} onClick={() => move(i, -1)} aria-label={`Move ${p.symbol} up`} title="Move up">
+                        ↑
+                      </button>
+                      <button type="button" className="btn-quiet" disabled={busy || i === picks.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${p.symbol} down`} title="Move down">
+                        ↓
+                      </button>
+                    </span>
+                  )}
+                  <NoteEditor pick={p} onSaved={saveNote} />
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {picks && picks.length > 0 && !simple && (
         <div className="wl-list">
           {ordered.map((p) => {
             const i = picks.findIndex((x) => x.symbol === p.symbol);
             const since = p.value != null && p.score_at_pin != null ? p.value - p.score_at_pin : null;
             const st = p.st;
+            const cov = coverageOf(p);
             return (
               <article className="card wl-card" key={p.symbol} aria-label={p.symbol}>
                 <div className="order" aria-label="Reorder">
@@ -299,7 +473,16 @@ export default function Watchlist() {
                     {p.lane ? ` · lane ${p.lane}` : ""}
                   </span>
                 </div>
-                <div className="act">{p.band ? <ScoreBadge band={p.band} value={p.value} /> : <span className="chip chip-plain">No run</span>}</div>
+                <div className="act">
+                  {st && st.closes && st.closes.length > 1 && (
+                    <span className="wl-spark">
+                      <Spark closes={st.closes} width={120} height={36} />
+                      <Move value={st.chg_30d} /> <span className="xs faint">30d</span>
+                    </span>
+                  )}
+                  <PickBand p={p} />
+                  <NotifyButton symbol={p.symbol} compact />
+                </div>
                 <div className="facts">
                   <span>
                     Pinned {shortDate(p.pinned_at, tz)}
@@ -311,13 +494,13 @@ export default function Watchlist() {
                     )}
                   </span>
                   <span>
-                    Now <b>{fmtScore(p.value)}</b>
+                    Now <b>{fmtScore(p.value, cov.present, cov.total)}</b>
                   </span>
                   <span>
-                    Since pinned <b className={deltaTone(since)}>{since == null ? "—" : delta(since)}</b>
+                    Since pinned <b>{since == null ? "—" : delta(since)}</b>
                   </span>
                   <span>
-                    Since last run <b className={deltaTone(p.delta_1d)}>{delta(p.delta_1d)}</b>
+                    Since last run <b>{delta(p.delta_1d)}</b>
                   </span>
                   {st && st.chg_since_pin != null && (
                     <span title={st.last_date ? `close ${shortDate(st.last_date)}` : ""}>
@@ -332,7 +515,7 @@ export default function Watchlist() {
                   )}
                   {st && st.hf_pass != null && (
                     <span>
-                      Screen <b className={`verdict ${st.hf_pass ? "pass" : "fail"}`}>{st.hf_pass ? "PASS" : "FAIL"}</b>
+                      Filters: <b className={`verdict ${st.hf_pass ? "pass" : "fail"}`}>{st.hf_pass ? "PASS" : "FAIL"}</b>
                     </span>
                   )}
                   {st && st.earnings && (
@@ -341,11 +524,11 @@ export default function Watchlist() {
                       <b className={st.earnings.days >= 0 && st.earnings.days <= 14 ? "soon" : ""}>
                         {inDays(st.earnings.days)}
                       </b>
-                      <span className="xs faint"> {st.earnings.date}</span>
+                      <span className="xs faint"> {shortDate(st.earnings.date, "UTC")}</span>
                     </span>
                   )}
                   {st && st.unread > 0 && (
-                    <Link to={`/alerts?symbol=${p.symbol}&unread=1`} className="chip chip-plain">
+                    <Link to={`/alerts?tab=history&symbol=${p.symbol}&unread=1`} className="chip chip-plain">
                       {st.unread} unread {st.unread === 1 ? "alert" : "alerts"}
                     </Link>
                   )}
@@ -354,7 +537,7 @@ export default function Watchlist() {
                   <button className="btn-quiet" onClick={() => unpin(p.symbol)}>
                     Unpin
                   </button>
-                  <NoteEditor pick={p} onSaved={(sym, note) => setPicks((xs) => xs.map((x) => (x.symbol === sym ? { ...x, note } : x)))} />
+                  <NoteEditor pick={p} onSaved={saveNote} />
                 </div>
               </article>
             );

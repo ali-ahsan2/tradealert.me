@@ -1,26 +1,27 @@
 /*
- * tradealert.me design tokens.
+ * tradealert.me design tokens (v4).
  *
- * This is the only file that declares colours. Components read custom
- * properties and never hard-code a hue, so a rebrand is an edit to
- * theme-override.css (loaded after this file), not a sweep through the
- * stylesheet. Structural tokens (spacing, radii, type scale) are identity
- * decisions and are not meant to be re-themed.
+ * The only file that declares colours. Components read custom properties
+ * and never hard-code a hue, so a rebrand is an edit to theme-override.css
+ * (loaded after this file), not a sweep through the stylesheet.
  *
- * Palette direction: PRODUCT_DESIGN.md §1.3. A cool off-white page, a
- * muted navy accent, red and green reserved for market outcomes only, and
- * a single-hue navy ramp for score bands so they read as ordered weight,
- * never as five strengths of "buy".
+ * Two surfaces share this file:
+ *   - the subscriber product: light-first, dark by OS preference or an
+ *     explicit data-theme, a consumer-finance feel (DESIGN_V4.md §1)
+ *   - the operator Lab (html[data-surface="lab"]): dark only, a dense
+ *     analysis terminal (DESIGN_V4.md §4)
  *
- * The dark block below is a straight token swap driven by the operating
- * system preference. There is deliberately no in-product switch.
+ * Red and green stay reserved for market outcomes and pass/fail verdicts.
+ * The brand accent is a cobalt blue so nothing branded reads as a buy or
+ * sell. Score bands are one ordered ramp of that hue, never five strengths
+ * of "buy".
  */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   font-size: 16px;
 
-  /* spacing: 4px base, eight steps, nothing off the scale */
+  /* spacing: 4px base, eight steps */
   --s-1: 4px;
   --s-2: 8px;
   --s-3: 12px;
@@ -30,126 +31,264 @@
   --s-7: 48px;
   --s-8: 64px;
 
-  /* radii: badges and chips, then cards/inputs/buttons. nothing rounder. */
-  --r-sm: 3px;
-  --r-md: 6px;
-  --r: 6px;
+  /* radii: chips and pills are round; cards are soft */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-pill: 999px;
 
-  /* type: system stacks, no webfont request on the product */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+  /* type */
+  --font-sans: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
     Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo,
-    Consolas, monospace;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas,
+    monospace;
 
-  /* 1.20 ratio, rounded to whole pixels, rem-based */
+  /* 1.20 ratio plus two display sizes for hero numbers */
   --fs-xs: 0.75rem;     /* 12 */
   --fs-sm: 0.875rem;    /* 14 */
-  --fs-base: 1rem;      /* 16 */
-  --fs-md: 1.1875rem;   /* 19 */
-  --fs-lg: 1.4375rem;   /* 23 */
+  --fs-base: 0.9375rem; /* 15 */
+  --fs-md: 1.125rem;    /* 18 */
+  --fs-lg: 1.375rem;    /* 22 */
   --fs-xl: 1.75rem;     /* 28 */
-  --fs-2xl: 2.125rem;   /* 34 */
+  --fs-2xl: 2.25rem;    /* 36 */
+  --fs-3xl: 3rem;       /* 48 */
+  --fs-hero: 3.5rem;    /* 56 */
 
-  /* neutrals: the 90% of every page */
-  --bg: #f7f8fa;
+  /* neutrals: cool whites, soft greys, near-black ink */
+  --bg: #f5f6fa;
   --surface: #ffffff;
   --surface-raised: #ffffff;
-  --surface-sunken: #eef0f4;
-  --border: #d8dce3;
-  --border-strong: #b4bac6;
-  --ink: #161a21;
-  --ink-muted: #5b6472;
-  --ink-faint: #8b93a2;
+  --surface-sunken: #eef0f5;
+  --border: #e6e8ef;
+  --border-strong: #cfd4df;
+  --ink: #0f1420;
+  --ink-muted: #5c6475;
+  --ink-faint: #8f97a8;
 
-  /* brand accent and semantic colours */
-  --info: #24466f;
-  --info-hover: #1a3455;
-  --info-active: #162c48;
-  --info-fill: #eaf0f8;
+  /* brand accent: cobalt. info-* keep their names for compatibility. */
+  --info: #2f5cff;
+  --info-hover: #2449d6;
+  --info-active: #1d3cb3;
+  --info-fill: #eaefff;
   --on-accent: #ffffff;
   --accent: var(--info);
+  --accent-soft: #eaefff;
 
-  --pos: #1f6b4a;
-  --pos-fill: #eaf4ee;
-  --neg: #9b2c2c;
-  --neg-fill: #fdf5f5;
-  --warn: #8a5a00;
-  --warn-fill: #fdf8ec;
+  /* market outcomes and verdicts only */
+  --pos: #0f9d58;
+  --pos-fill: #e6f6ee;
+  --neg: #e0393e;
+  --neg-fill: #fdecec;
+  --warn: #b4690e;
+  --warn-fill: #fff4e5;
 
-  --selection-bg: #d6e0ee;
+  --selection-bg: #d9e2ff;
   --selection-fg: var(--ink);
 
-  /* score bands: navy → neutral → warm grey. fill / text / border */
-  --band-strong-bg: #1d3a5f;
+  /* score bands: cobalt ramp → neutral → warm grey. fill / text / border */
+  --band-strong-bg: #1f3fcc;
   --band-strong-fg: #ffffff;
-  --band-strong-bd: #162c48;
-  --band-elevated-bg: #3a6491;
+  --band-strong-bd: #1f3fcc;
+  --band-elevated-bg: #5e7cff;
   --band-elevated-fg: #ffffff;
-  --band-elevated-bd: #2d5178;
-  --band-neutral-bg: #dfe3ea;
-  --band-neutral-fg: #2b323d;
-  --band-neutral-bd: #c3c9d4;
-  --band-weak-bg: #e8e4d8;
-  --band-weak-fg: #5b5240;
-  --band-weak-bd: #d3ccb9;
-  --band-excluded-bg: #eef0f4;
-  --band-excluded-fg: #5b6472;
-  --band-excluded-bd: #d8dce3;
+  --band-elevated-bd: #5e7cff;
+  --band-neutral-bg: #e8ebf3;
+  --band-neutral-fg: #2b3345;
+  --band-neutral-bd: #e8ebf3;
+  --band-weak-bg: #efeae0;
+  --band-weak-fg: #5d5340;
+  --band-weak-bd: #efeae0;
+  --band-excluded-bg: #f5f6fa;
+  --band-excluded-fg: #6b7385;
+  --band-excluded-bd: #d9dde7;
 
-  /* one shadow, nearly invisible. depth is not information here. */
-  --shadow: 0 1px 2px rgba(22, 26, 33, 0.06);
-  --shadow-lift: 0 4px 16px rgba(22, 26, 33, 0.1);
+  /* elevation: one soft lift for cards that float, hairlines elsewhere */
+  --shadow: 0 1px 2px rgba(15, 20, 32, 0.04), 0 6px 20px rgba(15, 20, 32, 0.05);
+  --shadow-lift: 0 10px 32px rgba(15, 20, 32, 0.12);
   --stack: var(--shadow);
   --stack-lift: var(--shadow-lift);
   --tile-hi: none;
+
+  /* charts */
+  --chart-line: var(--info);
+  --chart-fill: rgba(47, 92, 255, 0.14);
+  --chart-grid: #eef0f5;
 
   --focus: 0 0 0 2px var(--surface), 0 0 0 4px var(--info);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0f141b;
-    --surface: #161c25;
-    --surface-raised: #1c2430;
-    --surface-sunken: #0c1016;
-    --border: #26303d;
-    --border-strong: #3a475a;
-    --ink: #e4e9f0;
-    --ink-muted: #9aa6b8;
-    --ink-faint: #6b7788;
+    color-scheme: dark;
+    --bg: #0b0f17;
+    --surface: #121826;
+    --surface-raised: #182033;
+    --surface-sunken: #0e1320;
+    --border: #1f2838;
+    --border-strong: #2f3a4f;
+    --ink: #eef2f8;
+    --ink-muted: #9ba6ba;
+    --ink-faint: #6b7689;
 
-    --info: #8db0dc;
-    --info-hover: #a3c0e5;
-    --info-active: #7a9fcf;
-    --info-fill: #1a2638;
-    --on-accent: #0b1320;
+    --info: #6d8cff;
+    --info-hover: #85a0ff;
+    --info-active: #5a79f0;
+    --info-fill: #1a2240;
+    --on-accent: #0b0f17;
+    --accent-soft: #1a2240;
 
-    --pos: #6cbf96;
-    --pos-fill: #15261e;
-    --neg: #e37a7a;
-    --neg-fill: #2b1818;
-    --warn: #d9a441;
-    --warn-fill: #2a2416;
+    --pos: #22c55e;
+    --pos-fill: #0f2a1c;
+    --neg: #f87171;
+    --neg-fill: #2e1518;
+    --warn: #f0b450;
+    --warn-fill: #2b2210;
 
-    --selection-bg: #2a3c56;
+    --selection-bg: #2a3a6e;
 
-    --band-strong-bg: #3b619a;
+    --band-strong-bg: #3f63ff;
     --band-strong-fg: #ffffff;
-    --band-strong-bd: #4b74b0;
-    --band-elevated-bg: #2b4568;
-    --band-elevated-fg: #e8eef7;
-    --band-elevated-bd: #3a5a85;
-    --band-neutral-bg: #232c38;
-    --band-neutral-fg: #cdd5e0;
-    --band-neutral-bd: #35414f;
-    --band-weak-bg: #2d2a22;
-    --band-weak-fg: #d8ccae;
-    --band-weak-bd: #46402f;
-    --band-excluded-bg: #161c25;
-    --band-excluded-fg: #8a95a6;
-    --band-excluded-bd: #26303d;
+    --band-strong-bd: #3f63ff;
+    --band-elevated-bg: #2a3f8f;
+    --band-elevated-fg: #e6ecff;
+    --band-elevated-bd: #2a3f8f;
+    --band-neutral-bg: #232c3f;
+    --band-neutral-fg: #cfd6e4;
+    --band-neutral-bd: #232c3f;
+    --band-weak-bg: #2e2a22;
+    --band-weak-fg: #d9cdb0;
+    --band-weak-bd: #2e2a22;
+    --band-excluded-bg: #121826;
+    --band-excluded-fg: #8a94a8;
+    --band-excluded-bd: #2a3447;
 
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-lift: 0 6px 20px rgba(0, 0, 0, 0.45);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-lift: 0 12px 36px rgba(0, 0, 0, 0.5);
+
+    --chart-line: #6d8cff;
+    --chart-fill: rgba(109, 140, 255, 0.16);
+    --chart-grid: #1a2232;
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b0f17;
+  --surface: #121826;
+  --surface-raised: #182033;
+  --surface-sunken: #0e1320;
+  --border: #1f2838;
+  --border-strong: #2f3a4f;
+  --ink: #eef2f8;
+  --ink-muted: #9ba6ba;
+  --ink-faint: #6b7689;
+  --info: #6d8cff;
+  --info-hover: #85a0ff;
+  --info-active: #5a79f0;
+  --info-fill: #1a2240;
+  --on-accent: #0b0f17;
+  --accent-soft: #1a2240;
+  --pos: #22c55e;
+  --pos-fill: #0f2a1c;
+  --neg: #f87171;
+  --neg-fill: #2e1518;
+  --warn: #f0b450;
+  --warn-fill: #2b2210;
+  --selection-bg: #2a3a6e;
+  --band-strong-bg: #3f63ff;
+  --band-strong-fg: #ffffff;
+  --band-strong-bd: #3f63ff;
+  --band-elevated-bg: #2a3f8f;
+  --band-elevated-fg: #e6ecff;
+  --band-elevated-bd: #2a3f8f;
+  --band-neutral-bg: #232c3f;
+  --band-neutral-fg: #cfd6e4;
+  --band-neutral-bd: #232c3f;
+  --band-weak-bg: #2e2a22;
+  --band-weak-fg: #d9cdb0;
+  --band-weak-bd: #2e2a22;
+  --band-excluded-bg: #121826;
+  --band-excluded-fg: #8a94a8;
+  --band-excluded-bd: #2a3447;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lift: 0 12px 36px rgba(0, 0, 0, 0.5);
+  --chart-line: #6d8cff;
+  --chart-fill: rgba(109, 140, 255, 0.16);
+  --chart-grid: #1a2232;
+}
+
+/*
+ * The Lab: a dark analysis terminal regardless of OS preference. Amber is
+ * the working accent (selection, active tab, the thing you are editing);
+ * cyan is for links and secondary emphasis. Panels are flat with hairline
+ * borders; there is no elevation on a terminal.
+ */
+html:root[data-surface="lab"] {
+  color-scheme: dark;
+  --r-sm: 3px;
+  --r-md: 4px;
+  --r: 4px;
+  --r-lg: 6px;
+
+  --fs-xs: 0.6875rem;  /* 11 */
+  --fs-sm: 0.8125rem;  /* 13 */
+  --fs-base: 0.875rem; /* 14 */
+  --fs-md: 1rem;       /* 16 */
+  --fs-lg: 1.25rem;    /* 20 */
+  --fs-xl: 1.625rem;   /* 26 */
+  --fs-2xl: 2rem;      /* 32 */
+
+  --bg: #090c11;
+  --surface: #0f131a;
+  --surface-raised: #141a23;
+  --surface-sunken: #070a0e;
+  --border: #1c2430;
+  --border-strong: #2a3545;
+  --ink: #d9e0ea;
+  --ink-muted: #8b96a7;
+  --ink-faint: #5f6a7b;
+
+  --info: #f5a524;
+  --info-hover: #ffb84d;
+  --info-active: #d98f12;
+  --info-fill: #2a1f08;
+  --on-accent: #0b0d10;
+  --accent: var(--info);
+  --accent-soft: #2a1f08;
+  --link: #38bdf8;
+
+  --pos: #22c55e;
+  --pos-fill: #0d2418;
+  --neg: #f43f5e;
+  --neg-fill: #2a1017;
+  --warn: #f5a524;
+  --warn-fill: #2a1f08;
+
+  --selection-bg: #3a2c0a;
+  --selection-fg: #ffffff;
+
+  --band-strong-bg: #f5a524;
+  --band-strong-fg: #0b0d10;
+  --band-strong-bd: #f5a524;
+  --band-elevated-bg: #7a5312;
+  --band-elevated-fg: #ffe7bd;
+  --band-elevated-bd: #7a5312;
+  --band-neutral-bg: #1c2430;
+  --band-neutral-fg: #c6cfdb;
+  --band-neutral-bd: #2a3545;
+  --band-weak-bg: #171b22;
+  --band-weak-fg: #8b96a7;
+  --band-weak-bd: #2a3545;
+  --band-excluded-bg: #0f131a;
+  --band-excluded-fg: #5f6a7b;
+  --band-excluded-bd: #1c2430;
+
+  --shadow: none;
+  --shadow-lift: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --chart-line: #38bdf8;
+  --chart-fill: rgba(56, 189, 248, 0.12);
+  --chart-grid: #151b25;
+  --focus: 0 0 0 2px var(--surface), 0 0 0 4px var(--info);
 }

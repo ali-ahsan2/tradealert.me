@@ -1,0 +1,290 @@
+/* Home as a daily brief (DESIGN_V4 §6, §7). Additions only: cards, buttons,
+   badges, the utility line, the next-step card and the accordion come from
+   styles.css and assist.css; every colour is a token so dark mode follows. */
+
+/* title block: h1, the utility sentence, then the run stamp */
+.brief .pagehead {
+  align-items: flex-start;
+}
+
+.brief .brief-title {
+  min-width: 0;
+  flex: 1 1 420px;
+}
+
+.brief .brief-title .utility {
+  margin: var(--s-2) 0 var(--s-2);
+}
+
+.brief .brief-title .meta {
+  margin-top: 0;
+}
+
+/* a brief section: one card per topic */
+.brief-sec {
+  margin-bottom: var(--s-4);
+  min-width: 0;
+}
+
+.brief-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-3);
+}
+
+.brief-head-l {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2) var(--s-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.brief-head h2 {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+
+.brief .sum-note {
+  font-weight: 400;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+}
+
+.brief-head .more {
+  margin-left: auto;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* rows: one name per row, the plain sentence as the line that matters.
+   Phone: sentence block, badge at the right, actions on their own line.
+   Wider: three columns. */
+.brows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.brow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-2) var(--s-3);
+  align-items: start;
+  padding: var(--s-3) 0;
+  border-top: 1px solid var(--border);
+}
+
+.brow:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.brow-main {
+  min-width: 0;
+}
+
+.brow-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--s-2);
+  min-width: 0;
+}
+
+.brow-top .theme {
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.brow-top .ind {
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+}
+
+.brow-top .when {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.brow-say {
+  margin: 4px 0 0;
+  font-size: var(--fs-base);
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.brow.unread .brow-say {
+  font-weight: 600;
+}
+
+.brow-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--info);
+  display: inline-block;
+  flex: none;
+  align-self: center;
+}
+
+.brow-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-2);
+  margin-top: 6px;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+}
+
+.brow-detail .spark {
+  flex: none;
+}
+
+.brow-side {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  justify-self: end;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.brow-act {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+@media (min-width: 760px) {
+  .brow {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .brow-act {
+    grid-column: auto;
+    justify-self: end;
+  }
+}
+
+/* touch targets on the row controls */
+.brief .brow-act .btn-sm,
+.brief .nextstep .btn-sm,
+.brief .actrow .btn-sm {
+  min-height: 40px;
+}
+
+.brief .brow-act .pin {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.brief .brow-act .btn-quiet {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.brief-toggle {
+  margin-top: var(--s-2);
+}
+
+/* empty and locked states inside a section: a short paragraph and one row
+   of actions, never a second card */
+.brief-empty p,
+.brief-locked p {
+  margin: 0 0 var(--s-3);
+  line-height: 1.5;
+  max-width: 68ch;
+}
+
+.brief-empty .actrow,
+.brief-locked .actrow {
+  gap: var(--s-2) var(--s-3);
+}
+
+.brief-inline-err {
+  margin: 0;
+}
+
+.brief .nextstep {
+  margin: var(--s-2) 0 var(--s-5);
+}
+
+/* the markets accordion: a section header that opens, not a bordered box */
+.brief details.acc.mkt {
+  border-top: 0;
+  margin-top: var(--s-2);
+}
+
+.brief details.acc.mkt > summary {
+  padding: var(--s-3) 0;
+  flex-wrap: wrap;
+}
+
+.brief details.acc.mkt > summary h2 {
+  margin: 0;
+  font-size: var(--fs-lg);
+}
+
+.brief details.acc.mkt > summary .sum-note {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  /* heading and chevron on the first line, the note in full width below */
+  .brief details.acc.mkt > summary .sum-note {
+    flex: 1 1 100%;
+    order: 3;
+  }
+}
+
+.brief details.acc.mkt > .acc-body {
+  padding-top: var(--s-3);
+}
+
+.brief .hero {
+  margin-top: 0;
+}
+
+.brief .footnote {
+  margin-top: var(--s-5);
+}
+
+/* Phones: the badge and chips drop under the sentence so the words keep the
+   full width; the actions follow on their own line. */
+@media (max-width: 759px) {
+  .brow-side {
+    grid-column: 1 / -1;
+    justify-self: start;
+    justify-content: flex-start;
+  }
+}
+
+/* An alert's trigger chip explains itself on tap. The chip is an atomic
+   inline box, which would swallow the explainer's dotted underline, so the
+   hint is drawn on the chip itself. */
+.brief .xp-term .chip {
+  cursor: help;
+  text-decoration: underline dotted var(--ink-faint);
+  text-underline-offset: 3px;
+}
+
+.brief .xp-term[aria-expanded="true"] .chip {
+  text-decoration-color: var(--accent);
+}

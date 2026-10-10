@@ -1,6 +1,9 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
+import "./styles/assist.css";
+import { applyTheme } from "./lib/theme.js";
+import { applyMode } from "./lib/mode.js";
 import { usePath, RequireAuth, Link } from "./lib/router.jsx";
 import { MeProvider } from "./lib/me.jsx";
 import { Shell } from "./components/Shell.jsx";
@@ -23,6 +26,7 @@ import Overview from "./views/Overview.jsx";
 import Screen from "./views/Screen.jsx";
 import Changes from "./views/Changes.jsx";
 import Calendar from "./views/Calendar.jsx";
+import Help from "./views/Help.jsx";
 
 function NotFound() {
   return (
@@ -64,6 +68,7 @@ function Route({ path }) {
   const indMatch = pathname.match(/^\/industries\/([a-z0-9_]+)$/);
   if (indMatch) return <Industry industryKey={indMatch[1]} />;
   if (pathname === "/pricing") return <Pricing />;
+  if (pathname === "/help") return <Help />;
   if (pathname === "/settings") return authed(<Settings />);
   if (pathname === "/onboarding") return authed(<Onboarding />);
   if (pathname === "/reset") return <Reset />;
@@ -83,4 +88,6 @@ function App() {
   );
 }
 
+applyTheme();
+applyMode();
 createRoot(document.getElementById("root")).render(<App />);

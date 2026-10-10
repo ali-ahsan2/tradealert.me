@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api, cached, toast } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
@@ -8,7 +8,6 @@ import {
   coverage,
   dateTime,
   delta,
-  deltaTone,
   dollars,
   downloadText,
   inDays,
@@ -22,10 +21,16 @@ import {
 } from "../lib/fmt.js";
 import { EVIDENCE, nounFor } from "../lib/evidence.js";
 import { useRowNav } from "../lib/rownav.js";
+import { useMode } from "../lib/mode.js";
+import { changeSentence } from "../lib/plain.js";
 import SearchBar from "../components/SearchBar.jsx";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Pin from "../components/Pin.jsx";
-import { Empty, ErrorCard, Help, Monogram, Notice, Skeleton, StatusChip } from "../components/ui.jsx";
+import Spark, { Move } from "../components/Spark.jsx";
+import Explain from "../components/Explain.jsx";
+import NotifyButton from "../components/NotifyButton.jsx";
+import { AgeChip, Empty, ErrorCard, Monogram, Notice, Skeleton, StatusChip } from "../components/ui.jsx";
+import "./board.css";
 
 // Storage access throws in Safari private browsing; preferences degrade to
 // defaults rather than taking the board down.
@@ -75,6 +80,9 @@ const SORTS = {
   },
 };
 
+// Plain names for the sort menu in Simple mode; Full keeps the originals.
+const SORT_PLAIN = { coverage: "Data coverage", symbol: "Name", px30: "30-day price move", rel30: "30-day move vs the sector ETF" };
+
 const HELP = {
   score:
     "A 0 to 100 composite of the inputs that had data. Thin coverage shrinks it toward neutral (40) and marks the number with ~.",
@@ -84,10 +92,63 @@ const HELP = {
   delta: "Change in the score since the previous run. 'new' means the name was not scored last run.",
   screen: "Hard-filter verdict stored with the score: every filter passed, or at least one failed. Only Fast Mover stores one.",
   px: "Price change over the last 30 days from daily closes, and the gap to the industry's ETF over the same window.",
+  why: "The engine's one-line reason this name is on the board, and whether it cleared the strategy's pass-or-fail filters on this run. Open the row for the inputs behind the number.",
 };
 
 const BANDS = ["strong", "elevated", "neutral", "weak", "excluded"];
 const MAX_COMPARE = 4;
+
+// The glossary entry behind each stage word the payload carries.
+const LANE_TERM = { Early: "lane_early", Event: "lane_event" };
+const FALLBACK_STRATEGIES = [{ key: "fast_mover", label: "Fast Mover", monogram: "FM", calibrated: true }];
+
+// Whether an element scrolls sideways, and whether it is scrolled to the
+// end, so a fade or a hint shows only while there is something left to
+// reach. Measured from the element, never assumed from the viewport.
+function useSideScroll(deps) {
+  const ref = useRef(null);
+  const [state, setState] = useState({ can: false, end: true });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const measure = () => {
+      const can = el.scrollWidth > el.clientWidth + 1;
+      const end = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1;
+      setState((s) => (s.can === can && s.end === end ? s : { can, end }));
+    };
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    let ro = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(measure);
+      ro.observe(el);
+      Array.from(el.children).forEach((c) => ro.observe(c));
+    } else {
+      window.addEventListener("resize", measure);
+    }
+    return () => {
+      el.removeEventListener("scroll", measure);
+      if (ro) ro.disconnect();
+      else window.removeEventListener("resize", measure);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return [ref, state];
+}
+
+// A filter pill whose word carries its own explainer: the main button
+// toggles the filter, the "?" inside the pill opens the definition. Two
+// buttons side by side, because a button may not contain another.
+function SplitPill({ on, onClick, term, count, children }) {
+  return (
+    <span className={`fchip split ${on ? "on" : ""}`}>
+      <button type="button" className="fchip-main" aria-pressed={on} onClick={onClick}>
+        {children} <span className="mono">{count}</span>
+      </button>
+      <Explain term={term} />
+    </span>
+  );
+}
 
 function nextTierFor(tiers, current) {
   if (!tiers || !current) return null;
@@ -95,8 +156,88 @@ function nextTierFor(tiers, current) {
   return sorted.find((t) => t.price_monthly_cents > (current.price_monthly_cents || 0)) || null;
 }
 
+// "up to 10 pinned names", or "the names you pin" when the plan sets no cap.
+function pinsLabel(limit) {
+  if (limit == null || limit >= 999) return "the names you pin";
+  return `up to ${plural(limit, "pinned name")}`;
+}
+
+// "up 6", "down 3", "new", "unchanged": the Simple table's change column.
+function shortChange(d) {
+  if (d == null) return "new";
+  const r = Math.round(d);
+  if (r === 0) return "unchanged";
+  return `${r > 0 ? "up" : "down"} ${Math.abs(r)}`;
+}
+
+// The one dated event the board carries per row. Past dates are not a
+// next event, so they read as nothing rather than as "3d ago".
+function nextEvent(r) {
+  if (r.earnings_in == null || r.earnings_in < 0) return null;
+  return `earnings ${inDays(r.earnings_in)}`;
+}
+
+// When the run happened, in words that hold for the viewer's own clock.
+function runWhen(iso, tz) {
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return "on the latest run";
+  const opts = tz ? { timeZone: tz } : {};
+  const day = (d) => d.toLocaleDateString("en-CA", opts);
+  const now = new Date();
+  if (day(t) === day(now)) {
+    const hour = Number(t.toLocaleTimeString("en-GB", { ...opts, hour: "2-digit", hour12: false }));
+    return hour < 12 ? "this morning" : "today";
+  }
+  if (day(t) === day(new Date(now.getTime() - 864e5))) return "yesterday";
+  return `on ${shortDate(iso, tz)}`;
+}
+
+
+// One sentence with real figures from the rows the board returned. Nothing
+// here is derived from data the payload does not carry: the board has no
+// previous band, so the movement figure is points, not band changes.
+function BoardUtility({ data, rows, followed, tz }) {
+  const n = rows.length;
+  const keys = data.meta.industries && data.meta.industries.length ? data.meta.industries : [...new Set(rows.map((r) => r.industry.key))];
+  const m = keys.length;
+  const one = m === 1 ? followed.find((f) => f.key === keys[0]) || rows.find((r) => r.industry.key === keys[0])?.industry : null;
+  const scope = one ? one.label : `your ${plural(m, "industry", "industries")}`;
+  const strong = rows.filter((r) => r.band === "strong").length;
+  const elevated = rows.filter((r) => r.band === "elevated").length;
+  const fresh = rows.filter((r) => r.delta_1d == null).length;
+  const moved = rows.filter((r) => r.delta_1d != null && Math.abs(Math.round(r.delta_1d)) >= 5).length;
+  return (
+    <p className="utility">
+      {data.meta.truncated ? (
+        <>
+          The top <b>{n}</b> names scored
+        </>
+      ) : (
+        <>
+          <b>{n}</b> {n === 1 ? "name" : "names"} scored
+        </>
+      )}{" "}
+      across {scope} {runWhen(data.as_of, tz)}: <b>{strong}</b> strong, <b>{elevated}</b> elevated,{" "}
+      {n > 0 && fresh === n ? (
+        "all new this run."
+      ) : (
+        <>
+          <b>{moved}</b> moved 5 points or more since the last run
+          {fresh ? (
+            <>
+              , <b>{fresh}</b> new
+            </>
+          ) : null}
+          .
+        </>
+      )}
+    </p>
+  );
+}
+
 export default function Board() {
   const { me } = useMe();
+  const { simple, full } = useMode();
   const q = useQuery();
   const [strategies, setStrategies] = useState(null);
   const [industriesAll, setIndustriesAll] = useState([]);
@@ -118,6 +259,8 @@ export default function Board() {
   const [lane, setLane] = useState(q.get("lane") || "all");
   const [cleared, setCleared] = useState(q.get("cleared") === "1");
   const [priceCols, setPriceCols] = useState(ls.get("ta_board_px") === "1");
+  const [howOpen, setHowOpen] = useState(false);
+  const [tabsRef, tabsScroll] = useSideScroll([strategies]);
 
   useEffect(() => {
     cached("/strategies").then((d) => setStrategies(d.strategies)).catch(() => setStrategies([]));
@@ -185,6 +328,13 @@ export default function Board() {
     return ranked.sort(SORTS[sort].cmp);
   }, [rows, industry, lane, cleared, sort]);
   const lanes = useMemo(() => [...new Set(rows.map((r) => r.lane).filter(Boolean))].sort(), [rows]);
+  const laneCounts = useMemo(() => {
+    const c = {};
+    rows.forEach((r) => {
+      if (r.lane) c[r.lane] = (c[r.lane] || 0) + 1;
+    });
+    return c;
+  }, [rows]);
   const clearedCount = useMemo(() => rows.filter((r) => r.hf_pass === true).length, [rows]);
   const hasVerdicts = useMemo(() => rows.some((r) => r.hf_pass != null), [rows]);
   const earningsSoon = useMemo(() => rows.filter((r) => r.earnings_in != null && r.earnings_in >= 0 && r.earnings_in <= 14).length, [rows]);
@@ -211,9 +361,22 @@ export default function Board() {
     setIndustry(k);
     ls.set(`ta_board_ind_${strategy}`, k);
   };
+  const resetFilters = () => {
+    pickIndustry("all");
+    setLane("all");
+    setCleared(false);
+  };
   const hideStrip = () => {
     ls.set("ta_board_intro_hidden", "1");
     setStrip(false);
+  };
+  const openHowto = (e) => {
+    e.preventDefault();
+    setHowOpen(true);
+    requestAnimationFrame(() => {
+      const el = document.getElementById("board-howto");
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   };
   const toggleDensity = () => {
     const next = !compact;
@@ -283,6 +446,11 @@ export default function Board() {
   const stale = runAge && runAge.hours > 36;
   const nextTier = nextTierFor(tiers, me && me.tier);
   const noun = nounFor(strat);
+  // Counted from the strategies list the page loaded, never hard-coded.
+  const provisionalCount = strategies ? strategies.filter((s) => !s.calibrated).length : null;
+  const calibratedList = strategies ? strategies.filter((s) => s.calibrated) : [];
+  const strongCount = rows.filter((r) => r.band === "strong").length;
+  const elevatedCount = rows.filter((r) => r.band === "elevated").length;
   const scopeLabel =
     industry !== "all"
       ? followed.find((f) => f.key === industry)?.label
@@ -292,13 +460,65 @@ export default function Board() {
           ? `${followed.length} followed industries`
           : "your followed industries";
   const distTotal = view.length;
+  const allOn = industry === "all" && lane === "all" && !cleared;
+  const moreNote = [
+    industry !== "all" ? followed.find((f) => f.key === industry)?.label : null,
+    sort !== "score" ? `sorted by ${(SORT_PLAIN[sort] || SORTS[sort].label).toLowerCase()}` : null,
+    compact ? "compact rows" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const industryControl =
+    followed.length > 1 ? (
+      <div className="seg" role="group" aria-label="Industry">
+        <button aria-pressed={industry === "all"} onClick={() => pickIndustry("all")}>
+          All followed
+        </button>
+        {followed.map((f) => (
+          <button key={f.key} aria-pressed={industry === f.key} onClick={() => pickIndustry(f.key)}>
+            {f.label}
+          </button>
+        ))}
+      </div>
+    ) : followed.length === 1 ? (
+      <Link to={`/industries/${followed[0].key}`} className="ctl">
+        {followed[0].label} <span className="mono faint">{followed[0].etf}</span>
+      </Link>
+    ) : null;
+
+  const sortControl = (
+    <label className="ctl">
+      Sort
+      <select className="inline" value={sort} onChange={(e) => setSort(e.target.value)}>
+        {Object.entries(SORTS).map(([k, s]) => (
+          <option key={k} value={k}>
+            {simple ? SORT_PLAIN[k] || s.label : s.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+
+  const screenerLink = (
+    <Link
+      to={`/screen${strategy !== "fast_mover" ? `?strategy=${strategy}` : ""}${industry !== "all" ? `${strategy !== "fast_mover" ? "&" : "?"}industries=${industry}` : ""}`}
+      className="btn-quiet"
+    >
+      Open in Screener
+    </Link>
+  );
 
   return (
-    <div className="wrap">
+    <div className="wrap board-v">
       <div className="pagehead">
         <div>
           <h1>Board</h1>
-          <div className="meta">Ranked names in the industries you follow, through one scoring lens at a time.</div>
+          {data && rows.length > 0 ? (
+            <BoardUtility data={data} rows={rows} followed={followed} tz={tz} />
+          ) : (
+            <div className="meta">Ranked names in the industries you follow, through one scoring lens at a time.</div>
+          )}
         </div>
         <div className="actions">
           <SearchBar />
@@ -320,14 +540,32 @@ export default function Board() {
         </Notice>
       )}
 
-      <div className="tabs" role="tablist" aria-label="Strategy">
-        {(strategies || [{ key: "fast_mover", label: "Fast Mover", monogram: "FM", calibrated: true }]).map((s) => (
-          <button key={s.key} role="tab" className="tab" aria-selected={s.key === strategy} onClick={() => setStrategy(s.key)}>
-            <Monogram size={20}>{s.monogram}</Monogram>
-            {s.label}
-            {!s.calibrated && <span className="chip chip-prov">Provisional</span>}
-          </button>
-        ))}
+      <div className="lens">
+        <span className="lens-label">
+          <Explain term="strategy">Scoring lens</Explain>:
+        </span>
+        <div
+          className="tabs"
+          role="tablist"
+          aria-label="Scoring lens"
+          ref={tabsRef}
+          data-scroll={tabsScroll.can ? "1" : undefined}
+          data-end={tabsScroll.end ? "1" : undefined}
+        >
+          {(strategies || FALLBACK_STRATEGIES).map((s) => (
+            <span key={s.key} className={`tab ${s.key === strategy ? "on" : ""}`} role="presentation">
+              <button type="button" role="tab" className="tab-main" aria-selected={s.key === strategy} onClick={() => setStrategy(s.key)}>
+                <Monogram size={20}>{s.monogram}</Monogram>
+                {s.label}
+              </button>
+              {!s.calibrated && (
+                <Explain term="provisional" className="chip chip-prov xp-chip">
+                  Provisional
+                </Explain>
+              )}
+            </span>
+          ))}
+        </div>
       </div>
 
       {data && !strat.calibrated && rows.length > 0 && !provHidden[strategy] && (
@@ -343,8 +581,19 @@ export default function Board() {
       {strip && (
         <div className="strip">
           <span>
-            Scores update daily. Click any row for the full evaluation report; the coverage column shows how much data backed each score.
-            Pin a name to add it to your weekly digest; tick names to compare them.
+            {stale ? (
+              <>
+                Scores update each morning; this one is <AgeChip asOf={data.as_of} words />.
+              </>
+            ) : (
+              "Scores update each morning."
+            )}{" "}
+            {simple
+              ? "Tap a name for its full report, pin it to keep it in view, or turn on alerts to be told when something changes. Tick two to four names to compare them."
+              : "Click any row for the full evaluation report; the coverage column shows how much data backed each score. Pin a name to add it to your weekly digest; tick names to compare them."}{" "}
+            <a href="#board-howto" className="strip-link" onClick={openHowto}>
+              How to read this board
+            </a>
           </span>
           <button className="btn-quiet" onClick={hideStrip}>
             Got it
@@ -352,72 +601,98 @@ export default function Board() {
         </div>
       )}
 
-      <div className="toolbar">
-        {followed.length > 1 && (
-          <div className="seg" role="group" aria-label="Industry">
-            <button aria-pressed={industry === "all"} onClick={() => pickIndustry("all")}>
-              All followed
+      {simple ? (
+        <>
+          <div className="pillrow" role="group" aria-label="Show">
+            <button type="button" className="fchip" aria-pressed={allOn} onClick={resetFilters}>
+              All <span className="mono">{rows.length}</span>
             </button>
-            {followed.map((f) => (
-              <button key={f.key} aria-pressed={industry === f.key} onClick={() => pickIndustry(f.key)}>
-                {f.label}
-              </button>
-            ))}
+            {hasVerdicts && (
+              <SplitPill on={cleared} onClick={() => setCleared((c) => !c)} term="hard_filter" count={clearedCount}>
+                Cleared the filters
+              </SplitPill>
+            )}
+            {lanes.length > 1 && (
+              <span className="pillgroup" role="group" aria-label="Stage">
+                <span className="pill-label">
+                  <Explain term="lane">Stage</Explain>
+                </span>
+                {lanes.map((l) => (
+                  <SplitPill key={l} on={lane === l} onClick={() => setLane(lane === l ? "all" : l)} term={LANE_TERM[l] || "lane"} count={laneCounts[l]}>
+                    {l}
+                  </SplitPill>
+                ))}
+              </span>
+            )}
+            {earningsSoon > 0 && (
+              <Link to="/calendar?days=14" className="fchip" title="Names with a dated earnings print inside 14 days">
+                Earnings in 14 days <span className="mono">{earningsSoon}</span>
+              </Link>
+            )}
           </div>
-        )}
-        {followed.length === 1 && (
-          <Link to={`/industries/${followed[0].key}`} className="ctl">
-            {followed[0].label} <span className="mono faint">{followed[0].etf}</span>
-          </Link>
-        )}
-        {lanes.length > 1 && (
-          <div className="seg" role="group" aria-label="Lane">
-            <button aria-pressed={lane === "all"} onClick={() => setLane("all")}>
-              Any lane
+          <details className="acc morefilters">
+            <summary>
+              More filters{moreNote && <span className="sum-note">{moreNote}</span>}
+            </summary>
+            <div className="acc-body">
+              <div className="toolbar">
+                {industryControl}
+                {sortControl}
+                <button className="btn-quiet" onClick={toggleDensity} aria-pressed={compact}>
+                  {compact ? "Comfortable rows" : "Compact rows"}
+                </button>
+                {screenerLink}
+                {data && view.length > 0 && (
+                  <button className="btn-quiet" onClick={exportCsv} title="Download the visible rows as CSV">
+                    Export CSV
+                  </button>
+                )}
+              </div>
+              <p className="hint">Every column and control is in the Full view, one tap away at the top of the page.</p>
+            </div>
+          </details>
+        </>
+      ) : (
+        <div className="toolbar">
+          {industryControl}
+          {lanes.length > 1 && (
+            <div className="seg" role="group" aria-label="Stage">
+              <button aria-pressed={lane === "all"} onClick={() => setLane("all")}>
+                Any stage
+              </button>
+              {lanes.map((l) => (
+                <button key={l} aria-pressed={lane === l} onClick={() => setLane(l)}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          )}
+          {hasVerdicts && (
+            <button className="fchip" aria-pressed={cleared} onClick={() => setCleared((c) => !c)} title={HELP.screen}>
+              Cleared the screen <span className="mono">{clearedCount}</span>
             </button>
-            {lanes.map((l) => (
-              <button key={l} aria-pressed={lane === l} onClick={() => setLane(l)}>
-                {l}
-              </button>
-            ))}
-          </div>
-        )}
-        {hasVerdicts && (
-          <button className="fchip" aria-pressed={cleared} onClick={() => setCleared((c) => !c)} title={HELP.screen}>
-            Cleared the screen <span className="mono">{clearedCount}</span>
+          )}
+          {earningsSoon > 0 && (
+            <Link to="/calendar?days=14" className="fchip" title="Names with a dated earnings print inside 14 days">
+              Earnings in 14d <span className="mono">{earningsSoon}</span>
+            </Link>
+          )}
+          <span className="spacer" />
+          {screenerLink}
+          <button className="btn-quiet" onClick={togglePriceCols} aria-pressed={priceCols} title={HELP.px}>
+            {priceCols ? "Fewer columns" : "More columns"}
           </button>
-        )}
-        {earningsSoon > 0 && (
-          <Link to="/calendar?days=14" className="fchip" title="Names with a dated earnings print inside 14 days">
-            Earnings in 14d <span className="mono">{earningsSoon}</span>
-          </Link>
-        )}
-        <span className="spacer" />
-        <Link to={`/screen${strategy !== "fast_mover" ? `?strategy=${strategy}` : ""}${industry !== "all" ? `${strategy !== "fast_mover" ? "&" : "?"}industries=${industry}` : ""}`} className="btn-quiet">
-          Open in Screener
-        </Link>
-        <button className="btn-quiet" onClick={togglePriceCols} aria-pressed={priceCols} title={HELP.px}>
-          {priceCols ? "Hide price columns" : "Price columns"}
-        </button>
-        <label className="ctl">
-          Sort
-          <select className="inline" value={sort} onChange={(e) => setSort(e.target.value)}>
-            {Object.entries(SORTS).map(([k, s]) => (
-              <option key={k} value={k}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button className="btn-quiet" onClick={toggleDensity} aria-pressed={compact}>
-          {compact ? "Comfortable rows" : "Compact rows"}
-        </button>
-        {data && view.length > 0 && (
-          <button className="btn-quiet" onClick={exportCsv} title="Download the visible rows as CSV">
-            Export CSV
+          {sortControl}
+          <button className="btn-quiet" onClick={toggleDensity} aria-pressed={compact}>
+            {compact ? "Comfortable rows" : "Compact rows"}
           </button>
-        )}
-      </div>
+          {data && view.length > 0 && (
+            <button className="btn-quiet" onClick={exportCsv} title="Download the visible rows as CSV">
+              Export CSV
+            </button>
+          )}
+        </div>
+      )}
 
       {data && (
         <div className="boardhead">
@@ -449,23 +724,18 @@ export default function Board() {
         <Empty
           title="No names match."
           action={
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                pickIndustry("all");
-                setLane("all");
-                setCleared(false);
-              }}
-            >
+            <button className="btn btn-secondary" onClick={resetFilters}>
               Clear filters
             </button>
           }
-        />
+        >
+          {simple ? "Every name is back with the All pill." : null}
+        </Empty>
       )}
 
       {!loading && data && view.length > 0 && (
         <>
-          {movers && (
+          {movers && full && (
             <div className="movers">
               <MoverCard title="Up most since last run" rows={movers.up} />
               <MoverCard title="Down most since last run" rows={movers.down} />
@@ -473,129 +743,227 @@ export default function Board() {
             </div>
           )}
 
-          <div className="table-card cards">
-            <table className={`data ${compact ? "compact" : "comfortable"}`}>
-              <thead>
-                <tr>
-                  <th scope="col" className="c-sel">
-                    <span className="sr-only">Select for compare</span>
-                  </th>
-                  <th className="rank" scope="col">
-                    #
-                  </th>
-                  <SortTh k="symbol" sort={sort} setSort={setSort}>
-                    Name
-                  </SortTh>
-                  <th scope="col">Industry</th>
-                  <SortTh k="score" sort={sort} setSort={setSort} num help={HELP.score}>
-                    Score
-                  </SortTh>
-                  <th scope="col">
-                    Band
-                    <Help text={HELP.band} />
-                  </th>
-                  <SortTh k="coverage" sort={sort} setSort={setSort} num help={HELP.coverage}>
-                    Coverage
-                  </SortTh>
-                  <SortTh k="delta" sort={sort} setSort={setSort} num help={HELP.delta}>
-                    Δ run
-                  </SortTh>
-                  {hasVerdicts && (
-                    <th scope="col">
-                      Screen
-                      <Help text={HELP.screen} />
+          {simple ? (
+            <div className="table-card cards simple-table">
+              <table className={`data ${compact ? "compact" : "comfortable"}`}>
+                <thead>
+                  <tr>
+                    <th scope="col" className="c-sel">
+                      <span className="sr-only">Select for compare</span>
                     </th>
-                  )}
-                  {priceCols && (
-                    <>
-                      <SortTh k="px30" sort={sort} setSort={setSort} num help={HELP.px}>
-                        30d
-                      </SortTh>
-                      <SortTh k="rel30" sort={sort} setSort={setSort} num>
-                        vs ETF
-                      </SortTh>
-                      <SortTh k="earnings" sort={sort} setSort={setSort}>
-                        Earnings
-                      </SortTh>
-                    </>
-                  )}
-                  <th scope="col">
-                    <span className="sr-only">Pin</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {view.map((r, i) => {
-                  const cov = coverage(r.components_present, r.components_total);
-                  return (
-                    <tr key={r.symbol} data-rownav={i} className={`rowlink ${cursor === i ? "cursor" : ""}`} onClick={() => openRow(r)}>
-                      <td className="c-sel c-hide" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selected.has(r.symbol)}
-                          onChange={() => toggleSelect(r.symbol)}
-                          aria-label={`Select ${r.symbol} for compare`}
-                        />
-                      </td>
-                      <td className="rank c-rank">{r.viewRank}</td>
-                      <td className="name-cell c-sym">
-                        <Link className="sym" to={`/stock/${r.symbol}`} onClick={(e) => e.stopPropagation()}>
-                          {r.symbol}
-                        </Link>
-                        <span className="theme" title={r.theme}>
-                          {r.theme}
-                        </span>
-                        {r.earnings_in != null && r.earnings_in >= 0 && r.earnings_in <= 14 && (
-                          <span className="chip chip-plain soon" title="Dated earnings print inside 14 days">
-                            ER {inDays(r.earnings_in)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="c-ind">
-                        <Link to={`/industries/${r.industry.key}`} className="ind" onClick={(e) => e.stopPropagation()}>
-                          {r.industry.label} · {r.industry.benchmark_etf}
-                        </Link>
-                      </td>
-                      <td className="num c-score c-hide">{fmtScore(r.value, r.components_present, r.components_total)}</td>
-                      <td className="c-band">
-                        <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} strategy={strat} />
-                      </td>
-                      <td
-                        className="num cov-cell c-cov"
-                        data-label="Coverage"
-                        title={`Coverage ${cov.present} of ${cov.total}${cov.state !== "full" ? ": some inputs missing, score shrunk toward neutral" : ""}`}
-                      >
-                        <span className="covbar" aria-hidden="true">
-                          {[0, 1, 2].map((i) => (
-                            <span key={i} className={i < cov.segments ? "filled" : ""} />
-                          ))}
-                        </span>
-                        {r.components_present}/{r.components_total}
-                      </td>
-                      <td className={`num c-delta ${deltaTone(r.delta_1d)}`} data-label="Δ">
-                        {delta(r.delta_1d)}
-                      </td>
-                      {hasVerdicts && (
-                        <td className="c-hide">
-                          {r.hf_pass == null ? <span className="faint">—</span> : <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`}>{r.hf_pass ? "PASS" : "FAIL"}</span>}
+                    <th className="rank" scope="col">
+                      #
+                    </th>
+                    <SortTh k="symbol" sort={sort} setSort={setSort}>
+                      Name
+                    </SortTh>
+                    <SortTh k="score" sort={sort} setSort={setSort} term="score">
+                      Score
+                    </SortTh>
+                    <th scope="col">
+                      Why
+                      <Explain title="Why" text={HELP.why} />
+                    </th>
+                    <SortTh k="delta" sort={sort} setSort={setSort} term="delta_run">
+                      Since last run
+                    </SortTh>
+                    <SortTh k="earnings" sort={sort} setSort={setSort} term="catalyst">
+                      Next event
+                    </SortTh>
+                    <th scope="col">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {view.map((r, i) => {
+                    const ev = nextEvent(r);
+                    return (
+                      <tr key={r.symbol} data-rownav={i} className={`rowlink ${cursor === i ? "cursor" : ""}`} onClick={() => openRow(r)}>
+                        <td className="c-sel c-hide" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selected.has(r.symbol)}
+                            onChange={() => toggleSelect(r.symbol)}
+                            aria-label={`Select ${r.symbol} for compare`}
+                          />
                         </td>
-                      )}
-                      {priceCols && (
-                        <>
-                          <td className={`num c-hide ${tone(r.price && r.price.chg_30d)}`}>{pct(r.price && r.price.chg_30d)}</td>
-                          <td className={`num c-hide ${tone(r.price && r.price.rel_30d)}`} title={r.price && r.price.benchmark ? `vs ${r.price.benchmark}` : ""}>
-                            {pct(r.price && r.price.rel_30d)}
+                        <td className="rank c-rank">{r.viewRank}</td>
+                        <td className="name-cell c-sym">
+                          <Link className="sym" to={`/stock/${r.symbol}`} onClick={(e) => e.stopPropagation()}>
+                            {r.symbol}
+                          </Link>
+                          <Link to={`/industries/${r.industry.key}`} className="ind" onClick={(e) => e.stopPropagation()}>
+                            {r.industry.label}
+                          </Link>
+                        </td>
+                        <td className="c-band">
+                          <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} strategy={strat} />
+                        </td>
+                        <td className="c-why" title={r.hook || r.theme || undefined}>
+                          <span className="why">
+                            <span className="why-t">{r.hook || r.theme || <span className="faint">—</span>}</span>
+                            {r.hf_pass != null && (
+                              <span className="why-f" title={r.hf_pass ? "Cleared every hard filter" : "Failed a hard filter"}>
+                                <span className="faint">filters:</span> <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`}>{r.hf_pass ? "PASS" : "FAIL"}</span>
+                              </span>
+                            )}
+                          </span>
+                        </td>
+                        <td className="c-delta" data-label="Since last run" title={changeSentence(r.delta_1d)}>
+                          {shortChange(r.delta_1d)}
+                        </td>
+                        <td className="c-next" data-label="Next event">
+                          {ev ? <span className={r.earnings_in <= 14 ? "soon" : ""}>{ev}</span> : <span className="faint">—</span>}
+                        </td>
+                        <td className="c-act" onClick={(e) => e.stopPropagation()}>
+                          <span className="act">
+                            {pins && <Pin symbol={r.symbol} pinned={pins.has(r.symbol)} onChange={onPinChange} />}
+                            <NotifyButton symbol={r.symbol} compact />
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="table-card cards">
+              <table className={`data ${compact ? "compact" : "comfortable"}`}>
+                <thead>
+                  <tr>
+                    <th scope="col" className="c-sel">
+                      <span className="sr-only">Select for compare</span>
+                    </th>
+                    <th className="rank" scope="col">
+                      #
+                    </th>
+                    <SortTh k="symbol" sort={sort} setSort={setSort}>
+                      Name
+                    </SortTh>
+                    <th scope="col">Industry</th>
+                    <SortTh k="score" sort={sort} setSort={setSort} num help={HELP.score} title="Score">
+                      Score
+                    </SortTh>
+                    <th scope="col">
+                      Band
+                      <Explain text={HELP.band} title="Band" />
+                    </th>
+                    <SortTh k="coverage" sort={sort} setSort={setSort} num help={HELP.coverage} title="Coverage">
+                      Coverage
+                    </SortTh>
+                    <SortTh k="delta" sort={sort} setSort={setSort} num help={HELP.delta} title="Δ run">
+                      Δ run
+                    </SortTh>
+                    {hasVerdicts && (
+                      <th scope="col">
+                        Screen
+                        <Explain text={HELP.screen} title="Screen" />
+                      </th>
+                    )}
+                    <th scope="col" className="c-spark">
+                      <span className="sr-only">30-day sparkline</span>
+                    </th>
+                    <SortTh k="px30" sort={sort} setSort={setSort} num help={HELP.px} title="30-day move">
+                      30d
+                    </SortTh>
+                    {priceCols && (
+                      <>
+                        <SortTh k="rel30" sort={sort} setSort={setSort} num term="benchmark">
+                          vs ETF
+                        </SortTh>
+                        <SortTh k="earnings" sort={sort} setSort={setSort}>
+                          Earnings
+                        </SortTh>
+                      </>
+                    )}
+                    <th scope="col">
+                      <span className="sr-only">Pin</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {view.map((r, i) => {
+                    const cov = coverage(r.components_present, r.components_total);
+                    return (
+                      <tr key={r.symbol} data-rownav={i} className={`rowlink ${cursor === i ? "cursor" : ""}`} onClick={() => openRow(r)}>
+                        <td className="c-sel c-hide" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selected.has(r.symbol)}
+                            onChange={() => toggleSelect(r.symbol)}
+                            aria-label={`Select ${r.symbol} for compare`}
+                          />
+                        </td>
+                        <td className="rank c-rank">{r.viewRank}</td>
+                        <td className="name-cell c-sym">
+                          <Link className="sym" to={`/stock/${r.symbol}`} onClick={(e) => e.stopPropagation()}>
+                            {r.symbol}
+                          </Link>
+                          <span className="theme" title={r.theme}>
+                            {r.theme}
+                          </span>
+                          {r.earnings_in != null && r.earnings_in >= 0 && r.earnings_in <= 14 && (
+                            <span className="chip chip-plain soon" title="Dated earnings print inside 14 days">
+                              ER {inDays(r.earnings_in)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="c-ind">
+                          <Link to={`/industries/${r.industry.key}`} className="ind" onClick={(e) => e.stopPropagation()}>
+                            {r.industry.label} · {r.industry.benchmark_etf}
+                          </Link>
+                        </td>
+                        <td className="num c-score c-hide">{fmtScore(r.value, r.components_present, r.components_total)}</td>
+                        <td className="c-band">
+                          <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} strategy={strat} />
+                        </td>
+                        <td
+                          className="num cov-cell c-cov"
+                          data-label="Coverage"
+                          title={`Coverage ${cov.present} of ${cov.total}${cov.state !== "full" ? ": some inputs missing, score shrunk toward neutral" : ""}`}
+                        >
+                          <span className="covbar" aria-hidden="true">
+                            {[0, 1, 2].map((i) => (
+                              <span key={i} className={i < cov.segments ? "filled" : ""} />
+                            ))}
+                          </span>
+                          {r.components_present}/{r.components_total}
+                        </td>
+                        <td className="num c-delta" data-label="Δ">
+                          {delta(r.delta_1d)}
+                        </td>
+                        {hasVerdicts && (
+                          <td className="c-hide">
+                            {r.hf_pass == null ? <span className="faint">—</span> : <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`}>{r.hf_pass ? "PASS" : "FAIL"}</span>}
                           </td>
-                          <td className="c-hide">{r.earnings_in == null ? <span className="faint">—</span> : <span className="mono">{inDays(r.earnings_in)}</span>}</td>
-                        </>
-                      )}
-                      <td className="c-pin">{pins && <Pin symbol={r.symbol} pinned={pins.has(r.symbol)} onChange={onPinChange} />}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        )}
+                        <td className="c-spark c-hide">
+                          <Spark closes={r.price && r.price.closes} width={96} height={28} />
+                        </td>
+                        <td className="c-move" data-label="30d">
+                          <Move value={r.price && r.price.chg_30d} />
+                        </td>
+                        {priceCols && (
+                          <>
+                            <td
+                              className={`num c-hide ${tone(r.price && r.price.rel_30d)}`}
+                              title={r.price && r.price.benchmark ? `vs ${r.price.benchmark}${r.industry && r.industry.label ? ` (${r.industry.label} ETF)` : ""}` : ""}
+                            >
+                              {pct(r.price && r.price.rel_30d)}
+                            </td>
+                            <td className="c-hide">{r.earnings_in == null ? <span className="faint">—</span> : <span className="mono">{inDays(r.earnings_in)}</span>}</td>
+                          </>
+                        )}
+                        <td className="c-pin">{pins && <Pin symbol={r.symbol} pinned={pins.has(r.symbol)} onChange={onPinChange} />}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {selected.size > 0 && (
             <div className="selbar" role="status">
@@ -619,9 +987,14 @@ export default function Board() {
           {data.meta.truncated && nextTier && me && me.tier && !upgradeHidden && (
             <div className="upgrade-card">
               <div className="copy">
-                You're seeing the top <b>{data.meta.shown}</b> names in {scopeLabel}. <b>{nextTier.label}</b> shows the top{" "}
-                {nextTier.names_shown_limit}, follows {industriesLabel(nextTier.industries_limit)}, and includes{" "}
-                {plural(nextTier.picks_limit, "pick")} with {alertsLabel(nextTier.alerts_limit)}.
+                Of the <b>{data.meta.shown}</b> names this list reaches in {scopeLabel}, <b>{strongCount}</b> {strongCount === 1 ? "is" : "are"} strong and{" "}
+                <b>{elevatedCount}</b> elevated; more were scored {runWhen(data.as_of, tz)} than the list shows. On <b>{nextTier.label}</b> we would tell you
+                which of up to {nextTier.names_shown_limit} names changed band each morning, across {industriesLabel(nextTier.industries_limit)}
+                {nextTier.alerts_limit === 0 ? (
+                  <>, with {pinsLabel(nextTier.picks_limit)} kept in view.</>
+                ) : (
+                  <>, and send {alertsLabel(nextTier.alerts_limit)} on {pinsLabel(nextTier.picks_limit)}.</>
+                )}
               </div>
               <div className="actions">
                 <Link to="/pricing" className="btn btn-primary btn-sm">
@@ -650,7 +1023,7 @@ export default function Board() {
         </>
       )}
 
-      <details className="howto">
+      <details className="howto" id="board-howto" open={howOpen} onToggle={(e) => setHowOpen(e.currentTarget.open)}>
         <summary>How to read this board</summary>
         <div className="howbody">
           <dl>
@@ -666,13 +1039,32 @@ export default function Board() {
             </dd>
             <dt>Provisional</dt>
             <dd>
-              Four of the five strategies have working inputs but weights that no resolved outcomes back yet. They produce candidates, not
-              signals, until {EVIDENCE.calibrationThreshold} outcomes resolve. Fast Mover is the one calibrated strategy: {EVIDENCE.hits} of{" "}
-              {EVIDENCE.events} filter-passing events moved.
+              {strategies && strategies.length > 0 ? (
+                provisionalCount === 0 ? (
+                  <>Every one of the {strategies.length} strategies has weights backed by resolved outcomes.</>
+                ) : (
+                  <>
+                    {provisionalCount} of the {strategies.length} strategies {provisionalCount === 1 ? "has" : "have"} working inputs but weights that no
+                    resolved outcomes back yet. They produce candidates, not signals, until {EVIDENCE.calibrationThreshold} outcomes resolve.
+                  </>
+                )
+              ) : (
+                <>
+                  A strategy whose weights no resolved outcomes back yet is marked provisional. It produces candidates, not signals, until{" "}
+                  {EVIDENCE.calibrationThreshold} outcomes resolve.
+                </>
+              )}
+              {calibratedList.length === 1 && calibratedList[0].key === "fast_mover" && (
+                <>
+                  {" "}
+                  Fast Mover is the one calibrated strategy: {EVIDENCE.hits} of {EVIDENCE.events} filter-passing events moved.
+                </>
+              )}
+              {calibratedList.length > 1 && <> Calibrated today: {calibratedList.map((s) => s.label).join(", ")}.</>}
             </dd>
-            <dt>Δ run</dt>
+            <dt>{simple ? "Since last run" : "Δ run"}</dt>
             <dd>Change in the score since the previous run. "new" means the name was not scored last run.</dd>
-            <dt>Screen</dt>
+            <dt>{simple ? "PASS and FAIL" : "Screen"}</dt>
             <dd>The hard-filter verdict stored with each Fast Mover score. PASS means every filter passed; the Screener can isolate those names.</dd>
             <dt>Compare</dt>
             <dd>Tick up to four rows and choose Compare to see their filters, components and data side by side.</dd>
@@ -706,7 +1098,7 @@ function MoverCard({ title, rows, fresh }) {
               <span className="muted small" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {r.theme}
               </span>
-              <span className={`mono r ${fresh ? "" : deltaTone(r.delta_1d)}`}>{fresh ? fmtScore(r.value) : delta(r.delta_1d)}</span>
+              <span className="mono r">{fresh ? fmtScore(r.value) : delta(r.delta_1d)}</span>
             </li>
           ))}
         </ul>
@@ -715,14 +1107,17 @@ function MoverCard({ title, rows, fresh }) {
   );
 }
 
-function SortTh({ k, sort, setSort, children, num, help }) {
+// A sortable header. `term` opens a glossary definition, `help` a one-off
+// text; either way the explainer is a tap target that works on a phone.
+function SortTh({ k, sort, setSort, children, num, term, help, title }) {
   const active = sort === k;
+  const name = typeof children === "string" ? children : k;
   return (
     <th scope="col" className={`sortable ${num ? "num" : ""}`} aria-sort={active ? (k === "symbol" ? "ascending" : "descending") : undefined}>
-      <button onClick={() => setSort(k)} title={`Sort by ${children}`}>
+      <button type="button" onClick={() => setSort(k)} title={`Sort by ${name}`}>
         {children}
       </button>
-      {help && <Help text={help} />}
+      {(term || help) && <Explain term={term} text={help} title={title} />}
     </th>
   );
 }
@@ -759,7 +1154,7 @@ function BoardEmpty({ me, strat, onFastMover }) {
   }
   return (
     <Empty title={`No scored names in your followed industries for ${strat.label} on the latest run.`}>
-      Scores regenerate on the daily run. Try another industry in Account settings, or check back after the next run.
+      Scores regenerate each morning. Try another industry in Account settings, or check back after the next run.
     </Empty>
   );
 }

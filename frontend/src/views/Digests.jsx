@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api.js";
-import { Link } from "../lib/router.jsx";
+import { Link, navigate } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { DAYS, dateTime, score as fmtScore, shortDate } from "../lib/fmt.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
@@ -140,7 +140,7 @@ export default function Digests() {
               </thead>
               <tbody>
                 {list.map((d) => (
-                  <tr key={d.id} className="rowlink" onClick={() => (window.location.href = `/digests/${d.id}`)}>
+                  <tr key={d.id} className="rowlink" onClick={() => navigate(`/digests/${d.id}`)}>
                     <td>{dateTime(d.sent_at, tz)}</td>
                     <td className="muted">{shortDate(d.run_as_of, tz)}</td>
                     <td className="num">{d.rows}</td>
