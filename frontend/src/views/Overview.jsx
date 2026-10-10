@@ -416,7 +416,9 @@ export default function Overview() {
     return [...up, ...down].filter((r) => !seen.has(r.symbol) && seen.add(r.symbol));
   }, [screen]);
   // either list was cut to the plan's names_shown_limit
-  const moversClamped = Boolean(screen && ((screen.up.meta && screen.up.meta.truncated) || (screen.down.meta && screen.down.meta.truncated)));
+  // caption only on a genuine plan clamp (matched beyond the names the plan shows), not on our own limit
+  const planClamped = (m) => Boolean(m && m.names_shown_limit != null && m.matched > m.names_shown_limit);
+  const moversClamped = Boolean(screen && (planClamped(screen.up.meta) || planClamped(screen.down.meta)));
 
   // Band moves, ups first (largest first), then downs (largest first).
   const changes = useMemo(() => {
