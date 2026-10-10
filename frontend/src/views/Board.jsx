@@ -856,18 +856,18 @@ export default function Board() {
                     <SortTh k="delta" sort={sort} setSort={setSort} num help={HELP.delta} title="Δ run">
                       Δ run
                     </SortTh>
-                    <th scope="col" className="c-spark">
-                      <span className="sr-only">30-day sparkline</span>
-                    </th>
-                    <SortTh k="px30" sort={sort} setSort={setSort} num help={HELP.px} title="30-day move">
-                      30d
-                    </SortTh>
                     {hasVerdicts && (
                       <th scope="col">
                         Screen
                         <Explain text={HELP.screen} title="Screen" />
                       </th>
                     )}
+                    <th scope="col" className="c-spark">
+                      <span className="sr-only">30-day sparkline</span>
+                    </th>
+                    <SortTh k="px30" sort={sort} setSort={setSort} num help={HELP.px} title="30-day move">
+                      30d
+                    </SortTh>
                     {priceCols && (
                       <>
                         <SortTh k="rel30" sort={sort} setSort={setSort} num term="benchmark">

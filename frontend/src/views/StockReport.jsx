@@ -168,6 +168,21 @@ export default function StockReport({ symbol }) {
     };
   }, [symbol, strategyKey, reload]);
 
+  // The price header's figures (today, 30d, ETF 30d) come from a fixed
+  // 90-day window, independent of whatever range the chart is showing.
+  // Reset on every symbol change so a new dossier never wears the previous
+  // ticker's prices while its own load.
+  useEffect(() => {
+    let alive = true;
+    setSeries(null);
+    api(`/stock/${encodeURIComponent(symbol)}/series?days=90`)
+      .then((x) => alive && setSeries(x))
+      .catch(() => alive && setSeries(null));
+    return () => {
+      alive = false;
+    };
+  }, [symbol, reload]);
+
   useEffect(() => {
     let alive = true;
     // uncached on purpose: the swap button below must reflect a pin or
@@ -776,7 +791,7 @@ export default function StockReport({ symbol }) {
             )}
           </section>
 
-          <PriceChart symbol={d.symbol} initialDays={90} onData={setSeries} />
+          <PriceChart key={d.symbol} symbol={d.symbol} initialDays={90} />
 
           <section className="card sr-details" aria-labelledby="more-h">
             <h2 id="more-h">More detail</h2>

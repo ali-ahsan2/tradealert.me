@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createChart, CrosshairMode } from "lightweight-charts";
 import { api } from "../api.js";
 import { age, pct, price, seriesChange, shortDate } from "../lib/fmt.js";
@@ -36,7 +36,7 @@ function token(name, fallback) {
   return v || fallback;
 }
 
-export default function PriceChart({ symbol, initialDays = 90, onData }) {
+export default function PriceChart({ symbol, initialDays = 90 }) {
   const box = useRef(null);
   const [range, setRange] = useState(() => RANGES.find(([, d]) => d === initialDays) || RANGES[2]);
   const days = range[1];
@@ -46,31 +46,51 @@ export default function PriceChart({ symbol, initialDays = 90, onData }) {
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
+  // bumped when the theme changes so the chart re-reads its colour tokens
+  const [themeTick, setThemeTick] = useState(0);
+
+  useEffect(() => {
+    const bump = () => setThemeTick((n) => n + 1);
+    window.addEventListener("ta:theme", bump);
+    const mq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+    if (mq) {
+      if (mq.addEventListener) mq.addEventListener("change", bump);
+      else if (mq.addListener) mq.addListener(bump);
+    }
+    return () => {
+      window.removeEventListener("ta:theme", bump);
+      if (mq) {
+        if (mq.removeEventListener) mq.removeEventListener("change", bump);
+        else if (mq.removeListener) mq.removeListener(bump);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
     setErr(null);
     api(`/stock/${encodeURIComponent(symbol)}/series?days=${days}`)
-      .then((d) => {
-        if (!alive) return;
-        setRaw(d);
-        if (onData) onData(d);
-      })
+      .then((d) => alive && setRaw(d))
       .catch((e) => alive && setErr(e))
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, days, reload]);
 
-  // a week is the last five bars of the month fetch
-  const data = raw
-    ? range[2]
-      ? { ...raw, bars: raw.bars.slice(-range[2]), benchmark: raw.benchmark ? { ...raw.benchmark, bars: raw.benchmark.bars.slice(-range[2]) } : null }
-      : raw
-    : null;
+  // a week is the last five bars of the month fetch; memoised so the chart
+  // effect below only rebuilds when the bars or the range actually change
+  const keep = range[2];
+  const data = useMemo(
+    () =>
+      raw
+        ? keep
+          ? { ...raw, bars: raw.bars.slice(-keep), benchmark: raw.benchmark ? { ...raw.benchmark, bars: raw.benchmark.bars.slice(-keep) } : null }
+          : raw
+        : null,
+    [raw, keep]
+  );
 
   useEffect(() => {
     if (!box.current || !data || !data.bars.length) return undefined;
@@ -158,7 +178,7 @@ export default function PriceChart({ symbol, initialDays = 90, onData }) {
       ro.disconnect();
       c.remove();
     };
-  }, [data, markers, candles]);
+  }, [data, markers, candles, themeTick]);
 
   const stockChg = data ? seriesChange(data.bars) : null;
   const benchChg = data && data.benchmark ? seriesChange(data.benchmark.bars) : null;
