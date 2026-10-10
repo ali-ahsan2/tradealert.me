@@ -343,10 +343,16 @@ export default function Overview() {
     api("/overview")
       .then((x) => alive && setD(x))
       .catch((e) => alive && setErr(e));
-    // movers: the biggest 30-day price moves among the names on the board
-    api("/screen?sort=chg30&limit=40")
-      .then((x) => alive && setScreen(x))
-      .catch(() => alive && setScreen({ rows: [] }));
+    // movers: the biggest 30-day price moves among the names on the board,
+    // fetched from both ends so the strip shows real decliners (the server
+    // clamps each list to the plan's names_shown_limit)
+    Promise.allSettled([api("/screen?sort=chg30&limit=6"), api("/screen?sort=chg30&dir=asc&limit=4")]).then(([u, dn]) => {
+      if (!alive) return;
+      setScreen({
+        up: u.status === "fulfilled" ? u.value : { rows: [], meta: {} },
+        down: dn.status === "fulfilled" ? dn.value : { rows: [], meta: {} },
+      });
+    });
     // every band move since the previous run, up to the plan's limit (the
     // overview carries only the top three each way)
     setChg(null);
@@ -403,12 +409,14 @@ export default function Overview() {
 
   const movers = useMemo(() => {
     if (!screen) return [];
-    const rows = screen.rows.filter((r) => r.price && r.price.chg_30d != null);
-    const up = rows.filter((r) => r.price.chg_30d >= 0).slice(0, 6);
-    const down = rows.filter((r) => r.price.chg_30d < 0).reverse().slice(0, 4);
+    const priced = (x) => ((x && x.rows) || []).filter((r) => r.price && r.price.chg_30d != null);
+    const up = priced(screen.up).filter((r) => r.price.chg_30d > 0);
+    const down = priced(screen.down).filter((r) => r.price.chg_30d < 0);
     const seen = new Set();
     return [...up, ...down].filter((r) => !seen.has(r.symbol) && seen.add(r.symbol));
   }, [screen]);
+  // either list was cut to the plan's names_shown_limit
+  const moversClamped = Boolean(screen && ((screen.up.meta && screen.up.meta.truncated) || (screen.down.meta && screen.down.meta.truncated)));
 
   // Band moves, ups first (largest first), then downs (largest first).
   const changes = useMemo(() => {
@@ -961,7 +969,7 @@ export default function Overview() {
                 <>
                   <div className="section-head">
                     <h2>Biggest price moves, 30 days</h2>
-                    <span className="muted small">among your names · daily closes</span>
+                    <span className="muted small">{moversClamped ? "among the names your plan shows" : "among your names"} · daily closes</span>
                   </div>
                   <div className="movers-row">
                     {movers.map((r) => (

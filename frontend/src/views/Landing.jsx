@@ -31,7 +31,10 @@ function LiveRun({ run, industries }) {
       <div className="ld-device-body">
         <div className="ld-big">
           <span className="ld-big-num">{total || universe || "—"}</span>
-          <span className="ld-big-lab">names scored{run ? ` · ${shortDate(run.as_of)}` : ""}</span>
+          <span className="ld-big-lab">
+            {total > 0 ? "names scored" : "names covered"}
+            {run ? ` · ${shortDate(run.as_of)}` : ""}
+          </span>
         </div>
         {total > 0 && (
           <>
