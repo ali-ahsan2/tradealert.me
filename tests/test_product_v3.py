@@ -279,7 +279,11 @@ def test_board_rows_carry_v3_fields():
         for k in ("lane", "hf_pass", "price", "earnings_in"):
             assert k in r, k
         assert set(r["price"]) == {"last_close", "chg_30d", "rel_30d", "benchmark", "closes"}
-        assert isinstance(r["price"]["closes"], list) and len(r["price"]["closes"]) <= 30
+        assert isinstance(r["price"]["closes"], list) and len(r["price"]["closes"]) <= 32
+        # the sparkline covers the chg_30d window, so its direction matches the chip
+        cl = r["price"]["closes"]
+        if len(cl) >= 2 and r["price"]["chg_30d"] not in (None, 0):
+            assert (cl[-1] - cl[0] > 0) == (r["price"]["chg_30d"] > 0), (r["symbol"], cl[0], cl[-1], r["price"]["chg_30d"])
 
 
 def test_industry_shape_is_aggregate_only_outside_plan():

@@ -164,8 +164,15 @@ def seed_bars(cur, ticker_rows, now):
                 n += 1
             d += timedelta(days=1)
     buf.seek(0)
-    cur.copy_from(buf, "price_bars", columns=(
+    # stage, then insert skipping any (ticker, day) a real bar already holds
+    cur.execute("CREATE TEMP TABLE _dev_bars (LIKE price_bars INCLUDING DEFAULTS)")
+    cur.copy_from(buf, "_dev_bars", columns=(
         "ticker_id", "d", "open", "high", "low", "close", "raw_close", "volume", "source", "fetched_at"))
+    cur.execute(
+        "INSERT INTO price_bars (ticker_id, d, open, high, low, close, raw_close, volume, source, fetched_at) "
+        "SELECT ticker_id, d, open, high, low, close, raw_close, volume, source, fetched_at FROM _dev_bars "
+        "ON CONFLICT (ticker_id, d) DO NOTHING")
+    cur.execute("DROP TABLE _dev_bars")
     return n
 
 

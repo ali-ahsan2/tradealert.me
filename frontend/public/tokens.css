@@ -225,7 +225,7 @@
  * cyan is for links and secondary emphasis. Panels are flat with hairline
  * borders; there is no elevation on a terminal.
  */
-html[data-surface="lab"] {
+html:root[data-surface="lab"] {
   color-scheme: dark;
   --r-sm: 3px;
   --r-md: 4px;

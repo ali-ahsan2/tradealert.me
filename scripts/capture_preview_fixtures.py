@@ -42,6 +42,27 @@ def _call(method, path, body=None, token=None):
             return e.code, None
 
 
+SECRET_KEYS = {"webhook_secret", "phone_number", "webhook_url", "phone"}
+
+
+def _redact(obj, placeholder_email="subscriber@example.com"):
+    """The capture is meant for hosting: strip the capturing account's
+    contact details and secrets wherever they appear."""
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            if k in SECRET_KEYS:
+                out[k] = None
+            elif k == "email" and isinstance(v, str):
+                out[k] = placeholder_email
+            else:
+                out[k] = _redact(v, placeholder_email)
+        return out
+    if isinstance(obj, list):
+        return [_redact(v, placeholder_email) for v in obj]
+    return obj
+
+
 def main():
     status, body = _call("POST", "/login", {"email": EMAIL, "password": PASSWORD})
     if status != 200:
@@ -112,7 +133,7 @@ def main():
 
     os.makedirs(os.path.dirname(OUT_PATH) or ".", exist_ok=True)
     with open(OUT_PATH, "w") as f:
-        json.dump(out, f, separators=(",", ":"))
+        json.dump(_redact(out), f, separators=(",", ":"))
     print(f"{len(out)} responses, {len(syms)} names -> {OUT_PATH} ({os.path.getsize(OUT_PATH) // 1024} KB)")
 
 

@@ -121,7 +121,7 @@ def snapshot_lateral(ticker_alias="t", alias="sn"):
             f"ORDER BY s.field, s.as_of DESC) x) {alias} ON TRUE")
 
 
-SPARK_BARS = 30
+SPARK_BARS = 32  # cap; the array is bounded by the chg_30d window, so ~22 trading bars
 
 
 def price_lateral(ticker_alias="t", alias="px"):
@@ -134,8 +134,12 @@ def price_lateral(ticker_alias="t", alias="px"):
         f" (SELECT d FROM price_bars p WHERE p.ticker_id = {t}.id ORDER BY d DESC LIMIT 1) AS last_d, "
         f" (SELECT close FROM price_bars p WHERE p.ticker_id = {t}.id "
         "   AND p.d <= CURRENT_DATE - 30 ORDER BY d DESC LIMIT 1) AS c30, "
+        # the same window as chg_30d, starting at its base bar, so the line and
+        # the chip can never disagree on direction
         " (SELECT array_agg(z.close ORDER BY z.d) FROM (SELECT close, d FROM price_bars p "
-        f"   WHERE p.ticker_id = {t}.id ORDER BY d DESC LIMIT {SPARK_BARS}) z) AS closes"
+        f"   WHERE p.ticker_id = {t}.id AND p.d >= COALESCE((SELECT q.d FROM price_bars q "
+        f"     WHERE q.ticker_id = {t}.id AND q.d <= CURRENT_DATE - 30 ORDER BY q.d DESC LIMIT 1), "
+        f"     CURRENT_DATE - 30) ORDER BY d DESC LIMIT {SPARK_BARS}) z) AS closes"
         f") {alias} ON TRUE")
 
 
@@ -158,9 +162,14 @@ def benchmarks(cur, industry_ids):
         " (SELECT close FROM price_bars p WHERE p.ticker_id = t.id "
         "   AND d <= CURRENT_DATE - 90 ORDER BY d DESC LIMIT 1), "
         " (SELECT array_agg(z.close ORDER BY z.d) FROM (SELECT close, d FROM price_bars p "
-        f"   WHERE p.ticker_id = t.id ORDER BY d DESC LIMIT {SPARK_BARS}) z) "
+        "   WHERE p.ticker_id = t.id AND p.d >= COALESCE((SELECT q.d FROM price_bars q "
+        "     WHERE q.ticker_id = t.id AND q.d <= CURRENT_DATE - 30 ORDER BY q.d DESC LIMIT 1), "
+        f"     CURRENT_DATE - 30) ORDER BY d DESC LIMIT {SPARK_BARS}) z) "
         "FROM reference_assets r JOIN tickers t ON t.id = r.ticker_id "
-        "WHERE r.industry_id = ANY(%s) ORDER BY r.industry_id, r.sort_order",
+        "JOIN industries ind ON ind.id = r.industry_id "
+        "WHERE r.industry_id = ANY(%s) "
+        # the industry's declared benchmark first, then the reference order
+        "ORDER BY r.industry_id, (t.symbol = ind.benchmark_etf) DESC, r.sort_order",
         (ids,),
     )
     out = {}
@@ -1182,15 +1191,23 @@ def _rebased(cur, ticker_ids, days):
         "AND d >= CURRENT_DATE - %s ORDER BY d",
         (list(ticker_ids), days),
     )
-    first, by_day = {}, {}
+    # Chain-linked: each day the index moves by the mean day-over-day ratio of
+    # the tickers that have a bar both today and on their previous bar day. A
+    # ticker joining or missing a day cannot move the index on its own.
+    by_day = {}
     for tid, d, close in cur.fetchall():
         c = float(close)
-        if tid not in first:
-            if not c:
-                continue
-            first[tid] = c
-        by_day.setdefault(d, []).append(c / first[tid] * 100)
-    return [{"d": d.isoformat(), "v": round(sum(vs) / len(vs), 3)} for d, vs in sorted(by_day.items())]
+        if c:
+            by_day.setdefault(d, []).append((tid, c))
+    prev, idx, out = {}, 100.0, []
+    for d in sorted(by_day):
+        ratios = [c / prev[tid] for tid, c in by_day[d] if tid in prev]
+        if out and ratios:
+            idx *= sum(ratios) / len(ratios)
+        for tid, c in by_day[d]:
+            prev[tid] = c
+        out.append({"d": d.isoformat(), "v": round(idx, 3)})
+    return out
 
 
 @router.get("/api/me/watchlist/series")
@@ -1212,15 +1229,18 @@ def watchlist_series(days: int = Query(90, ge=7, le=730),
             )
             pick_rows = cur.fetchall()
             watch = _rebased(cur, [r[0] for r in pick_rows], days)
+            # the industry's declared benchmark ETF, in the subscriber's scope order
             cur.execute(
-                "SELECT DISTINCT ON (ind.id) ind.id, ind.key, ind.label, t.id, t.symbol, r.label "
+                "SELECT DISTINCT ON (ind.id) ind.id, ind.key, ind.label, t.id, t.symbol, "
+                "COALESCE(r.label, ind.benchmark_etf) "
                 "FROM industries ind JOIN reference_assets r ON r.industry_id = ind.id "
                 "JOIN tickers t ON t.id = r.ticker_id WHERE ind.key = ANY(%s) "
-                "ORDER BY ind.id, r.sort_order",
+                "ORDER BY ind.id, (t.symbol = ind.benchmark_etf) DESC, r.sort_order",
                 (keys,),
             )
+            rows_b = sorted(cur.fetchall(), key=lambda r: keys.index(r[1]) if r[1] in keys else 999)
             bench = []
-            for iid, ikey, ilabel, tid, sym, label in cur.fetchall():
+            for iid, ikey, ilabel, tid, sym, label in rows_b:
                 pts = _rebased(cur, [tid], days)
                 bench.append({"industry_key": ikey, "industry_label": ilabel, "symbol": sym,
                               "label": label, "points": pts,

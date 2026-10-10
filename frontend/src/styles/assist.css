@@ -149,3 +149,9 @@ details.acc > .acc-body { padding: 0 0 var(--s-4); }
 /* Scroll containers inside accordions must not widen the column. */
 details.acc > .acc-body { min-width: 0; max-width: 100%; }
 details.acc > .acc-body .tscroll { max-width: 100%; }
+
+/* Desktop: the rail already carries the plan chip and the account menu. */
+@media (min-width: 900px) {
+  .app.authed .apphead-right .tierchip,
+  .app.authed .apphead-right .acct { display: none; }
+}

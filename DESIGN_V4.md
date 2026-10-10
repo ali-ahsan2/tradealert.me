@@ -320,3 +320,38 @@ What changed as a result:
 Known data gaps, recorded rather than papered over: the ingest carries
 no company names (tickers show symbol and hook), and the score at pin
 time has no stored coverage.
+
+The adversarial review of the whole PR (47 findings, 31 confirmed by three
+independent verifiers each) added these, beyond what the critiques above
+had already fixed:
+
+- **Sparkline window.** The 30-day sparkline now covers exactly the
+  window of the 30-day move beside it, starting at that move's base bar,
+  so the line's colour and the chip's sign can never disagree. A test
+  asserts the agreement on every board row.
+- **Rebased index.** The Home index is chain-linked (each day moves by the
+  mean day-over-day ratio of the names that have bars on both days), so a
+  name joining or missing a day cannot move the index on its own.
+- **Benchmarks.** Every industry resolves to its declared benchmark ETF
+  (not the first reference asset by sort order), and the Home index lists
+  benchmarks in the subscriber's own industry order.
+- **Shell.** One plan chip and one account menu on desktop (the rail's);
+  the stale unread badge rule is gone; unread dots use the info colour;
+  print hides the rail and header; the footer, not the main column, makes
+  room for the phone tab bar. "Calibrated" chips are info-toned, not
+  green. The Lab palette wins over the app's dark tokens when the OS
+  prefers dark; the Lab's live dot is amber.
+- **Dossier and Home.** The price header no longer depends on the chart's
+  range or lingers from the previous ticker; the chart is rebuilt only
+  when its data changes and recolours on a theme switch; Home's movers
+  strip fetches real decliners and never duplicates a card; the Board's
+  Full table header and body share one column order.
+- **Tooling.** The preview capture redacts the capturing account's email,
+  phone and webhook details; `bootstrap --fixture` runs the Lab seed
+  before the dev fixture so neither deletes the other's rows; the dev
+  fixture's price bars skip days a real bar already holds; `dev.sh --help`
+  works from any directory; the preview page loads the v4 typeface;
+  Digests navigates through the router so the hosted preview keeps its
+  route.
+- **Copy.** Plans say "the same day" rather than "the moment", and name
+  channels in words.

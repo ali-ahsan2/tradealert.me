@@ -498,8 +498,11 @@ table.data th {
   margin: 0;
 }
 
-.app.authed .main {
-  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+/* room for the fixed tab bar goes on the last thing in flow, the footer */
+@media (max-width: 899px) {
+  .app.authed .footer-inner {
+    padding-bottom: calc(var(--s-7) + 64px + env(safe-area-inset-bottom));
+  }
 }
 
 @media (min-width: 900px) {
@@ -579,7 +582,7 @@ table.data th {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--neg);
+    background: var(--info);
     border: 2px solid var(--surface);
   }
 
@@ -3011,11 +3014,6 @@ table.hf th.num {
   margin-left: 6px;
 }
 
-.bb-item .navbadge {
-  position: absolute;
-  top: 6px;
-  margin-left: 14px;
-}
 
 .bb-item {
   position: relative;
@@ -4736,8 +4734,8 @@ td.c-move {
 }
 
 .chip-cal {
-  background: var(--pos-fill);
-  color: var(--pos);
+  background: var(--info-fill);
+  color: var(--info);
   border-color: transparent;
 }
 
@@ -4859,6 +4857,12 @@ select.inline,
 /* ---------- print: a report should fit one page and keep its dates ---------- */
 
 @media print {
+  .app.authed { display: block; }
+  .app.authed .main { padding-bottom: 0; }
+  .rail,
+  .apphead,
+  .acct-menu,
+  .skip,
   .topbar,
   .bottombar,
   .footer,

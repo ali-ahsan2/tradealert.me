@@ -28,7 +28,8 @@ Then open <http://localhost:8000> and sign in as `dev@example.com` /
 2. uses Postgres at `DATABASE_URL`, starting the compose `postgres` service
    when nothing answers and `docker compose` is available;
 3. runs `db/bootstrap.py --fixture`: schema, migrations, reference seed,
-   the universe and one scored run, benchmarks, then the dev fixture;
+   the universe and one scored run, benchmarks, then the Lab seed, the dev
+   fixture and the demo rows (the Lab and demo rows are not tagged `dev_fixture`);
 4. builds the frontend once (`--build` to rebuild) and serves on `:8000`
    with reload.
 
@@ -61,7 +62,7 @@ sharing a walkthrough of the product on fixture data.
 ```sh
 python scripts/capture_preview_fixtures.py frontend/preview/fixtures.json   # against a running dev server
 cd frontend && npx vite build --config vite.preview.config.js               # -> frontend/preview-dist/
-cp preview/fixtures.json public/tokens.css public/theme-override.css preview-dist/
+cp preview/fixtures.json preview-dist/
 ```
 
 Serve `preview-dist/` from any static host and open `preview.html`. Writes

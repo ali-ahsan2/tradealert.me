@@ -96,8 +96,10 @@ def main():
         _seed_universe()
     _run(DB / "seed_benchmarks.py")
     if args.fixture:
-        _run(DB / "seed_dev.py", {"DEV_FIXTURE": "1"})
+        # seed_lab clears every synthetic backtest event before writing its own,
+        # so it runs first and the dev fixture's events survive
         _run(DB / "seed_lab.py")
+        _run(DB / "seed_dev.py", {"DEV_FIXTURE": "1"})
         _run(DB / "seed_demo.py")
     print("bootstrap complete")
 

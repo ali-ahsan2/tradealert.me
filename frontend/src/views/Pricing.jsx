@@ -24,7 +24,8 @@ function utilityText(t) {
       : t.alerts_limit == null || t.alerts_limit >= 999
         ? "unlimited alerts"
         : `${t.alerts_limit} ${t.alerts_limit === 1 ? "alert" : "alerts"}`;
-  const how = t.alerts_limit === 0 ? "" : ` We tell you the moment a catalyst, a borrow-fee double or 3x volume is recorded on a name you watch${t.channels && t.channels.length > 1 ? `, by ${t.channels.join(", ")}` : ""}.`;
+  const chans = (t.channels || []).map((c) => CHANNEL_LABEL[c] || c);
+  const how = t.alerts_limit === 0 ? "" : ` We tell you the same day a catalyst is dated, a borrow fee doubles or volume prints 3x on a name you watch${chans.length > 1 ? `, by ${chans.join(", ")}` : ""}.`;
   return `We watch ${ind} for you and explain ${names}, with ${pins} and ${alerts}.${how}`;
 }
 

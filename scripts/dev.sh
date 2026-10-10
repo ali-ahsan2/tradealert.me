@@ -13,6 +13,7 @@
 # For hot reload run `npm run dev` in frontend/ in a second shell: Vite on
 # :5173 proxies /api to this server.
 set -euo pipefail
+SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 cd "$(dirname "$0")/.."
 
 FIXTURE=1 BUILD=0 SERVE=1
@@ -21,7 +22,7 @@ for a in "$@"; do
     --no-fixture) FIXTURE=0 ;;
     --build) BUILD=1 ;;
     --no-serve) SERVE=0 ;;
-    -h|--help) sed -n 2,14p "$0"; exit 0 ;;
+    -h|--help) sed -n 2,14p "$SELF"; exit 0 ;;
     *) echo "unknown option $a" >&2; exit 1 ;;
   esac
 done
