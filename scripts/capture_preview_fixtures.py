@@ -118,6 +118,7 @@ def main():
             syms.update(r["symbol"] for r in chg[k]["rows"])
     syms.update(e["symbol"] for e in out["GET /alert-events?days=365&limit=100"]["body"]["events"])
     for sym in sorted(syms):
+        get(f"/me/record?symbol={sym}&days=365")
         get(f"/stock/{sym}?strategy=fast_mover")
         get(f"/stock/{sym}/fields?strategy=fast_mover")
         series = get(f"/stock/{sym}/series?days=365")

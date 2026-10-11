@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import "./styles/assist.css";
@@ -8,25 +8,27 @@ import { usePath, RequireAuth, Link } from "./lib/router.jsx";
 import { MeProvider } from "./lib/me.jsx";
 import { Shell } from "./components/Shell.jsx";
 import Board from "./views/Board.jsx";
-import StockReport from "./views/StockReport.jsx";
+const StockReport = lazy(() => import("./views/StockReport.jsx"));
 import Landing from "./views/Landing.jsx";
 import Auth from "./views/Auth.jsx";
 import Watchlist from "./views/Watchlist.jsx";
 import Alerts from "./views/Alerts.jsx";
-import Pricing from "./views/Pricing.jsx";
-import Settings from "./views/Settings.jsx";
-import Onboarding from "./views/Onboarding.jsx";
-import Reset from "./views/Reset.jsx";
-import Legal from "./views/Legal.jsx";
-import Compare from "./views/Compare.jsx";
-import Strategies, { StrategyDetail } from "./views/Strategies.jsx";
-import Digests, { DigestView } from "./views/Digests.jsx";
-import Industry from "./views/Industry.jsx";
+const Pricing = lazy(() => import("./views/Pricing.jsx"));
+const Settings = lazy(() => import("./views/Settings.jsx"));
+const Onboarding = lazy(() => import("./views/Onboarding.jsx"));
+const Reset = lazy(() => import("./views/Reset.jsx"));
+const Legal = lazy(() => import("./views/Legal.jsx"));
+const Compare = lazy(() => import("./views/Compare.jsx"));
+const Strategies = lazy(() => import("./views/Strategies.jsx"));
+const StrategyDetail = lazy(() => import("./views/Strategies.jsx").then((m) => ({ default: m.StrategyDetail })));
+const Digests = lazy(() => import("./views/Digests.jsx"));
+const DigestView = lazy(() => import("./views/Digests.jsx").then((m) => ({ default: m.DigestView })));
+const Industry = lazy(() => import("./views/Industry.jsx"));
 import Overview from "./views/Overview.jsx";
 import Screen from "./views/Screen.jsx";
 import Changes from "./views/Changes.jsx";
 import Calendar from "./views/Calendar.jsx";
-import Help from "./views/Help.jsx";
+const Help = lazy(() => import("./views/Help.jsx"));
 
 function NotFound() {
   return (
@@ -77,12 +79,28 @@ function Route({ path }) {
   return <NotFound />;
 }
 
+function RouteFallback() {
+  return (
+    <div className="wrap" aria-busy="true">
+      <div className="sk" aria-hidden="true">
+        <div className="sk-row" style={{ height: 44 }} />
+        <div className="sk-row" style={{ height: 160 }} />
+        <div className="sk-row" style={{ height: 120 }} />
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const path = usePath();
   return (
     <MeProvider>
       <Shell>
-        <Route path={path} />
+        <Suspense fallback={<RouteFallback />}>
+          <div className="page-enter" key={path.split("?")[0]}>
+            <Route path={path} />
+          </div>
+        </Suspense>
       </Shell>
     </MeProvider>
   );

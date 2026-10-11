@@ -8,7 +8,7 @@ from pathlib import Path
 
 import jwt
 import psycopg2
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exceptions import HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -318,7 +318,8 @@ def unsubscribe(token: str, channel: str = "email"):
         '</body></html>')
 
 @app.get("/api/strategies")
-def strategies():
+def strategies(response: Response):
+    response.headers["Cache-Control"] = "public, max-age=300"
     """Public list: what the screen is called and whether it is calibrated.
     Only the name and track record leave the server; the inputs and cutoffs
     stay internal."""
@@ -341,7 +342,8 @@ def strategies():
 
 
 @app.get("/api/industries")
-def industries():
+def industries(response: Response):
+    response.headers["Cache-Control"] = "public, max-age=300"
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -370,7 +372,8 @@ def _latest_run(conn):
 
 
 @app.get("/api/runs/latest")
-def runs_latest():
+def runs_latest(response: Response):
+    response.headers["Cache-Control"] = "public, max-age=60"
     conn = get_conn()
     try:
         run = _latest_run(conn)

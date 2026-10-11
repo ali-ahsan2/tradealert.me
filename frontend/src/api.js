@@ -46,13 +46,32 @@ function toStringDetail(detail) {
   return "request failed";
 }
 
+// Hover/focus prefetch: a GET started early is reused by the next api() call
+// for the same path within a few seconds, so a dossier opens from memory.
+const PREFETCH_TTL = 8000;
+const inflight = new Map();
+
+export function prefetch(path) {
+  if (!path || inflight.has(path)) return;
+  const p = api(path, { _prefetch: true }).catch(() => null);
+  inflight.set(path, { p, t: Date.now() });
+  setTimeout(() => inflight.delete(path), PREFETCH_TTL);
+}
+
 export async function api(path, opts = {}) {
+  const isGet = !opts.method || opts.method === "GET";
+  if (isGet && !opts._prefetch && inflight.has(path)) {
+    const hit = inflight.get(path);
+    inflight.delete(path);
+    const v = await hit.p;
+    if (v !== null) return v;
+  }
   const headers = { ...(opts.headers || {}) };
   const hasBody = opts.json !== undefined;
   if (hasBody) headers["content-type"] = "application/json";
   const token = getToken();
   if (token) headers["authorization"] = `Bearer ${token}`;
-  const { json: _json, ...rest } = opts;
+  const { json: _json, _prefetch: _pf, ...rest } = opts;
   let res;
   try {
     res = await fetch(`/api${path}`, {

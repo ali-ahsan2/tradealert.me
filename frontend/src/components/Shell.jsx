@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { api, logout } from "../api.js";
+import { api, logout, prefetch } from "../api.js";
 import { Link, navigate, usePath } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { THEMES, getTheme, setTheme } from "../lib/theme.js";
@@ -321,10 +321,36 @@ export function Footer() {
   );
 }
 
+// One listener for every list in the product: hovering or focusing a dossier
+// link starts its request, so the page opens from memory a moment later.
+function usePrefetchLinks(enabled) {
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let last = "";
+    const on = (e) => {
+      const a = e.target && e.target.closest ? e.target.closest('a[href^="/stock/"]') : null;
+      if (!a) return;
+      const sym = decodeURIComponent(a.getAttribute("href").slice(7).split(/[/?#]/)[0]);
+      if (!sym || sym === last) return;
+      last = sym;
+      prefetch(`/stock/${encodeURIComponent(sym)}`);
+    };
+    document.addEventListener("mouseover", on, { passive: true });
+    document.addEventListener("focusin", on);
+    document.addEventListener("touchstart", on, { passive: true });
+    return () => {
+      document.removeEventListener("mouseover", on);
+      document.removeEventListener("focusin", on);
+      document.removeEventListener("touchstart", on);
+    };
+  }, [enabled]);
+}
+
 export function Shell({ children }) {
   const { me } = useMe();
   const unread = useUnread(me);
   const here = usePath().split("?")[0];
+  usePrefetchLinks(Boolean(me));
   return (
     <div className={`app ${me ? "authed" : "anon"}`}>
       <a className="skip" href="#main">
