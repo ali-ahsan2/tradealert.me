@@ -5,7 +5,7 @@ import { hasChannel, useMe } from "../lib/me.jsx";
 import { age, dateTime, dollars, pct, plural, rate, shortDate, signed, tone } from "../lib/fmt.js";
 import { DILUTION_TRIGGERS, TRIGGERS } from "../lib/evidence.js";
 import { DEFAULT_TRIGGERS, GLOSSARY } from "../lib/glossary.js";
-import { CTA, triggerLabel, triggerSentence } from "../lib/plain.js";
+import { CTA, firedSentence, triggerLabel, triggerSentence } from "../lib/plain.js";
 import { HOME_ROWS } from "../lib/caps.js";
 import { useMode } from "../lib/mode.js";
 import { beyondSentence, fetchRecord, leadPhrase, movePhrase, tallySentence } from "../lib/record.js";
@@ -140,7 +140,7 @@ function PlainEvent({ ev, tz, onRead, full = false }) {
           {a ? `${a.label} ago` : shortDate(ev.fired_at, tz)}
         </span>
       </div>
-      <div className={`r2 ${unread ? "bold" : ""}`}>{triggerSentence(ev.trigger_key, ev.symbol)}</div>
+      <div className={`r2 ${unread ? "bold" : ""}`}>{firedSentence(ev.trigger_key, ev.symbol)}</div>
       {full && ev.detail && <div className="r3">{ev.detail}</div>}
       {full && (
         <div className="r3">

@@ -247,6 +247,14 @@ export function triggerSentence(key, symbol) {
   return `We will tell you when ${t[1]}${symbol ? ` on ${symbol}` : ""}.`;
 }
 
+// What a sent alert told you, as a full sentence in the past tense.
+export function firedSentence(key, symbol) {
+  const t = TRIGGER_PLAIN[key];
+  const on = symbol ? ` on ${symbol}` : "";
+  if (!t || !t[2]) return `This fired${on}: ${t ? t[0].toLowerCase() : key}.`;
+  return `This fired${on} because ${t[2]}.`;
+}
+
 export function triggerLabel(key) {
   const t = TRIGGER_PLAIN[key];
   return t ? t[0] : key;

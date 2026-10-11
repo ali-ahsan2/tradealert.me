@@ -194,16 +194,17 @@ export function term(key) {
 
 // Plain phrases for each alert trigger: what we will tell you, and why it
 // matters. The second string finishes the sentence "We will tell you when…".
+// [label, what it will tell you (present), what it told you (past)]
 export const TRIGGER_PLAIN = {
-  borrow_fee_2x: ["The cost to borrow doubles", "the cost to borrow shares doubles, a sign shares are getting hard to find"],
-  si_cross: ["Short interest crosses a line", "short interest crosses 10%, 15% or 20% of the float on a FINRA print"],
-  volume_3x: ["Unusual volume", "a day trades at three times its normal volume"],
-  catalyst_dated: ["A dated event ahead", "a dated event such as earnings or a regulator's decision lands inside the next window"],
-  s3_424b: ["A share-sale filing", "the company files to sell more shares (an S-3 or 424B)"],
-  band_change: ["The rating word changes", "the score moves to a different rating word between mornings"],
-  insider_buying: ["Insiders buying", "insiders report open-market buys after a stretch of selling"],
-  social_surge: ["Social chatter spikes", "the social feed prints 20 or more messages in a day"],
-  contract_award: ["A contract award", "a government or corporate contract with a dollar figure is announced"],
+  borrow_fee_2x: ["The cost to borrow doubles", "the cost to borrow shares doubles, a sign shares are getting hard to find", "the cost to borrow shares doubled, a sign shares are getting hard to find"],
+  si_cross: ["Short interest crosses a line", "short interest crosses 10%, 15% or 20% of the float on a FINRA print", "short interest crossed 10%, 15% or 20% of the float on a FINRA print"],
+  volume_3x: ["Unusual volume", "a day trades at three times its normal volume", "a day traded at three times its normal volume"],
+  catalyst_dated: ["A dated event ahead", "a dated event such as earnings or a regulator's decision lands inside the next window", "a dated event such as earnings or a regulator's decision landed inside the next window"],
+  s3_424b: ["A share-sale filing", "the company files to sell more shares (an S-3 or 424B)", "the company filed to sell more shares (an S-3 or 424B)"],
+  band_change: ["The rating word changes", "the score moves to a different rating word between mornings", "the score moved to a different rating word between mornings"],
+  insider_buying: ["Insiders buying", "insiders report open-market buys after a stretch of selling", "insiders reported open-market buys after a stretch of selling"],
+  social_surge: ["Social chatter spikes", "the social feed prints 20 or more messages in a day", "the social feed printed 20 or more messages in a day"],
+  contract_award: ["A contract award", "a government or corporate contract with a dollar figure is announced", "a government or corporate contract with a dollar figure was announced"],
 };
 
 // The three triggers a newcomer gets with one tap. Chosen because each is a
