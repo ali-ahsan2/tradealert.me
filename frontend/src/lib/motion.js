@@ -17,12 +17,17 @@ export function prefersReducedMotion() {
 export function useReveal({ once = true, rootMargin = "0px 0px -10% 0px" } = {}) {
   const ref = useRef(null);
   const [seen, setSeen] = useState(() => prefersReducedMotion());
+  // No dependency list on purpose: the element may mount after data arrives,
+  // so the hook looks for it on every render until it is observing.
+  const observing = useRef(false);
   useEffect(() => {
     const el = ref.current;
-    if (!el || seen || typeof IntersectionObserver === "undefined") {
-      if (el && !seen) setSeen(true);
+    if (!el || seen || observing.current) return undefined;
+    if (typeof IntersectionObserver === "undefined") {
+      setSeen(true);
       return undefined;
     }
+    observing.current = true;
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
@@ -42,8 +47,9 @@ export function useReveal({ once = true, rootMargin = "0px 0px -10% 0px" } = {})
     return () => {
       io.disconnect();
       clearTimeout(safety);
+      observing.current = false;
     };
-  }, [once, rootMargin, seen]);
+  });
   return [ref, seen];
 }
 
