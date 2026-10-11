@@ -214,7 +214,6 @@ export default function Onboarding() {
   const [board, setBoard] = useState(null); // {rows, strategy} or null while loading
   const [boardFor, setBoardFor] = useState("");
   const [pins, setPins] = useState(() => new Set());
-  const [hooks, setHooks] = useState({}); // symbol -> hook text from its dossier
   const shapeReq = useRef(0);
   const headRef = useRef(null);
   const firstStep = useRef(true);
@@ -307,28 +306,6 @@ export default function Onboarding() {
   const pulseFor = (k) => (k ? pulseInd[k] : undefined);
   const days = (pulse && pulse.days) || 30;
 
-  // The one-line "why" is the name's hook. Board rows do not carry it yet,
-  // so fetch it from each shown dossier, best effort, and fall back to the
-  // plain verdict built from the row's own recorded fields.
-  useEffect(() => {
-    if (step !== 2 || rows.length === 0) return undefined;
-    const want = rows.filter((r) => !r.hook && hooks[r.symbol] === undefined).map((r) => r.symbol);
-    if (want.length === 0) return undefined;
-    let alive = true;
-    Promise.allSettled(want.map((s) => api(`/stock/${encodeURIComponent(s)}`).then((d) => [s, (d && d.hook) || ""]))).then((res) => {
-      if (!alive) return;
-      const add = {};
-      res.forEach((r, i) => {
-        add[want[i]] = r.status === "fulfilled" ? r.value[1] : "";
-      });
-      setHooks((h) => ({ ...h, ...add }));
-    });
-    return () => {
-      alive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, rows]);
-
   const toggle = async (key) => {
     const isOn = picked.includes(key);
     try {
@@ -370,11 +347,9 @@ export default function Onboarding() {
       return n;
     });
 
-  const why = (r) => {
-    const hook = (r.hook || hooks[r.symbol] || "").trim();
-    if (hook) return hook;
-    return verdict(r, board && board.strategy, r.symbol).headline;
-  };
+  // The one-line "why" is the plain verdict built from the row's own
+  // recorded fields; the operator's hook is Lab material (DESIGN_V5 §2).
+  const why = (r) => verdict(r, board && board.strategy, r.symbol).headline;
 
   const byPrice = tiers && [...tiers].sort((a, b) => a.price_monthly_cents - b.price_monthly_cents);
   const nextTier = byPrice && byPrice.find((t) => t.industries_limit > limit);
@@ -580,6 +555,7 @@ export default function Onboarding() {
                 Watch these for me
               </button>
             </span>
+            <FinePrint short links={false} className="ob-fine" />
           </StickyFoot>
         </div>
       )}

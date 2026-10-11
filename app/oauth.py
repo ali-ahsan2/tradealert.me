@@ -33,11 +33,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from app.db import _load_env, get_conn
 from app import security
 
-try:  # the legal package owns the constant; until it merges, the same value
-    from app.legal import TERMS_VERSION
-except ImportError:  # pragma: no cover - transitional
-    TERMS_VERSION = "2026-10-11"  # must match frontend/src/lib/legal.js
-
 _load_env()
 
 log = logging.getLogger("tradealert.oauth")
@@ -104,29 +99,11 @@ def _safe_next(raw):
     return ""
 
 
-def _store_state(provider, next_path="", accept_terms=False):
+def _store_state(provider, next_path=""):
     state = _b64url(24)
     _pending[state] = {"provider": provider, "created_at": time.time(),
-                       "next": _safe_next(next_path),
-                       "accept_terms": bool(accept_terms)}
+                       "next": _safe_next(next_path)}
     return state
-
-
-_consent_cols = None
-
-
-def _has_consent_columns(conn):
-    """users.accepted_terms_version / accepted_terms_at arrive with the
-    consent migration; until it has run here the insert leaves them out."""
-    global _consent_cols
-    if _consent_cols is None:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT COUNT(*) FROM information_schema.columns "
-                "WHERE table_schema = current_schema() AND table_name = 'users' "
-                "AND column_name IN ('accepted_terms_version', 'accepted_terms_at')")
-            _consent_cols = cur.fetchone()[0] == 2
-    return _consent_cols
 
 
 def _pop_state(provider, state):
@@ -199,11 +176,11 @@ def _profile_from_provider(conf, code):
     }
 
 
-def _upsert_user(provider, profile, accept_terms=False):
-    """Returns (user_id, created): whether this sign-in made the row. A row
-    made from /signup carries the tick the visitor gave there, so the new
-    account is created accepted; a first sign-in from /login meets the
-    /welcome backstop instead."""
+def _upsert_user(provider, profile):
+    """Returns (user_id, created): whether this sign-in made the row. Consent
+    is never recorded here (DESIGN_V6 §6): a GET link cannot prove a tick,
+    so every Google account meets /welcome, where the tick is recorded by an
+    authenticated POST /api/me/consent."""
     created = False
     conn = get_conn()
     try:
@@ -237,10 +214,6 @@ def _upsert_user(provider, profile, accept_terms=False):
                 vals = "%s, %s, %s, %s, %s"
                 args = [profile["email"], profile["name"], provider,
                         profile["provider_id"], profile["verified"]]
-                if accept_terms and _has_consent_columns(conn):
-                    cols += ", accepted_terms_version, accepted_terms_at"
-                    vals += ", %s, now()"
-                    args.append(TERMS_VERSION)
                 cur.execute(
                     f"INSERT INTO users ({cols}) VALUES ({vals}) "
                     "ON CONFLICT (provider, provider_id) WHERE provider IS NOT NULL "
@@ -305,10 +278,10 @@ def _store_token_page(provider, token, name, created=False, next_path=""):
 
 
 @router.get("/api/oauth/start/{provider}")
-def oauth_start(provider: str, next: str = "", accept_terms: str = ""):
+def oauth_start(provider: str, next: str = ""):
     provider, conf = _provider(provider)
     _prune_pending()
-    state = _store_state(provider, next, accept_terms == "1")
+    state = _store_state(provider, next)
     if _DEV:
         return RedirectResponse(
             f"/api/oauth/callback/{provider}?state={state}&dev=1",
@@ -347,8 +320,7 @@ def oauth_callback(provider: str, code: str = "",
         if not code:
             raise HTTPException(400, "missing authorization code")
         profile = _profile_from_provider(conf, code)
-    uid, created = _upsert_user(provider, profile,
-                                accept_terms=entry.get("accept_terms", False))
+    uid, created = _upsert_user(provider, profile)
     token = security.make_token(uid)
     log.info("oauth %s sign-in: user %s (new=%s, dev=%s)", provider, uid,
              created, _DEV or dev == "1")

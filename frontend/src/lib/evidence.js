@@ -12,8 +12,12 @@ export const EVIDENCE = {
   randomRate: 36.6,
   randomHits: 85,
   randomEvents: 232,
-  window: "2 trading days before the signal to 5 after it",
+  // the window, stated one way everywhere (app/plain_copy.py RECORD_DEFINITION says the same)
+  window: "two trading days before the event to five after",
   hitDefinition: "a move of 20% or more, or volume at 3x its 20-day average",
+  // the backtest applied six filters; four run in today's engine
+  testFilters: "six",
+  liveFilters: "four",
   calibrationThreshold: 30,
 };
 

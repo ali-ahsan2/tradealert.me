@@ -1,3 +1,5 @@
+import { navigate } from "./lib/router.jsx";
+
 export const TOKEN_KEY = "ta_token";
 
 // Storage access throws outright in Safari private browsing; every read and
@@ -92,6 +94,12 @@ export async function api(path, opts = {}) {
     if (res.status === 401) {
       // stale token: drop it so the next request is anonymous
       setToken(null);
+    }
+    if (res.status === 403 && body && body.detail === "consent_required") {
+      // the account has not ticked the current terms (DESIGN_V6 §6): the
+      // API serves nothing but /me, consent, export and delete until it
+      // has, so every screen hands over to the one that asks
+      if (window.location.pathname !== "/welcome") navigate("/welcome", { replace: true });
     }
     if (res.status === 429) {
       throw new ApiError(429, "Too many requests. Try again in a minute.", body);

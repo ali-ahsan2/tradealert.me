@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api, cached } from "../api.js";
 import { Link } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
+import { useMode } from "../lib/mode.js";
 import { dateTime, plural, shortDate } from "../lib/fmt.js";
 import { ErrorCard, Monogram, Notice, Skeleton } from "../components/ui.jsx";
 import { PlainStatusChip, RecordLine, StrategyPlainCard } from "../components/Plain.jsx";
@@ -31,8 +32,39 @@ function openerLine(list) {
   return `${word(n)} ${n === 1 ? "strategy" : "strategies"}. ${has} a measured record.`;
 }
 
+// One card per strategy. Simple keeps the ones that put a score on names
+// today at top level and folds the ones being built behind a closed drawer
+// (DESIGN_V6 §7); More shows every card in one list.
+function StrategyRow({ s }) {
+  const status = statusOf(s);
+  return (
+    <article className="plain-row" aria-labelledby={`st-${s.key}`}>
+      <div className="plain-row-top">
+        <Monogram>{s.monogram}</Monogram>
+        <h3 id={`st-${s.key}`}>
+          <Link to={`/strategies/${s.key}`}>{s.label}</Link>
+        </h3>
+        <PlainStatusChip status={status} />
+      </div>
+      <StrategyPlainCard strategy={{ ...s, label: null }} compact />
+      {s.plain && <RecordLine plain={s.plain} className="plain-note" />}
+      <div className="plain-row-actions">
+        <Link to={`/strategies/${s.key}`} className="btn btn-secondary btn-sm">
+          How it hunts
+        </Link>
+        {status !== "not_running" && (
+          <Link to={boardLink(s.key)} className="btn btn-primary btn-sm">
+            Show me its names
+          </Link>
+        )}
+      </div>
+    </article>
+  );
+}
+
 export default function Strategies() {
   const { me } = useMe();
+  const { simple } = useMode();
   const [list, setList] = useState(null);
   const [err, setErr] = useState(null);
   useEffect(() => {
@@ -57,32 +89,26 @@ export default function Strategies() {
       {list && (
         <>
           <div className="plain-list">
-            {list.map((s) => {
-              const status = statusOf(s);
-              return (
-                <article className="plain-row" key={s.key} aria-labelledby={`st-${s.key}`}>
-                  <div className="plain-row-top">
-                    <Monogram>{s.monogram}</Monogram>
-                    <h3 id={`st-${s.key}`}>
-                      <Link to={`/strategies/${s.key}`}>{s.label}</Link>
-                    </h3>
-                    <PlainStatusChip status={status} />
-                  </div>
-                  <StrategyPlainCard strategy={{ ...s, label: null }} compact />
-                  {s.plain && <RecordLine plain={s.plain} className="plain-note" />}
-                  <div className="plain-row-actions">
-                    <Link to={`/strategies/${s.key}`} className="btn btn-secondary btn-sm">
-                      How it hunts
-                    </Link>
-                    {status !== "not_running" && (
-                      <Link to={boardLink(s.key)} className="btn btn-primary btn-sm">
-                        Show me its names
-                      </Link>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
+            {(simple ? list.filter((s) => statusOf(s) !== "not_running") : list).map((s) => (
+              <StrategyRow key={s.key} s={s} />
+            ))}
+            {simple && list.some((s) => statusOf(s) === "not_running") && (
+              <details className="plain-more">
+                <summary>
+                  {list.filter((s) => statusOf(s) === "not_running").length === 1
+                    ? "One more strategy is"
+                    : `${list.filter((s) => statusOf(s) === "not_running").length} more strategies are`}{" "}
+                  being built
+                </summary>
+                <div className="plain-list">
+                  {list
+                    .filter((s) => statusOf(s) === "not_running")
+                    .map((s) => (
+                      <StrategyRow key={s.key} s={s} />
+                    ))}
+                </div>
+              </details>
+            )}
           </div>
           {me && me.is_admin && (
             <p className="plain-note" style={{ marginTop: "var(--s-5)" }}>

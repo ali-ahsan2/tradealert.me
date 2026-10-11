@@ -303,8 +303,8 @@ function Record({ record }) {
           <p className="ld-kicker">The backtest</p>
           <h2 id="rec-h">The record, as published.</h2>
           <p className="ld-sub">
-            On real data, {hits} of {events} events that passed Fast Mover's must-pass rules went on to move inside the window. A move is{" "}
-            {EVIDENCE.hitDefinition}, measured over {EVIDENCE.window}.
+            On real data, {hits} of {events} backtest events that passed the test's {EVIDENCE.testFilters} filters went on to move inside the window. A move is{" "}
+            {EVIDENCE.hitDefinition}, measured from {EVIDENCE.window}.
           </p>
         </div>
 

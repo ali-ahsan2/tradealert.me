@@ -139,7 +139,10 @@ def _dispatch(conn, uid, event_id, symbol, trigger_key, detail, fired_at,
                                               f"{base}/settings"),
                 )
             elif channel == "push" and ch_push:
-                ok = channels.send_push(push_sub, title, body)
+                # a notification has no room for the paragraph: one line and
+                # the disclaimer link, as the SMS carries
+                ok = channels.send_push(push_sub, title,
+                                        f"{body}\nNot advice: {base}/legal/disclaimer")
             elif channel == "sms" and ch_sms:
                 # no room for the paragraph: one line and the disclaimer link
                 ok = channels.send_sms(
@@ -208,6 +211,8 @@ def _board_rows_for(conn, user_id, tier_row, limit=None):
         q = (
             "SELECT t.symbol, i.theme, ind.label, sc.value, sc.band "
             "FROM scores sc JOIN instruments i ON i.id = sc.instrument_id "
+            # the brief is labelled Fast Mover, so only its scores rank here
+            "JOIN strategies st ON st.id = sc.strategy_id AND st.key = 'fast_mover' "
             "JOIN tickers t ON t.id = i.ticker_id "
             "JOIN industries ind ON ind.id = i.industry_id "
             f"WHERE sc.run_id = %s AND {vis} "

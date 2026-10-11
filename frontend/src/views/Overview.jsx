@@ -1056,8 +1056,8 @@ export default function Overview() {
   const noIndustries = d.industries.length === 0;
 
   const verified = verifiedNote && (
-    <Notice tone="pos" className="home-notice" onDismiss={() => setVerifiedNote(false)}>
-      <p>Email verified. Alerts are live.</p>
+    <Notice tone="info" className="home-notice" onDismiss={() => setVerifiedNote(false)}>
+      <p>Email verified. Alerts and the weekly brief can now reach this address.</p>
     </Notice>
   );
 
@@ -1074,6 +1074,7 @@ export default function Overview() {
               Pick my industries <Icon name="arrow" size={16} />
             </Link>
           </div>
+          <FinePrint short links={false} />
         </header>
         {showHow && <HowCard welcome={welcome} onDone={dismissHow} />}
       </div>
@@ -1160,6 +1161,7 @@ export default function Overview() {
         <h1>{hello}</h1>
         <TheLine d={d} locked={locked} tz={tz} />
         <div className="home-cta">{primary}</div>
+        <FinePrint short links={false} />
       </header>
 
       {/* 2. Three cards --------------------------------------------------- */}

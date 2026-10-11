@@ -137,6 +137,42 @@ def test_consent_rejects_a_stale_version_and_is_idempotent():
     assert post("/me/consent", {"version": legal.TERMS_VERSION})[0] == 401
 
 
+# ---- the server-side gate -----------------------------------------------
+
+def test_api_refuses_an_account_without_the_current_tick():
+    """Every /api/* route answers 403 consent_required for an account whose
+    accepted_terms_version is not the current one, except the few that let
+    the person tick, read, export or delete (DESIGN_V6 §6, §10)."""
+    email, token = _user("gate")
+    s, body = get("/overview", token)
+    assert s == 200, body
+    psql(f"UPDATE users SET accepted_terms_version=NULL WHERE email='{email}';")
+    s, body = get("/overview", token)
+    assert s == 403 and body == {"detail": "consent_required"}, (s, body)
+    s, body = get("/board", token)
+    assert s == 403 and body["detail"] == "consent_required", (s, body)
+    s, body = get("/me/record", token)
+    assert s == 403 and body["detail"] == "consent_required", (s, body)
+    # what stays open: read the account, export it, resend the verification
+    s, me = get("/me", token)
+    assert s == 200 and me["accepted_terms_version"] is None, me
+    s, body = get("/me/export", token)
+    assert s == 200, body
+    s, body = post("/me/verify/resend", None, token)
+    assert s == 200, body
+    # a stale version is refused by consent itself, and the gate stays shut
+    s, body = post("/me/consent", {"version": "2000-01-01"}, token)
+    assert s == 422, body
+    assert get("/overview", token)[0] == 403
+    # the tick reopens everything
+    s, body = post("/me/consent", {"version": legal.TERMS_VERSION}, token)
+    assert s == 200 and body["accepted_terms_version"] == legal.TERMS_VERSION, body
+    s, body = get("/overview", token)
+    assert s == 200, body
+    # an anonymous request is still a 401, never a consent answer
+    assert get("/overview")[0] == 401
+
+
 # ---- verify and resend ---------------------------------------------------
 
 def test_verify_redirects_to_the_client_page():

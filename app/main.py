@@ -18,8 +18,8 @@ from pydantic import BaseModel, Field
 
 from app import email as emailer, legal, plain_copy, record
 from app import security
-from app import (account, admin, alerts, billing, discover, dossier, lab, lab_regression,
-                 lab_release, oauth, product, reporting, scope)
+from app import (account, admin, alerts, billing, context, discover, dossier, lab,
+                 lab_regression, lab_release, oauth, product, reporting, scope)
 from app.db import _load_env, get_conn
 
 _load_env()
@@ -112,7 +112,11 @@ def _user_payload(row):
             "terms_version_current": legal.TERMS_VERSION}
 
 
-def _user_from_token(creds):
+def _user_from_token(creds, require_consent=True):
+    """The bearer's users row (11 columns, see _get_by). Like
+    context.user_from_creds, an account that has not ticked the current
+    terms gets 403 consent_required unless require_consent=False: only
+    /api/me passes that here, so the client can learn what to tick."""
     if creds is None:
         raise HTTPException(401, "missing bearer token")
     try:
@@ -130,6 +134,8 @@ def _user_from_token(creds):
         conn.close()
     if not row:
         raise HTTPException(401, "user no longer exists")
+    if require_consent:
+        context.require_current_terms(row)
     return row
 
 
@@ -293,7 +299,7 @@ def login(body: LoginIn, request: Request):
 
 @app.get("/api/me")
 def me(creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
-    row = _user_from_token(creds)
+    row = _user_from_token(creds, require_consent=False)
     conn = get_conn()
     try:
         return _account_payload(row, conn)
@@ -352,6 +358,7 @@ def unsubscribe(request: Request, token: str = "", channel: str = "email"):
             '<p>' + ("You will stop receiving these emails. Turn them back on any time "
                      "from your settings." if ok else
                      "Change what reaches you from your settings.") + '</p>'
+            '<p style="font-size:.9em;opacity:.8">' + legal.FINE_PRINT_SHORT + '</p>'
             '<p><a href="/settings">My settings</a> · <a href="/">Back to the start</a></p>'
             '</body></html>')
     return {"ok": ok, "channel": channel}
@@ -491,8 +498,7 @@ def board(band: str = "", strategy: str = "fast_mover",
                 f"i.lane, ind.id, {discover._hf_pass()} AS hf_pass, "
                 "px.last_close, px.c30, px.closes, "
                 "(CASE WHEN e.value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' "
-                " THEN substr(e.value, 1, 10)::date - CURRENT_DATE END) AS earnings_in, "
-                "i.hook "
+                " THEN substr(e.value, 1, 10)::date - CURRENT_DATE END) AS earnings_in "
                 "FROM scores sc "
                 "JOIN instruments i ON i.id = sc.instrument_id "
                 "JOIN tickers s ON s.id = i.ticker_id "
@@ -540,7 +546,7 @@ def board(band: str = "", strategy: str = "fast_mover",
              "components_present": r[8], "components_total": r[9],
              "delta_1d": float(r[10]) if r[10] is not None else None,
              "lane": r[11] or "", "hf_pass": r[13], "price": _price(r),
-             "earnings_in": r[17], "hook": r[18] or ""}
+             "earnings_in": r[17]}
             for i, r in enumerate(rows)
         ],
         "meta": {"shown": len(rows), "truncated": truncated,
@@ -558,6 +564,11 @@ _SNAPSHOT_FIELDS = {
     "float_m": "float_m", "fee_pct": "fee_pct", "borrow_avail": "borrow_avail",
     "growth_pct": "growth_pct", "avgvol20": "avgvol20", "hi52": "hi52", "lo52": "lo52",
 }
+
+
+# Plain names for the must-pass rules; the seed labels carry the thresholds.
+_HARD_FILTER_PLAIN = {"cap": "Company size", "float": "Shares that trade",
+                      "si": "Short interest", "growth": "Revenue growth"}
 
 
 @app.get("/api/stock/{symbol}")
@@ -636,10 +647,15 @@ def stock(symbol: str, strategy: str = "fast_mover",
             pick = cur.fetchone()
     finally:
         conn.close()
+    # the operator's hook and thesis are Lab material (DESIGN_V6 §8, §10):
+    # an admin reads them here, every other viewer gets empty strings
+    is_admin = bool(user_row[4])
     out = {
         "symbol": sym, "theme": row[2], "group": row[3],
         "industry": {"key": row[4], "label": row[5], "benchmark_etf": row[6]},
-        "lane": row[7], "hook": row[8] or "", "thesis": row[9] or "",
+        "lane": row[7],
+        "hook": (row[8] or "") if is_admin else "",
+        "thesis": (row[9] or "") if is_admin else "",
         "strategy": _strategy_payload(strat),
         "strategies": lenses,
         "run": {"id": run_id, "as_of": run[1].isoformat()},
@@ -656,15 +672,18 @@ def stock(symbol: str, strategy: str = "fast_mover",
             "shrinkage_applied": shrink,
             "shrinkage_from": float(score[5]) if score[5] is not None else None,
             "components": components,
+            # the recipe stays private (DESIGN_V6 §10): a penalty is named,
+            # never priced; a must-pass rule is named in plain words and
+            # marked pass or fail, never with the line it tests or the value
             "haircuts": [
-                {"label": h.get("label"), "points": h.get("points"),
-                 "evidence_url": h.get("evidence_url")}
+                {"label": h.get("label"), "evidence_url": h.get("evidence_url")}
                 for h in (score[7] or [])
             ],
             "delta_1d": float(score[8]) if score[8] is not None else None,
             "hard_filters": [
-                {"key": f.get("key"), "label": f.get("label"),
-                 "value": f.get("value"), "pass": bool(f.get("pass"))}
+                {"key": f.get("key"),
+                 "label": _HARD_FILTER_PLAIN.get(f.get("key"), f.get("key")),
+                 "pass": bool(f.get("pass"))}
                 for f in (score[9] or [])
             ],
         }

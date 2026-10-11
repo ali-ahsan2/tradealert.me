@@ -1036,12 +1036,15 @@ def stock_fields(symbol: str, days: int = Query(365, ge=30, le=1500),
                 vrow = cur.fetchone()
                 weights = dict((vrow[0] or {}) if vrow else {})
             labels = _component_labels(cur, strat[0])
-            # ordered by the declared weight, which stays on the server: a
-            # subscriber sees which inputs lacked data, not what they weigh
+            # ordered by label, never by the declared weight, which stays on
+            # the server: a subscriber sees which inputs lacked data, not
+            # what they weigh or how they rank (DESIGN_V6 §10)
             missing = [
                 {"key": kk, "label": labels.get(kk) or COMPONENT_LABELS.get(kk, kk),
                  "source": COMPONENT_SOURCE.get(kk, "")}
-                for kk, _w in sorted(weights.items(), key=lambda kv: -float(kv[1]))
+                for kk, _w in sorted(
+                    weights.items(),
+                    key=lambda kv: (labels.get(kv[0]) or COMPONENT_LABELS.get(kv[0], kv[0])).lower())
                 if kk not in present_keys
             ]
             # price since pinned, against the industry benchmark

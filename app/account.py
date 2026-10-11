@@ -189,8 +189,9 @@ def consent(body: ConsentIn,
     """The one-time acknowledgement (DESIGN_V6 §6, §10): records the terms
     version the person ticked, and when. Only the current version is
     accepted; a stale one tells the client to reload. Idempotent: ticking
-    the same version again keeps the first timestamp."""
-    row = _require_user(creds)
+    the same version again keeps the first timestamp. One of the few routes
+    open to an account that has not ticked yet (require_consent=False)."""
+    row = context.user_from_creds(creds, require_consent=False)
     uid = context.user_id(row)
     if body.version != legal.TERMS_VERSION:
         raise HTTPException(
@@ -214,8 +215,9 @@ def consent(body: ConsentIn,
 def resend_verification(creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
     """Sends the verification email again for the bearer's account. Three
     an hour per account; 200 either way, and the body says when there was
-    nothing to send because the address is already verified."""
-    row = _require_user(creds)
+    nothing to send because the address is already verified. Open before
+    the consent tick (require_consent=False): verifying is not using."""
+    row = context.user_from_creds(creds, require_consent=False)
     uid = context.user_id(row)
     if context.user_verified(row):
         return {"sent": False, "verified": True}

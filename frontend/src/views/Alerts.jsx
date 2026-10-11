@@ -110,7 +110,7 @@ function channelWord(k) {
 // and green stay reserved for price moves and PASS/FAIL. Full mode adds the
 // raw trigger label, the theme and the delivery record.
 const DILUTION_NOTE =
-  "The company filed to sell more shares (an S-3 or 424B). More shares means each existing share is a smaller slice, and the score takes a haircut for it.";
+  "The company filed to sell more shares (an S-3 or 424B). More shares means each existing share is a smaller slice; the filing fires an alert.";
 
 function PlainEvent({ ev, tz, onRead, full = false }) {
   const unread = ev.read === false;

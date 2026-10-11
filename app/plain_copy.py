@@ -13,8 +13,9 @@ no market background and no appetite for the recipe. The shape is fixed:
 
 The copy is checked against the engine (db/seed_universe.py), not against
 the brochure: names that fail a must-pass rule are flagged FAIL and still
-rated, an undated name is scored down rather than dropped, and a share-sale
-filing costs points and fires an alert rather than disqualifying a name.
+rated, an undated name is scored down rather than dropped, a large company
+is scored down rather than dropped, and a share-sale filing fires an alert
+rather than disqualifying a name.
 
 Nothing here reveals a weight, a threshold or a filter value: those stay in
 the Lab. The only numbers are in the record sentences, which quote measured
@@ -32,8 +33,9 @@ NO_RECORD = "No measured record yet. Treat its names as candidates, not signals.
 NOT_RUNNING = ("Not scoring yet. No names come from it today; this card says what it is "
                "built to look for.")
 # the hit definition every record sentence rests on, in words
-RECORD_DEFINITION = ("a 20% move either way, or three times normal volume, within five "
-                     "trading days")
+# (one way everywhere: the dossier, Strategies and lib/evidence.js say the same)
+RECORD_DEFINITION = ("a 20% move, or three times normal volume, from two trading days "
+                     "before the event to five after")
 # a calibrated strategy whose numbers are not in reach: never "no record"
 MEASURED_ELSEWHERE = "Measured on {resolved} past events; the numbers are on its page."
 RECORD_MIN_OUTCOMES = 30
@@ -48,13 +50,14 @@ STRATEGIES = {
             "A dated event ahead: earnings, a decision, a filing",
         ],
         "judgment": "An operator's reading of the news and of company quality also counts.",
-        "move": "A sharp move around the dated event, either way, over a few trading days. "
-                "The strategy scores the setup, not the direction.",
-        "ignores": "Large companies. Names with no date are scored down, not dropped. A fresh "
-                   "share-sale filing costs points and fires an alert.",
-        "record_template": "{hits} of {n} events that passed its must-pass rules moved 20% "
-                           "or traded 3x their usual volume inside the test window. "
-                           "That measures movement, not profit.",
+        "move": "A sharp move around the dated event over a few trading days; the test "
+                "counts moves up. The strategy scores the setup, not the direction.",
+        "ignores": "Large companies are scored down, not dropped. Names with no date are "
+                   "scored down, not dropped. A fresh share-sale filing fires an alert.",
+        "record_template": "{hits} of {n} backtest events that passed the test's filters "
+                           "moved 20% or traded 3x their usual volume in the test window. "
+                           "The test used six filters; four run today. That measures "
+                           "movement, not profit.",
     },
     "market_shift": {
         "one_line": "Names pulling ahead of their own sector, with volume behind the move.",

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { api } from "../api.js";
 import { Link, useQuery } from "../lib/router.jsx";
+import FinePrint from "../components/FinePrint.jsx";
 
 export default function Reset() {
   const q = useQuery();
@@ -49,7 +50,7 @@ export default function Reset() {
         {!token && !sent && (
           <form onSubmit={request}>
             <h1>Reset my password</h1>
-            <p className="sub">We'll email you a link that works for one hour.</p>
+            <p className="sub">We'll email you a link that works for 24 hours.</p>
             <div className="field">
               <label htmlFor="reset-email">Email</label>
               <input id="reset-email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -62,6 +63,7 @@ export default function Reset() {
             <button className="btn btn-primary btn-block" disabled={busy}>
               {busy ? "Sending…" : "Send me a reset link"}
             </button>
+            <FinePrint short links={false} className="auth-legal" />
           </form>
         )}
         {!token && sent && (
@@ -90,6 +92,7 @@ export default function Reset() {
             <button className="btn btn-primary btn-block" disabled={busy}>
               {busy ? "Saving…" : "Set my password"}
             </button>
+            <FinePrint short links={false} className="auth-legal" />
           </form>
         )}
         {token && done && (

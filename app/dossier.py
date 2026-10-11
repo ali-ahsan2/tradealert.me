@@ -157,8 +157,6 @@ def lenses(cur, run_id, instrument_id):
             "components_present": r[6], "components_total": r[7],
             "components": components_of(r[8]),
             "shrinkage_applied": _f(r[9]), "delta_1d": _f(r[10]),
-            "haircut_points": sum(float(h.get("points") or 0) for h in (r[11] or [])
-                                  if isinstance(h, dict)),
             "plain": plain_for(fact, brief=True) if fact
             else plain_copy.strategy_brief(r[0], bool(r[3])),
         })

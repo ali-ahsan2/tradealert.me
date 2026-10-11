@@ -367,6 +367,7 @@ export default function Watchlist() {
           </>
         }
       />
+      <FinePrint short />
 
       {summary && summary.count > 0 && (
         <div className="tiles full-only">

@@ -212,8 +212,9 @@ def strategy_detail(key: str):
                 "GROUP BY going_in_band",
                 (sid,),
             )
+            # rates only at n >= 10 (DESIGN_V5 §2): below that a count, never a rate
             by_band = {r[0]: {"n": r[1], "hits": r[2],
-                              "hit_rate": round(r[2] / r[1], 3) if r[1] else None,
+                              "hit_rate": round(r[2] / r[1], 3) if r[1] and r[1] >= 10 else None,
                               "mean_return_pct": _f(r[3])} for r in cur.fetchall()}
             cur.execute(
                 "SELECT event_type, created_at, resolved_outcomes_at_event, reason "
@@ -258,7 +259,7 @@ def strategy_detail(key: str):
         },
         "calibration": {
             "resolved": n, "hits": hits,
-            "hit_rate": round(hits / n, 3) if n else None,
+            "hit_rate": round(hits / n, 3) if n and n >= 10 else None,
             "mean_return_pct": _f(mean_ret), "by_band": by_band,
         },
         "timeline": timeline,
@@ -583,8 +584,10 @@ def set_pick_note(symbol: str, body: NoteIn,
 @router.get("/api/me/export")
 def export_account(creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
     """Everything the subscriber authored, as one JSON document. Secrets
-    (password hash, webhook secret, push subscription) are never included."""
-    row = context.user_from_creds(creds)
+    (password hash, webhook secret, push subscription) are never included.
+    Open before the consent tick (require_consent=False): a person may take
+    their data out without agreeing to anything."""
+    row = context.user_from_creds(creds, require_consent=False)
     uid = context.user_id(row)
     conn = get_conn()
     try:
@@ -700,8 +703,9 @@ def delete_account(body: DeleteIn,
     """Permanent. The typed email is the confirmation; a live paid plan must
     be cancelled through billing first so no one is charged for a deleted
     account; an account that authored operator records cannot be removed
-    without breaking the audit trail and is refused."""
-    row = context.user_from_creds(creds)
+    without breaking the audit trail and is refused. Open before the consent
+    tick (require_consent=False): leaving never needs a tick."""
+    row = context.user_from_creds(creds, require_consent=False)
     uid = context.user_id(row)
     email = (context.user_email(row) or "").lower()
     if body.confirm.strip().lower() != email:

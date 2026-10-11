@@ -3,7 +3,8 @@ import { api } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { coverage, dateTime, delta } from "../lib/fmt.js";
-import { SNAPSHOT_LABELS, HARD_FILTER_FORMAT } from "../lib/evidence.js";
+import { SNAPSHOT_LABELS } from "../lib/evidence.js";
+import { STRATEGY_STATUS } from "../lib/glossary.js";
 import { inputName } from "../lib/plain.js";
 import { useMode } from "../lib/mode.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
@@ -107,12 +108,14 @@ export default function Compare() {
               }
               aria-label="Strategy"
             >
-              {strategies.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
-                  {statusOf(s) === "measured" ? "" : " (no measured record yet)"}
-                </option>
-              ))}
+              {strategies
+                .filter((s) => !simple || statusOf(s) !== "not_running" || s.key === strategy)
+                .map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}
+                    {statusOf(s) === "measured" ? "" : ` (${(STRATEGY_STATUS[statusOf(s)] || STRATEGY_STATUS.provisional).chip.toLowerCase()})`}
+                  </option>
+                ))}
             </select>
           ) : null
         }
@@ -189,14 +192,7 @@ export default function Compare() {
                             <div className={`cmp-row ${f ? "" : "missing"}`} key={k}>
                               <span className="k">{label}</span>
                               <span className="mono">
-                                {f ? (
-                                  <>
-                                    <span className={`verdict ${f.pass ? "pass" : "fail"}`}>{f.pass ? "PASS" : "FAIL"}</span>{" "}
-                                    <span className="muted full-only">{(HARD_FILTER_FORMAT[k] || String)(f.value)}</span>
-                                  </>
-                                ) : (
-                                  "no data"
-                                )}
+                                {f ? <span className={`verdict ${f.pass ? "pass" : "fail"}`}>{f.pass ? "PASS" : "FAIL"}</span> : "no data"}
                               </span>
                             </div>
                           );
@@ -211,12 +207,9 @@ export default function Compare() {
                           const c = (d.score?.components || []).find((x) => x.key === k);
                           const word = inputWord(c);
                           return (
-                            <div className={`cmp-row ${c && word !== "no data" ? "" : "missing"}`} key={k} title={c && c.value != null ? String(c.value) : ""}>
+                            <div className={`cmp-row ${c && word !== "no data" ? "" : "missing"}`} key={k}>
                               <span className="k">{label}</span>
-                              <span className={`mono ${word === "no data" ? "faint" : ""}`}>
-                                {word}
-                                {c && word !== "no data" ? <span className="full-only"> · {(c.score ?? 0).toFixed(2)}</span> : null}
-                              </span>
+                              <span className={`mono ${word === "no data" ? "faint" : ""}`}>{word}</span>
                             </div>
                           );
                         })}

@@ -594,7 +594,9 @@ export default function StockReport({ symbol }) {
     // here (lifted, weighed, even, operator-read or missing), not only the named ones.
     const inputsTotal = components.length + missingExtra.length;
     const heldSentence = weighed.length ? `${capped(weighed)}.` : "nothing weighed on it.";
-    const noDataSentence = noData.length ? ` No data yet for ${noData.length} of ${inputsTotal} inputs.` : " Every input had data.";
+    // "did not use", not "no data yet": the figure may sit in Data on file from
+    // a newer snapshot than the one this score was computed from
+    const noDataSentence = noData.length ? ` This score did not use ${capped(noData)} (${noData.length} of ${inputsTotal} inputs).` : " Every input had data.";
     whyBullets.push(
       <>
         <b>What held it back:</b> {heldSentence}
@@ -645,7 +647,7 @@ export default function StockReport({ symbol }) {
       </p>
       {history.length > 1 && (
         <div className="hist">
-          <Sparkline points={history} label={`${strat.label} score over ${history.length} runs`} />
+          <Sparkline points={history} neutral={null} label={`${strat.label} score over ${history.length} runs`} />
           <div className="hist-meta">
             {plural(history.length, simple ? "morning" : "run")} on record · from {fmtScore(history[0].value, history[0].components_present, history[0].components_total)} to{" "}
             {fmtScore(history[history.length - 1].value, history[history.length - 1].components_present, history[history.length - 1].components_total)}
@@ -834,10 +836,7 @@ export default function StockReport({ symbol }) {
             .filter((m) => !components.some((c) => c.key === m.key))
             .map((m) => (
               <li key={`missing-${m.key}`} className="missing">
-                <span className="lbl">
-                  {inputName(m)}
-                  {m.source && full && <span className="judg"> · {m.source}</span>}
-                </span>
+                <span className="lbl">{inputName(m)}</span>
                 <span className="st st-none">no data</span>
               </li>
             ))}
@@ -905,14 +904,20 @@ export default function StockReport({ symbol }) {
     </Block>
   );
 
+  // Simple shows only the strategies that put a score on names today; the
+  // ones being built stay in More (DESIGN_V6 §7).
+  const lensStatus = (l) => (l.plain && l.plain.status) || (l.value == null ? "not_running" : l.calibrated ? "measured" : "provisional");
+  const shownLenses = simple ? d.strategies.filter((l) => lensStatus(l) !== "not_running" || l.key === strat.key) : d.strategies;
+  const hiddenLenses = d.strategies.length - shownLenses.length;
   const otherLenses = (
-    <Block full={full} title="Other strategies" note={`${plural(d.strategies.length, "strategy", "strategies")} on this name`} id="lenses">
+    <Block full={full} title="Other strategies" note={`${plural(shownLenses.length, "strategy", "strategies")} on this name`} id="lenses">
       <p className="hint" style={{ marginTop: 0, marginBottom: "var(--s-3)" }}>
         Each strategy rates the same name by its own recipe. Tap one to read this report through it.
+        {hiddenLenses > 0 ? ` ${plural(hiddenLenses, "more strategy is", "more strategies are")} being built and put no score on any name yet.` : ""}
       </p>
       <div className="lens-tabs" role="group" aria-label="Strategies">
-        {d.strategies.map((l) => {
-          const st = (l.plain && l.plain.status) || (l.value == null ? "not_running" : l.calibrated ? "measured" : "provisional");
+        {shownLenses.map((l) => {
+          const st = lensStatus(l);
           return (
             <button key={l.key} className="lens-card" aria-pressed={l.key === strat.key} onClick={() => navigate(lensHref(l.key), { replace: true })}>
               <div className="lc-top">
@@ -1174,9 +1179,10 @@ export default function StockReport({ symbol }) {
           </div>
         ) : strat.calibrated ? (
           <div className="aside-note">
-            {strat.label}'s record rests on {strat.resolved_outcomes_count} resolved outcomes. Events that passed its must-pass rules moved {EVIDENCE.hitRate}% of
-            the time ({EVIDENCE.hits} of {EVIDENCE.events}), against {EVIDENCE.earningsRate}% for earnings events generally and {EVIDENCE.randomRate}% on a
-            random day. The test measures movement, not direction or profit, over {EVIDENCE.window}.{" "}
+            {strat.label}'s record rests on {strat.resolved_outcomes_count} resolved outcomes. Backtest events that passed the test's filters moved{" "}
+            {EVIDENCE.hitRate}% of the time ({EVIDENCE.hits} of {EVIDENCE.events}), against {EVIDENCE.earningsRate}% for earnings events generally and{" "}
+            {EVIDENCE.randomRate}% on a random day. The test used {EVIDENCE.testFilters} filters; {EVIDENCE.liveFilters} run today. It measures movement, not direction or
+            profit, from {EVIDENCE.window}.{" "}
             <Link to={`/strategies/${strat.key}`}>{CTA.RECORD}</Link>
           </div>
         ) : (
@@ -1416,7 +1422,7 @@ export default function StockReport({ symbol }) {
                         {full && strat.calibrated ? (
                           <>
                             {" "}
-                            The rules are the measured part: {EVIDENCE.hits} of {EVIDENCE.events} events that passed them moved ({EVIDENCE.hitRate}%).
+                            The record: {EVIDENCE.hits} of {EVIDENCE.events} backtest events that passed the test's {EVIDENCE.testFilters} filters moved ({EVIDENCE.hitRate}%); {EVIDENCE.liveFilters} of those filters run today.
                           </>
                         ) : null}
                       </p>

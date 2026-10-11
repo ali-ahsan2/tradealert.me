@@ -162,8 +162,9 @@ export default function Auth({ mode }) {
           disabled={isSignup && !accept}
           title={isSignup && !accept ? "Tick the box below first." : undefined}
           onClick={() => {
+            // the tick here signals intent only; a Google account records
+            // its consent on /welcome, by an authenticated request
             const p = new URLSearchParams();
-            if (isSignup) p.set("accept_terms", "1");
             if (next) p.set("next", next);
             const qs = p.toString();
             window.location.assign(`/api/oauth/start/google${qs ? `?${qs}` : ""}`);

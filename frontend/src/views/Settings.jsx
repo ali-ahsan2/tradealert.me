@@ -208,7 +208,7 @@ export default function Settings() {
         <div className="kv">
           <span className="k">Status</span>
           <span className="v" style={{ fontFamily: "inherit" }}>
-            {me.verified ? <span className="pos">Verified</span> : <span className="warn">Not verified · alerts, digests and upgrades wait on it</span>}
+            {me.verified ? <span>Verified</span> : <span className="warn">Not verified · alerts, digests and upgrades wait on it</span>}
             {!me.verified && <ResendVerify />}
           </span>
         </div>

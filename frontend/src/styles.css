@@ -2159,15 +2159,16 @@ table.hf th.num {
   color: var(--ink-faint);
 }
 
+/* a penalty is a score fact, not a price move: amber, never red (DESIGN_V5 §2) */
 .haircuts {
-  border-left: 3px solid var(--neg);
-  background: var(--neg-fill);
+  border-left: 3px solid var(--warn);
+  background: var(--warn-fill);
   border-radius: 0 var(--r-md) var(--r-md) 0;
   padding: var(--s-3) var(--s-4);
 }
 
 .haircuts h3 {
-  color: var(--neg);
+  color: var(--warn);
   margin-bottom: var(--s-2);
 }
 

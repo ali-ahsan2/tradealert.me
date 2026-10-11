@@ -547,6 +547,7 @@ export default function Board() {
           </>
         }
       />
+      <FinePrint short />
 
       {simple ? notices.slice(0, 1) : notices}
 
@@ -963,7 +964,11 @@ export default function Board() {
                         .filter((s) => s.calibrated)
                         .map((s) => s.label)
                         .join(", ")} ${strategies.filter((s) => s.calibrated).length === 1 ? "has" : "have"} a measured record: its setups were checked against what happened next.`}{" "}
-                  The others have no measured record yet and produce candidates, not signals, until {EVIDENCE.calibrationThreshold} outcomes resolve.
+                  {strategies.some((s) => statusOf(s) === "provisional")
+                    ? `The others have no measured record yet and produce candidates, not signals, until ${EVIDENCE.calibrationThreshold} outcomes resolve.`
+                    : strategies.some((s) => statusOf(s) === "not_running")
+                      ? "The others are not running yet and put no score on any name."
+                      : ""}
                 </>
               ) : (
                 <>

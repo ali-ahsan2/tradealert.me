@@ -64,8 +64,8 @@ const TERMS = [
     p: [
       "One person per account. Keep your password private; what happens under your account " +
         "is your responsibility. Verifying your email turns delivery on; it does not gate " +
-        "browsing. You can delete your account at any time from My account. Deletion is " +
-        "permanent.",
+        "browsing. You can delete your account from My account once any paid plan is " +
+        "cancelled. Deletion is permanent.",
     ],
   },
   {
@@ -164,8 +164,8 @@ const TERMS = [
     id: "termination",
     h: "Termination",
     p: [
-      "You may stop using the service and delete your account at any time. We may suspend or " +
-        "close an account that breaks these terms.",
+      "You may stop using the service at any time and delete your account once any paid " +
+        "plan is cancelled. We may suspend or close an account that breaks these terms.",
     ],
   },
   {
@@ -305,9 +305,9 @@ const DISCLAIMER = [
     h: "The record",
     p: [
       "The backtest is published as it was tested: 26 of 32 events over about two years, " +
-        "measuring movement, not profit. One strategy is calibrated; the others are " +
-        "provisional and have no measured record yet, so treat their names as candidates. " +
-        "Past movement is not a forecast.",
+        "measuring movement, not profit. Strategies without a measured record are marked as " +
+        "such on every screen; treat their names as candidates. Past movement is not a " +
+        "forecast.",
     ],
   },
   {

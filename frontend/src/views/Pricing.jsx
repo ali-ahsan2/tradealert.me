@@ -54,11 +54,20 @@ export default function Pricing() {
       alive = false;
     };
   }, []);
+  // Nothing is said about the list until it has loaded; a failed fetch says
+  // nothing rather than a guess. Keyed on the plain status: a strategy that
+  // puts no score on any name is "not running yet", not "provisional".
   const provisionalLine = (() => {
-    if (!strats || !strats.length) return "Most strategies have no measured record yet.";
-    const prov = strats.filter((x) => !x.calibrated).length;
-    if (prov === 0) return "Every strategy has a measured record.";
-    return `${prov} of the ${strats.length} strategies ${prov === 1 ? "has" : "have"} no measured record yet (provisional).`;
+    if (!strats || !strats.length) return "";
+    const status = (x) => (x.plain && x.plain.status) || (x.calibrated ? "measured" : "provisional");
+    const prov = strats.filter((x) => status(x) === "provisional").length;
+    const idle = strats.filter((x) => status(x) === "not_running").length;
+    const parts = [];
+    if (prov > 0) parts.push(`${prov} of the ${strats.length} strategies ${prov === 1 ? "has" : "have"} no measured record yet (provisional).`);
+    const word = (n) => ["No", "One", "Two", "Three", "Four", "Five"][n] || String(n);
+    if (idle > 0) parts.push(`${word(idle)} ${idle === 1 ? "is" : "are"} not running yet and ${idle === 1 ? "puts" : "put"} no score on any name.`);
+    if (!parts.length) return "Every strategy has a measured record.";
+    return parts.join(" ");
   })();
 
   // The viewer's own record frames the comparison (DESIGN_V5 §4.6): what
@@ -236,9 +245,10 @@ export default function Pricing() {
       <div className="section card card-sunken">
         <h2>What the record does and does not say</h2>
         <p className="muted" style={{ maxWidth: "68ch", marginBottom: 0 }}>
-          {provisionalLine} Fast Mover is the one with a measured record: its must-pass rules hit on {EVIDENCE.hitRate}% of the {EVIDENCE.events}{" "}
-          qualifying events tested ({EVIDENCE.hits} of {EVIDENCE.events}), against {EVIDENCE.earningsRate}% for earnings events generally and{" "}
-          {EVIDENCE.randomRate}% on a random day. That sample is small and measures movement, not direction or profit.
+          {provisionalLine ? `${provisionalLine} ` : ""}Fast Mover is the one with a measured record: {EVIDENCE.hits} of the {EVIDENCE.events} backtest events that passed the test's{" "}
+          {EVIDENCE.testFilters} filters moved ({EVIDENCE.hitRate}%), against {EVIDENCE.earningsRate}% for earnings events generally and {EVIDENCE.randomRate}% on a
+          random day. {EVIDENCE.liveFilters[0].toUpperCase() + EVIDENCE.liveFilters.slice(1)} of those filters run today. That sample is small and measures movement, not
+          direction or profit.
         </p>
       </div>
 

@@ -20,6 +20,12 @@ import NotifyButton from "../components/NotifyButton.jsx";
 import ScreenHead from "../components/ScreenHead.jsx";
 import FinePrint from "../components/FinePrint.jsx";
 import { PlainStatusChip } from "../components/Plain.jsx";
+import { STRATEGY_STATUS } from "../lib/glossary.js";
+
+// measured / provisional / not_running for the strategy picker: the plain
+// status when the API carries it, else the calibration flag. Simple hides
+// the strategies that put no score on any name (DESIGN_V6 §7).
+const pickerStatus = (s) => (s && s.plain && s.plain.status) || (s && s.calibrated ? "measured" : "provisional");
 import { Empty, ErrorCard, Monogram, Skeleton } from "../components/ui.jsx";
 import "./board.css";
 
@@ -684,12 +690,14 @@ export default function Screen() {
               aria-label="Strategy"
               onChange={(e) => go({ ...filters, strategy: e.target.value === "fast_mover" ? "" : e.target.value })}
             >
-              {(strategies || [{ key: "fast_mover", label: "Fast Mover", calibrated: true }]).map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
-                  {s.calibrated ? "" : " (no record yet)"}
-                </option>
-              ))}
+              {(strategies || [{ key: "fast_mover", label: "Fast Mover", calibrated: true }])
+                .filter((s) => !simple || pickerStatus(s) !== "not_running" || s.key === stratKey)
+                .map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}
+                    {pickerStatus(s) === "measured" ? "" : ` (${(STRATEGY_STATUS[pickerStatus(s)] || STRATEGY_STATUS.provisional).chip.toLowerCase()})`}
+                  </option>
+                ))}
             </select>
             <button className="btn btn-secondary btn-sm fpanel-toggle full-only" onClick={() => setAdv((a) => !a)} aria-expanded={adv}>
               Filters{activeCount ? ` · ${activeCount}` : ""}
