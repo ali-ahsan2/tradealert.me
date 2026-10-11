@@ -213,3 +213,8 @@ details.acc > .acc-body .tscroll { max-width: 100%; }
 .page-enter { animation: page-in .22s ease; }
 @keyframes page-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .page-enter { animation: none; } }
+
+/* text-styled buttons for in-place prompts */
+.linkbtn { all: unset; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; font: inherit; }
+.linkbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.tierchip-btn { cursor: pointer; border: 0; font: inherit; }

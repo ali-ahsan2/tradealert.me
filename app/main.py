@@ -189,12 +189,27 @@ def _send_verification(email, user_id):
     token = security.make_token(user_id, purpose="verify", expires_days=1)
     base = os.environ.get("APP_BASE_URL", "http://localhost:8000")
     link = f"{base}/api/verify?token={token}"
+    pulse_line = ""
+    try:
+        conn = get_conn()
+        try:
+            pz = record.compute_pulse(conn, 30)
+        finally:
+            conn.close()
+        a = pz["alerts"]
+        if a["fired"]:
+            pulse_line = (f"This month across the universe: {a['fired']} alerts fired on {a['names']} names; "
+                          f"{a['moved_10']} of the {a['measured']} measured moved 10%+ within five sessions. "
+                          "Measured, not predicted.\n\n")
+    except Exception as e:  # noqa: BLE001 - the pulse never blocks a signup
+        log.warning("pulse line for verification email failed: %s", e)
     try:
         status = emailer.send_email(
             email,
             "Verify your tradealert.me account",
             "Confirm your email address to finish signing up.\n\n"
             f"Open this link: {link}\n\n"
+            f"{pulse_line}"
             "This link expires in 24 hours. If you did not create an account, "
             "ignore this email.",
         )

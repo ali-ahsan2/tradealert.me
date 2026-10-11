@@ -81,7 +81,8 @@ def _dispatch(conn, uid, event_id, symbol, trigger_key, detail, fired_at,
               rule_channels, email_addr, ch_email, ch_push, push_sub,
               ch_sms, phone):
     title = f"{symbol}: {trigger_key}"
-    body = detail or f"{symbol} hit the {trigger_key} trigger."
+    base = os.environ.get("APP_BASE_URL", "http://localhost:8000")
+    body = (detail or f"{symbol} hit the {trigger_key} trigger.") + f"\n\nOpen the report: {base}/stock/{symbol}"
     sent = []
     with conn.cursor() as cur:
         for channel in rule_channels:

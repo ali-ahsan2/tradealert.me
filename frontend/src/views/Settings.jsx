@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api, cached, logout, toast } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
+import { openUpgrade } from "../lib/upgrade.js";
 import { hasChannel, useMe } from "../lib/me.jsx";
 import { DAYS, dollars, downloadText, industriesLabel, plural, shortDate, tzList } from "../lib/fmt.js";
 import { ErrorCard, Meter, Modal, Notice, Skeleton } from "../components/ui.jsx";
@@ -260,7 +261,7 @@ export default function Settings() {
             {nextTier && (
               <>
                 {" "}
-                {nextTier.label} follows {industriesLabel(nextTier.industries_limit)}. <Link to="/pricing">See plans</Link>
+                {nextTier.label} follows {industriesLabel(nextTier.industries_limit)}. <button type="button" className="linkbtn" onClick={() => openUpgrade("industries")}>See plans</button>
               </>
             )}
           </p>
@@ -281,7 +282,7 @@ export default function Settings() {
             Web push
             {!hasChannel(me, "push") && (
               <span className="lock-note">
-                Basic and above · <Link to="/pricing">See plans</Link>
+                Basic and above · <button type="button" className="linkbtn" onClick={() => openUpgrade("channels")}>See plans</button>
               </span>
             )}
           </span>
@@ -292,7 +293,7 @@ export default function Settings() {
             SMS
             {!hasChannel(me, "sms") && (
               <span className="lock-note">
-                Pro and above · <Link to="/pricing">See plans</Link>
+                Pro and above · <button type="button" className="linkbtn" onClick={() => openUpgrade("channels")}>See plans</button>
               </span>
             )}
           </span>
@@ -303,7 +304,7 @@ export default function Settings() {
             Webhook URL{" "}
             {!hasChannel(me, "webhook") && (
               <span className="faint">
-                · Investor only · <Link to="/pricing">See plans</Link>
+                · Investor only · <button type="button" className="linkbtn" onClick={() => openUpgrade("channels")}>See plans</button>
               </span>
             )}
           </label>
@@ -404,9 +405,9 @@ export default function Settings() {
             </div>
           </div>
           <div className="row" style={{ marginTop: "var(--s-4)" }}>
-            <Link to="/pricing" className="btn btn-primary btn-sm">
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => openUpgrade("general")}>
               {nextTier ? "Change plan" : "See plans"}
-            </Link>
+            </button>
             {health && health.configured && paid && (
               <button className="btn btn-secondary btn-sm" onClick={portal}>
                 Billing history and payment method

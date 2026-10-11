@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "../lib/router.jsx";
+import { openUpgrade } from "../lib/upgrade.js";
 import { age, shortDate } from "../lib/fmt.js";
 import Icon from "./Icons.jsx";
 
@@ -171,9 +172,9 @@ export function TierChip({ tier, link = true }) {
   const upgradeable = tier.key === "free" || tier.key === "basic";
   const cls = "tierchip mono";
   return link && upgradeable ? (
-    <Link to="/pricing" className={cls} title="See plans">
+    <button type="button" className={`${cls} tierchip-btn`} title="See plans" onClick={() => openUpgrade("general")}>
       {label.toUpperCase()}
-    </Link>
+    </button>
   ) : (
     <span className={cls}>{label.toUpperCase()}</span>
   );
