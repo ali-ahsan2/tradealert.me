@@ -580,10 +580,8 @@ export default function StockReport({ symbol }) {
   const capped = (names) => (names.length <= 3 ? plainList(names) : `${plainList(names.slice(0, 3))} and ${names.length - 3} more`);
   const lifted = components.filter((c) => inputStatus(c)[0] === "up").map(inputName);
   const weighed = components.filter((c) => inputStatus(c)[0] === "down").map(inputName);
-  const noData = [
-    ...components.filter((c) => inputStatus(c)[0] === "none").map(inputName),
-    ...missingComponents.filter((m) => !components.some((c) => c.key === m.key)).map(inputName),
-  ];
+  const missingExtra = missingComponents.filter((m) => !components.some((c) => c.key === m.key));
+  const noData = [...components.filter((c) => inputStatus(c)[0] === "none").map(inputName), ...missingExtra.map(inputName)];
   const whyBullets = [];
   if (stratPlain && stratPlain.plain && stratPlain.plain.one_line) whyBullets.push(<>{strat.label} hunts {lowerFirst(stratPlain.plain.one_line)}</>);
   if (s) {
@@ -592,8 +590,9 @@ export default function StockReport({ symbol }) {
         <b>What lifted it:</b> {lifted.length ? `${capped(lifted)}.` : "nothing stood out."}
       </>
     );
-    // Three names at most, then a count; missing data is a count of all the inputs seen here.
-    const inputsTotal = lifted.length + weighed.length + noData.length;
+    // Three names at most, then a count; missing data is a count of every input seen
+    // here (lifted, weighed, even, operator-read or missing), not only the named ones.
+    const inputsTotal = components.length + missingExtra.length;
     const heldSentence = weighed.length ? `${capped(weighed)}.` : "nothing weighed on it.";
     const noDataSentence = noData.length ? ` No data yet for ${noData.length} of ${inputsTotal} inputs.` : " Every input had data.";
     whyBullets.push(

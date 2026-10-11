@@ -1232,6 +1232,18 @@ a.sym:hover {
   opacity: 0.9;
 }
 
+/* the band word as text with the score after it (Simple rows): no pill */
+.bandtext {
+  font-size: 15px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.bandtext b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
 .badge .cov {
   display: flex;
   gap: 2px;

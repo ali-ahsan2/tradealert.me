@@ -916,7 +916,7 @@ function MoreOnMyNames({ d, record, recErr, onRecRetry, locked, tz, full, K, rel
                         )}
                         {st.chg_since_pin != null && (
                           <span>
-                            since pin <b className={tone(st.chg_since_pin)}>{signed(st.chg_since_pin, 1, "%")}</b>
+                            since added <b className={tone(st.chg_since_pin)}>{signed(st.chg_since_pin, 1, "%")}</b>
                             {st.benchmark_chg_since_pin != null ? (
                               <>
                                 {" "}
