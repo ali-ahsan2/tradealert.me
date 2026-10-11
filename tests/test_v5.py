@@ -17,8 +17,12 @@ TALLY_KEYS = {"fired", "names", "measured", "moved_10", "moved_20", "industries"
 
 
 def _user(prefix, industries):
-    email = f"{prefix}{int(time.time() * 1000)}@example.com"
-    s, body = post("/signup", {"email": email, "password": PASSWORD})
+    stamp = int(time.time() * 1000)
+    email = f"{prefix}{stamp}@example.com"
+    # the signup limiter is five per hour per client IP (see test_product_v3):
+    # each test user presents its own address so the suite runs in one go
+    s, body = post("/signup", {"email": email, "password": PASSWORD},
+                   ip=f"10.5.{(stamp // 256) % 256}.{stamp % 256}")
     assert s == 200, body
     token = body["token"]
     psql(f"UPDATE users SET verified=TRUE WHERE email='{email}';")
