@@ -18,6 +18,6 @@ export default defineConfig({
   build: {
     outDir: OUT,
     emptyOutDir: true,
-    rollupOptions: { input: { preview: path.join(here, "preview.html") } },
+    rollupOptions: { input: { preview: path.join(here, "preview.html"), lab: path.join(here, "preview-lab.html") } },
   },
 });
