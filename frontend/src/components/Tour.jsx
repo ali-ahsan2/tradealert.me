@@ -47,12 +47,12 @@ export const HOME_TOUR = [
   {
     title: "It tells me before the move is over",
     body:
-      "Tap Alert me on a name and you are emailed the day a fact changes on it: a date set, the cost to borrow doubling, volume at three times normal. Alerts lists what you were told; Watchlist keeps your names in view.",
+      "Tap Alert me on a name. You are emailed the day a fact changes on it. Alerts lists what you were told; Watchlist keeps your names in view.",
   },
   {
     title: "Measured, not predicted",
     body:
-      "Every number is a count with a date behind it, and the record keeps score of how early you were told. Nothing here is a recommendation; you decide.",
+      "Every number is a count with a date behind it. The record keeps score of how early you were told. Nothing here is a recommendation; you decide.",
   },
 ];
 

@@ -53,12 +53,12 @@ export function pulseStats(pulse, run, industries) {
       push("lead", m, `${m === 1 ? "session" : "sessions"} from alert to peak`, "median of the measured moves");
     }
     push("names", u.names, "names scored each morning", null);
-    if (u.strategies > 0) push("strategies", u.strategies, "strategies", `${u.calibrated || 0} calibrated`);
+    if (u.strategies > 0) push("strategies", u.strategies, "strategies", `${u.calibrated || 0} with a measured record`);
     return out;
   }
   if (run) {
     const scored = Object.values(run.bands || {}).reduce((s, n) => s + (Number(n) || 0), 0);
-    if (scored > 0) push("names", scored, "names scored this morning", run.as_of ? `run of ${shortDate(run.as_of)}` : null);
+    if (scored > 0) push("names", scored, "names scored this morning", run.as_of ? `scored ${shortDate(run.as_of)}` : null);
     else push("names", run.universe_active, "names covered", null);
   }
   if (industries && industries.length) push("industries", industries.length, "industries watched", null);
@@ -85,10 +85,10 @@ export default function PulsePanel({ pulse, stats = [], loading = false, active 
   if (!loading && stats.length === 0) return null;
   const days = (pulse && pulse.days) || 30;
   return (
-    <aside className="pulse" aria-label={pulse ? `The pulse: what fired and what moved in the last ${days} days` : "This morning's run"}>
+    <aside className="pulse" aria-label={pulse ? `The pulse: what fired and what moved in the last ${days} days` : "This morning's scoring"}>
       <div className="pulse-head">
         <span className="pulse-dot" aria-hidden="true" />
-        <span className="pulse-title">{pulse ? `Live · last ${days} days` : "Live · this morning's run"}</span>
+        <span className="pulse-title">{pulse ? `Live · last ${days} days` : "Live · this morning's scoring"}</span>
         {pulse && pulse.as_of && <span className="pulse-asof">as of {shortDate(pulse.as_of)}</span>}
       </div>
       {loading ? (
@@ -117,7 +117,7 @@ export default function PulsePanel({ pulse, stats = [], loading = false, active 
             How the record is measured
           </Link>
         )}
-        <span className="pulse-note">{pulse ? "Counts across the whole universe. Names are shown to subscribers." : "Counts from the latest completed run."}</span>
+        <span className="pulse-note">{pulse ? "Counts across every industry we watch. Names are shown to subscribers." : "Counts from this morning's scoring."}</span>
       </div>
     </aside>
   );

@@ -4,7 +4,7 @@ import { Link, navigate } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { openUpgrade } from "../lib/upgrade.js";
 import { DEFAULT_TRIGGERS, TRIGGER_PLAIN } from "../lib/glossary.js";
-import { CTA } from "../lib/plain.js";
+import { CTA, list } from "../lib/plain.js";
 import { Modal } from "./ui.jsx";
 
 // One tap to be told about a name ("Alert me"). Turns on the three default
@@ -78,6 +78,8 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
   const anyArmed = armedKeys.size > 0;
   const limit = me && me.tier ? me.tier.alerts_limit : null;
   const plainList = triggers.map((k) => (TRIGGER_PLAIN[k] ? TRIGGER_PLAIN[k][0].toLowerCase() : k));
+  // "three facts (a dated event ahead, the cost to borrow doubles and unusual volume)"
+  const factsPhrase = `${plainList.length === 1 ? "one fact" : `${plainList.length === 3 ? "three" : plainList.length} facts`} (${list(plainList)})`;
 
   useEffect(() => {
     if (confirmed) setAssumed(false);
@@ -129,7 +131,7 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
   const armedPlain = [...armedKeys].map((k) => (TRIGGER_PLAIN[k] ? TRIGGER_PLAIN[k][0].toLowerCase() : k));
   const title = lit
     ? `Alerts on for ${symbol}: ${(on ? plainList : armedPlain).join(", ")}. Tap to change them.`
-    : `Tell me when ${symbol} has a ${plainList.join(", a ")}.`;
+    : `Tell me the day a fact changes on ${symbol}: ${list(plainList)}.`;
 
   const seePlans = (reason) => {
     setCard(null);
@@ -153,7 +155,7 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
           }
         >
           <p>
-            We would watch {symbol} for a {plainList.join(", a ")} and email you the moment one prints. Alerts only go to a verified address.
+            We would watch {symbol} for {factsPhrase} and email you the moment one prints. Alerts only go to a verified address.
           </p>
           <p className="muted">Open the link we sent when you signed up, or request a new one from My account.</p>
         </Modal>
@@ -174,7 +176,7 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
           }
         >
           <p>
-            Alerts start on the Basic plan. We would watch {symbol} for a {plainList.join(", a ")} and email you when one prints, with the fact that fired it.
+            Alerts start on the Basic plan. We would watch {symbol} for {factsPhrase} and email you the moment one prints, with the fact that fired it.
           </p>
           <p className="muted">On the free plan you can watch the name and it stays in view on your Home and My watchlist.</p>
         </Modal>

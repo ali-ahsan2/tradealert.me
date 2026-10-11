@@ -32,11 +32,16 @@ const TRIGGER_GLYPH = {
   contract_award: "$",
 };
 
-// "B the cost to borrow doubles, SI short interest crosses a line, …": the
-// legend reads each glyph in the alert's own plain words (glossary.js).
-const GLYPH_LEGEND = Object.entries(TRIGGER_GLYPH)
-  .map(([k, g]) => `${g} ${TRIGGER_PLAIN[k] ? TRIGGER_PLAIN[k][0].toLowerCase() : k}`)
-  .join(", ");
+// "B the cost to borrow doubles, SI short interest crosses a line": the
+// legend reads each glyph in the alert's own plain words (glossary.js) and
+// names only the alerts that fired inside the chart's window.
+function glyphLegend(alerts) {
+  const seen = new Set((alerts || []).map((a) => a.trigger_key));
+  return Object.entries(TRIGGER_GLYPH)
+    .filter(([k]) => seen.has(k))
+    .map(([k, g]) => `${g} ${TRIGGER_PLAIN[k] ? TRIGGER_PLAIN[k][0].toLowerCase() : k}`)
+    .join(", ");
+}
 
 function token(name, fallback) {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -207,10 +212,10 @@ export default function PriceChart({ symbol, initialDays = 90, placeholder = nul
               </button>
             ))}
           </div>
-          <button className="btn-quiet" aria-pressed={candles} onClick={() => setCandles((v) => !v)}>
+          <button className="btn-quiet full-only" aria-pressed={candles} onClick={() => setCandles((v) => !v)}>
             {candles ? "Line" : "Candles"}
           </button>
-          <button className="btn-quiet" aria-pressed={markers} onClick={() => setMarkers((m) => !m)}>
+          <button className="btn-quiet full-only" aria-pressed={markers} onClick={() => setMarkers((m) => !m)}>
             {markers ? "Hide events" : "Show events"}
           </button>
         </div>
@@ -252,9 +257,11 @@ export default function PriceChart({ symbol, initialDays = 90, placeholder = nul
             <span>
               <i className="lg-dot pos" /> E = dated event, filled when the name then moved 20% or traded 3x volume
             </span>
-            <span>
-              <i className="lg-arrow" /> an alert fired: {GLYPH_LEGEND}
-            </span>
+            {glyphLegend(data.alerts) && (
+              <span>
+                <i className="lg-arrow" /> an alert fired: {glyphLegend(data.alerts)}
+              </span>
+            )}
             <span className="spacer" />
             <span>{data.source.name}</span>
           </div>

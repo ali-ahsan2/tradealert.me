@@ -694,7 +694,6 @@ html[data-mode="simple"] .brief {
 .brief .fineprint-short {
   margin: var(--s-2) 0 0;
   font-size: 13px;
-  color: var(--ink-faint);
 }
 
 /* the skeleton while the brief loads keeps the page shape */

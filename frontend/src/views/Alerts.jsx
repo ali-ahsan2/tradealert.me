@@ -140,7 +140,8 @@ function PlainEvent({ ev, tz, onRead, full = false }) {
           {a ? `${a.label} ago` : shortDate(ev.fired_at, tz)}
         </span>
       </div>
-      <div className={`r2 ${unread ? "bold" : ""}`}>{ev.detail || ev.trigger}</div>
+      <div className={`r2 ${unread ? "bold" : ""}`}>{triggerSentence(ev.trigger_key, ev.symbol)}</div>
+      {full && ev.detail && <div className="r3">{ev.detail}</div>}
       {full && (
         <div className="r3">
           {ev.theme ? `${ev.theme} · ` : ""}
@@ -650,7 +651,7 @@ export default function Alerts() {
         line={line}
         action={
           <button type="button" className="btn btn-primary" onClick={watchAName}>
-            Watch a name for me
+            {fSymbol ? CTA.ALERT_ME_ON(fSymbol) : "Alert me on a name"}
           </button>
         }
         secondary={
@@ -666,7 +667,7 @@ export default function Alerts() {
       <div className="tabs tl-tabs" role="tablist" aria-label="Alerts">
         <button role="tab" className="tab" aria-selected={tab === "history"} onClick={() => setTab("history")}>
           {simple ? "Told me" : "History"}
-          {events ? ` · ${sent.length}` : ""}
+          {events && unreadCount === 0 ? ` · ${sent.length}` : ""}
           {unreadCount > 0 && <span className="navbadge">{unreadCount}</span>}
         </button>
         <button role="tab" className="tab" aria-selected={tab === "armed"} onClick={() => setTab("armed")}>

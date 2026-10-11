@@ -1,5 +1,6 @@
 import { api } from "../api.js";
 import { pct, plural, shortDate } from "./fmt.js";
+import { TRIGGER_PLAIN } from "./glossary.js";
 
 // Sentences from the record endpoints (DESIGN_V5 §3, DESIGN_V6 §4). Every
 // sentence states a recorded fact: what fired, whether this account was
@@ -46,11 +47,11 @@ export function movePhrase(e) {
   return e.chg_5d != null ? `${peak}, closed ${pct(e.chg_5d)}` : peak;
 }
 
-// One row's story: "CAMT · Dilution filing on Sep 25 · +10.9% at the high within five sessions · fired 5 sessions before the peak"
+// One row's story: "CAMT · A share-sale filing on Sep 25 · +10.9% at the high within five sessions · fired 5 sessions before the peak"
 export function missSentence(e, { withSymbol = true } = {}) {
   const parts = [];
   if (withSymbol && e.symbol) parts.push(e.symbol);
-  parts.push(`${e.trigger} on ${shortDate(e.date)}`);
+  parts.push(`${(TRIGGER_PLAIN[e.trigger_key] || [e.trigger])[0]} on ${shortDate(e.date)}`);
   parts.push(movePhrase(e));
   const lead = leadPhrase(e);
   if (lead && !e.pending) parts.push(lead);

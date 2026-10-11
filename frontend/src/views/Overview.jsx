@@ -7,7 +7,7 @@ import { openUpgrade } from "../lib/upgrade.js";
 import { HOME_ROWS } from "../lib/caps.js";
 import { bestToldEvent, beyondPlanSentence, dayMonth, fetchRecord, missedCardSentence, toldCardLatest, toldCardSentence, toldHeadline } from "../lib/record.js";
 import { prefersReducedMotion, useCountUp, useReveal } from "../lib/motion.js";
-import { DAYS, age, dateTime, delta, plural, score as fmtScore, shortDate, signed, tone } from "../lib/fmt.js";
+import { DAYS, age, dateTime, delta, plural, score as fmtScore, shortDate, signed, tone, zoneName } from "../lib/fmt.js";
 import { TRIGGER_PLAIN } from "../lib/glossary.js";
 import { changeSentence, triggerLabel, triggerSentence } from "../lib/plain.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
@@ -127,12 +127,12 @@ function pinSentence(p, st, tz) {
   const parts = [];
   const when = p.pinned_at ? ` on ${shortDate(p.pinned_at, tz)}` : "";
   const [cp, ct] = pickCoverage(p, st);
-  if (p.value == null) parts.push("No score on this run.");
-  else if (p.score_at_pin == null) parts.push(`Scores ${fmtScore(p.value, cp, ct)} now; no score was recorded when you pinned it.`);
+  if (p.value == null) parts.push("No score in this morning's scoring.");
+  else if (p.score_at_pin == null) parts.push(`Scores ${fmtScore(p.value, cp, ct)} now; no score was recorded when you started watching it.`);
   else {
     const r = Math.round(p.value - p.score_at_pin);
-    if (r === 0) parts.push(`Unchanged since you pinned it${when}.`);
-    else parts.push(`${r > 0 ? "Up" : "Down"} ${Math.abs(r)} point${Math.abs(r) === 1 ? "" : "s"} since you pinned it${when}.`);
+    if (r === 0) parts.push(`Unchanged since you started watching it${when}.`);
+    else parts.push(`${r > 0 ? "Up" : "Down"} ${Math.abs(r)} point${Math.abs(r) === 1 ? "" : "s"} since you started watching it${when}.`);
   }
   if (st && st.earnings) parts.push(`Earnings ${inWords(st.earnings.days)}.`);
   return parts.join(" ");
@@ -289,19 +289,19 @@ function HowCard({ welcome, onDone }) {
           <span className="how-ic" aria-hidden="true">
             <Icon name="check" size={18} />
           </span>
-          <span>I pick my industries.</span>
+          <span>It watches my industries: every name in them, every morning.</span>
         </li>
         <li>
           <span className="how-ic" aria-hidden="true">
             <Icon name="search" size={18} />
           </span>
-          <span>It watches every name in them, every morning.</span>
+          <span>It tells me before the move is over: the day a fact changes.</span>
         </li>
         <li>
           <span className="how-ic" aria-hidden="true">
             <Icon name="alerts" size={18} />
           </span>
-          <span>It tells me the day a fact changes, and keeps score of how early.</span>
+          <span>Measured, not predicted: it keeps score of how early it told me.</span>
         </li>
       </ul>
       <button type="button" className="btn btn-secondary btn-sm" onClick={onDone}>
@@ -400,7 +400,7 @@ function Hero() {
           <div className="hero-sub">
             {hasWatch ? (
               <>
-                <span>{plural(d.watchlist.symbols.length, "pinned name")}, equal-weight</span>
+                <span>{plural(d.watchlist.symbols.length, "watched name")}, equal weight</span>
                 {bench[0] && bench[0].change_pct != null && (
                   <span>
                     vs {bench[0].symbol} <Move value={bench[0].change_pct} />
@@ -705,7 +705,7 @@ function MoreOnMyNames({ d, record, recErr, onRecRetry, locked, tz, full, K, rel
           <div className="brief-empty">
             <p>
               Nothing fired on your names in the last 30 days.{" "}
-              {a.armed > 0 ? `You have ${plural(a.armed, "alert")} armed.` : "You have asked for no alerts yet."}
+              {a.armed > 0 ? `You have ${plural(a.armed, "alert")} on.` : "You have asked for no alerts yet."}
             </p>
             <div className="actrow">
               {topPinned ? (
@@ -859,7 +859,7 @@ function MoreOnMyNames({ d, record, recErr, onRecRetry, locked, tz, full, K, rel
         id="more-wl"
         level={3}
         title="My watchlist"
-        note={w.count > 0 ? (w.limit != null ? `${w.count} of ${w.limit} pins` : plural(w.count, "pin")) : null}
+        note={w.count > 0 ? (w.limit != null ? `${w.count} of ${w.limit} names watched` : plural(w.count, "name watched", "names watched")) : null}
         more={
           picks && picks.length > 0 ? (
             <Link to="/watchlist" className="more-all">
@@ -876,7 +876,7 @@ function MoreOnMyNames({ d, record, recErr, onRecRetry, locked, tz, full, K, rel
           <div className="brief-empty">
             <p>
               Nothing watched yet. A watched name stays on this page and in your weekly brief.
-              {w.limit != null ? ` Your plan holds ${plural(w.limit, "pin")}.` : ""}
+              {w.limit != null ? ` Your plan watches up to ${plural(w.limit, "name")} for you.` : ""}
             </p>
             <div className="actrow">
               <Link to="/board" className="btn btn-secondary btn-sm">
@@ -944,7 +944,7 @@ function MoreOnMyNames({ d, record, recErr, onRecRetry, locked, tz, full, K, rel
       <details className="acc mkt" open={mktOpen} onToggle={(e) => setMktOpen(e.currentTarget.open)}>
         <summary>
           <h3>Markets</h3>
-          <span className="sum-note">your pins as an index, the biggest 30-day moves, your industries</span>
+          <span className="sum-note">your watched names as an index, the biggest 30-day moves, your industries</span>
         </summary>
         {mktSeen && <Markets d={d} K={K} reload={reload} />}
       </details>
@@ -1086,7 +1086,7 @@ export default function Overview() {
         {verified}
         <header className="home-head">
           <h1>{hello}</h1>
-          <p className="home-line">No morning run has completed yet. Your brief fills after the first one.</p>
+          <p className="home-line">No morning scoring has finished yet. Your brief fills after the first one.</p>
         </header>
         <Empty title="Nothing scored yet.">The engine runs each morning; what changed, the alerts and the dates ahead appear here after it.</Empty>
         {showHow && <HowCard welcome={welcome} onDone={dismissHow} />}
@@ -1213,7 +1213,7 @@ export default function Overview() {
           ) : null
         }
       >
-        {!c && <p className="brief-line">Only one run is on record. Changes appear once a second run completes.</p>}
+        {!c && <p className="brief-line">Only one morning's scoring is on record. Changes appear after the next one.</p>}
         {c && changeRows.length === 0 && (
           <p className="brief-line">
             No name changed rating since the last scoring.
@@ -1257,7 +1257,7 @@ export default function Overview() {
       <details className="acc more" open={moreOpen} onToggle={(e) => setMoreOpen(e.currentTarget.open)}>
         <summary>
           <h2>More on my names</h2>
-          <span className="sum-note">the alerts that fired, what you'd have known, your record, coming up, your watchlist, markets</span>
+          <span className="sum-note">alerts, record, calendar, watchlist and markets</span>
         </summary>
         {moreSeen && (
           <MoreOnMyNames
@@ -1280,7 +1280,7 @@ export default function Overview() {
           {d.digest && (
             <>
               {d.digest.enabled
-                ? `Weekly brief: ${DAYS[d.digest.day]} at ${String(d.digest.hour).padStart(2, "0")}:00 ${d.digest.timezone}.`
+                ? `Weekly brief: ${DAYS[d.digest.day]} at ${String(d.digest.hour).padStart(2, "0")}:00 ${zoneName(d.digest.timezone)}.`
                 : "Weekly brief is off."}{" "}
               <Link to="/digests">Preview</Link> · <Link to="/settings#digest">Change</Link>.
             </>

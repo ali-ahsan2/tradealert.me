@@ -630,7 +630,7 @@ export default function Screen() {
       </div>
       <div className="fpanel-foot">
         <button className="btn btn-primary btn-block" onClick={apply}>
-          Apply filters
+          Show me what matches
         </button>
       </div>
     </aside>
@@ -1022,7 +1022,7 @@ export default function Screen() {
                   </div>
                   {nextTier && (
                     <div className="actions">
-                      <button type="button" className="btn btn-primary btn-sm" onClick={() => openUpgrade("names")}>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => openUpgrade("names")}>
                         Show me the plans — {dollars(nextTier.price_monthly_cents)}/mo
                       </button>
                     </div>

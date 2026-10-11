@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api, cached, toast } from "../api.js";
 import { Link } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
-import { DAYS, delta, dollars, downloadText, inDays, pct, plural, score as fmtScore, shortDate, signed, toCsv, tone } from "../lib/fmt.js";
+import { DAYS, delta, dollars, downloadText, inDays, pct, plural, score as fmtScore, shortDate, signed, toCsv, tone, zoneName } from "../lib/fmt.js";
 import { GLOSSARY } from "../lib/glossary.js";
 import { CTA, bandWord } from "../lib/plain.js";
 import { useMode } from "../lib/mode.js";
@@ -181,7 +181,7 @@ function NoteEditor({ pick, onSaved }) {
       <textarea value={v} maxLength={280} onChange={(e) => setV(e.target.value)} placeholder="Why you watch it, what would change your mind…" />
       <div className="row" style={{ marginTop: "var(--s-2)" }}>
         <button className="btn btn-primary btn-sm" disabled={busy} onClick={save}>
-          {busy ? "Saving…" : "Save"}
+          {busy ? "Saving…" : "Save my note"}
         </button>
         <button className="btn-quiet" onClick={() => setOpen(false)}>
           Cancel
@@ -454,8 +454,6 @@ export default function Watchlist() {
                   <p className="tl-meta">
                     {bandWords(p)}
                     {ev ? <> · {ev}</> : null}
-                    {" · watching since "}
-                    {shortDate(p.pinned_at, tz)}
                     {st && st.unread > 0 && (
                       <>
                         {" · "}
@@ -476,12 +474,13 @@ export default function Watchlist() {
                 </div>
                 <div className="tl-acts">
                   <NotifyButton symbol={p.symbol} compact />
-                  <Link to={`/stock/${p.symbol}`} className="btn btn-secondary btn-sm">
-                    {CTA.REPORT}
-                  </Link>
                   <details className="tl-more">
                     <summary className="btn-quiet">More</summary>
                     <div className="tl-more-body">
+                      <Link to={`/stock/${p.symbol}`} className="btn-quiet">
+                        {CTA.REPORT}
+                      </Link>
+                      <span className="xs faint">watching since {shortDate(p.pinned_at, tz)}</span>
                       {sort === "order" && picks.length > 1 && (
                         <span className="tl-move" role="group" aria-label={`Reorder ${p.symbol}`}>
                           <button type="button" className="btn-quiet" disabled={busy || i === 0} onClick={() => move(i, -1)} aria-label={`Move ${p.symbol} up`} title="Move up">
@@ -626,7 +625,7 @@ export default function Watchlist() {
           <p className="hint tl-digest">
             {settings.digest_enabled ? (
               <>
-                Your weekly brief goes out {DAYS[settings.digest_day]} at {String(settings.digest_hour).padStart(2, "0")}:00 {settings.timezone}.
+                Your weekly brief goes out {DAYS[settings.digest_day]} at {String(settings.digest_hour).padStart(2, "0")}:00 {zoneName(settings.timezone)}.
               </>
             ) : (
               <>Your weekly brief is off.</>

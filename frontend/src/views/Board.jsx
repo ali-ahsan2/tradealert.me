@@ -241,7 +241,7 @@ export default function Board() {
   const [priceCols, setPriceCols] = useState(ls.get("ta_board_px") === "1");
   const [howOpen, setHowOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
-  const [tabsRef, tabsScroll] = useSideScroll([strategies]);
+  const [tabsRef, tabsScroll] = useSideScroll([strategies, full]);
 
   useEffect(() => {
     cached("/strategies").then((d) => setStrategies(d.strategies)).catch(() => setStrategies([]));
@@ -550,37 +550,42 @@ export default function Board() {
 
       {simple ? notices.slice(0, 1) : notices}
 
-      <div className="lens">
-        <span className="lens-label">Strategy</span>
-        <div
-          className="tabs"
-          role="tablist"
-          aria-label="Strategy"
-          ref={tabsRef}
-          data-scroll={tabsScroll.can ? "1" : undefined}
-          data-end={tabsScroll.end ? "1" : undefined}
-        >
-          {strategyRow.map((s) => {
-            const st = statusOf(s);
-            return (
-              <span key={s.key} className={`tab ${s.key === strategy ? "on" : ""}`} role="presentation">
-                <button type="button" role="tab" className="tab-main" aria-selected={s.key === strategy} onClick={() => setStrategy(s.key)}>
-                  <Monogram size={20}>{s.monogram}</Monogram>
-                  {s.label}
-                </button>
-                {full && st === "not_running" && <span className="chip chip-plain">not running yet</span>}
-                {full && st === "provisional" && <span className="chip chip-prov">No record yet</span>}
-              </span>
-            );
-          })}
-        </div>
-      </div>
+      {/* One strategy running: Simple skips the strip and its sentence (DESIGN_V6 §7); Full keeps them. */}
+      {(full || strategyRow.length > 1) && (
+        <>
+          <div className="lens">
+            <span className="lens-label">Strategy</span>
+            <div
+              className="tabs"
+              role="tablist"
+              aria-label="Strategy"
+              ref={tabsRef}
+              data-scroll={tabsScroll.can ? "1" : undefined}
+              data-end={tabsScroll.end ? "1" : undefined}
+            >
+              {strategyRow.map((s) => {
+                const st = statusOf(s);
+                return (
+                  <span key={s.key} className={`tab ${s.key === strategy ? "on" : ""}`} role="presentation">
+                    <button type="button" role="tab" className="tab-main" aria-selected={s.key === strategy} onClick={() => setStrategy(s.key)}>
+                      <Monogram size={20}>{s.monogram}</Monogram>
+                      {s.label}
+                    </button>
+                    {full && st === "not_running" && <span className="chip chip-plain">not running yet</span>}
+                    {full && st === "provisional" && <span className="chip chip-prov">No record yet</span>}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
 
-      {strat.plain && strat.plain.one_line && (
-        <div className="lens-plain">
-          <PlainStatusChip status={status} />
-          <StrategyPlainCard strategy={strat} compact />
-        </div>
+          {strat.plain && strat.plain.one_line && (
+            <div className="lens-plain">
+              <PlainStatusChip status={status} />
+              <StrategyPlainCard strategy={strat} compact />
+            </div>
+          )}
+        </>
       )}
 
       {full && strip && (
@@ -614,11 +619,6 @@ export default function Board() {
             <SplitPill on={cleared} onClick={() => setCleared((c) => !c)} term="hard_filter" count={clearedCount}>
               Passed every rule
             </SplitPill>
-          )}
-          {earningsSoon > 0 && (
-            <Link to="/calendar?days=14" className="fchip" title="Names with a dated earnings print inside 14 days">
-              Earnings in 14 days <span className="count">{earningsSoon}</span>
-            </Link>
           )}
           {industryControl}
           {rows.length > 1 && sortControl}
@@ -913,7 +913,7 @@ export default function Board() {
                 )}
               </div>
               <div className="actions">
-                <button type="button" className="btn btn-primary btn-sm" onClick={() => openUpgrade("names")}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => openUpgrade("names")}>
                   Show me the plans — {dollars(nextTier.price_monthly_cents)}/mo
                 </button>
                 <span>

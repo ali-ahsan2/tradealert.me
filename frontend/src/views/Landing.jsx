@@ -78,7 +78,7 @@ function Hero({ me, pulse, run, industries, loading, ctaRef }) {
             <span>It watches my industries.</span> <span>It tells me before the move is over.</span>
           </h1>
           <p className="ld-lede">
-            <b className="ld-measured">Measured, not predicted.</b> Pick your industries. Every morning it rates every name in them and tells you the day a
+            <b className="ld-measured">Measured, not predicted.</b> Pick your industries. Every morning it rates every name in them. It tells you the day a
             fact changes.
           </p>
           <div className="ld-actions" ref={ctaRef}>
@@ -363,15 +363,15 @@ function Record({ record }) {
 const WHO = [
   {
     title: "You already follow an industry.",
-    body: "You know the names. What you lack is the morning: which of them changed, which filed, which has a date coming. Home is that morning, every day, in plain words.",
+    body: "You know the names. What you lack is the morning: which changed, which filed, which has a date. Home is that morning, every day.",
   },
   {
     title: "You want to be told, not to watch.",
-    body: "Watch the names, choose the facts you care about, and get on with your day. When the cost to borrow doubles or short interest crosses a line, the message arrives the same day.",
+    body: "Watch the names, choose the facts, and get on with your day. When the cost to borrow doubles, the message arrives the same day.",
   },
   {
     title: "You want the working shown.",
-    body: "Every score says how much data it had and what the missing data did to it. Every alert names its fact. Every figure carries a source and a date you can check.",
+    body: "Every score says how much data it had. Every alert names its fact. Every figure carries a source and a date you can check.",
   },
 ];
 

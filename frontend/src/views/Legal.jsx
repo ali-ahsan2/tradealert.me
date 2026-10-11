@@ -261,7 +261,7 @@ const PRIVACY = [
     h: "Cookies and local storage",
     p: [
       "No tracking cookies. Your browser keeps your session token and your display " +
-        "preferences (theme, Simple or Full) in local storage, so the product remembers you " +
+        "preferences (theme, Simple or More detail) in local storage, so the product remembers you " +
         "between visits. Clearing site data signs you out.",
     ],
   },

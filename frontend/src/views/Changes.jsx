@@ -7,7 +7,7 @@ import { CTA, changeSentence } from "../lib/plain.js";
 import { HOME_ROWS } from "../lib/caps.js";
 import { useMode } from "../lib/mode.js";
 import { openUpgrade } from "../lib/upgrade.js";
-import ScoreBadge from "../components/ScoreBadge.jsx";
+import ScoreBadge, { BandText } from "../components/ScoreBadge.jsx";
 import BandBar from "../components/BandBar.jsx";
 import Pin from "../components/Pin.jsx";
 import NotifyButton from "../components/NotifyButton.jsx";
@@ -126,8 +126,16 @@ function ChangeList({ title, hint, list, kind, vs, k, pinned, onPin, simple }) {
               </p>
             </div>
             <div className="tl-acts">
-              {r.now ? <ScoreBadge band={r.now.band} value={r.now.value} present={r.now.present} total={r.now.total} /> : <span className="chip chip-plain">not scored</span>}
-              <Pin symbol={r.symbol} pinned={pinned.has(r.symbol)} onChange={onPin} />
+              {r.now ? (
+                simple ? (
+                  <BandText band={r.now.band} value={r.now.value} present={r.now.present} total={r.now.total} />
+                ) : (
+                  <ScoreBadge band={r.now.band} value={r.now.value} present={r.now.present} total={r.now.total} />
+                )
+              ) : (
+                <span className="chip chip-plain">not scored</span>
+              )}
+              <Pin symbol={r.symbol} pinned={pinned.has(r.symbol)} onChange={onPin} className="full-only" />
               <NotifyButton symbol={r.symbol} compact />
             </div>
           </div>
@@ -295,14 +303,14 @@ export default function Changes() {
               <Link to={`/strategies/${strat.key}`}>How it hunts</Link>
             </Notice>
           )}
-          <div className="boardhead">
+          <div className="boardhead full-only">
             <b>{strat.label}</b>
             <PlainStatusChip status={statusOf(strat)} />
             <span>
               {shortDate(d.prev_run.as_of, tz)} → {dateTime(d.as_of, tz)}
             </span>
             <span>{plural(s.compared, "name")} compared</span>
-            {vs !== "prev" && <span className="xs faint">(oldest run inside the window, or the oldest on record when history is shorter)</span>}
+            {vs !== "prev" && <span className="xs faint">(the oldest scoring inside the window, or the oldest on record when history is shorter)</span>}
           </div>
 
           <div className="tiles full-only">

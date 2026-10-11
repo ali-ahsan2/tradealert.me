@@ -409,7 +409,7 @@
 }
 
 .pcard-d {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-base);
   color: var(--ink-muted);
   line-height: 1.45;
 }

@@ -6,9 +6,10 @@ import { dateTime, pct, plural, shortDate, weekStart, weekday } from "../lib/fmt
 import { EVIDENCE } from "../lib/evidence.js";
 import { CTA } from "../lib/plain.js";
 import { HOME_ROWS } from "../lib/caps.js";
+import { dayMonth } from "../lib/record.js";
 import { useMode } from "../lib/mode.js";
 import { openUpgrade } from "../lib/upgrade.js";
-import ScoreBadge from "../components/ScoreBadge.jsx";
+import ScoreBadge, { BandText } from "../components/ScoreBadge.jsx";
 import NotifyButton, { invalidateRules } from "../components/NotifyButton.jsx";
 import Explain from "../components/Explain.jsx";
 import ScreenHead from "../components/ScreenHead.jsx";
@@ -178,7 +179,7 @@ export default function Calendar() {
                       <div className="cal-row" key={`${r.symbol}-${r.date}`}>
                         <div className="cal-when">
                           <span className="cal-day">{weekday(r.date)}</span>
-                          <span className="cal-date mono">{r.date.slice(5)}</span>
+                          <span className="cal-date">{dayMonth(r.date)}</span>
                           <span className={`xs ${r.days >= 0 && r.days <= 3 ? "soon" : "faint"}`}>{plainDays(r.days)}</span>
                         </div>
                         <div className="cal-who">
@@ -205,7 +206,11 @@ export default function Calendar() {
                         </div>
                         <div className="cal-score">
                           {r.band ? (
-                            <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} />
+                            simple ? (
+                              <BandText band={r.band} value={r.value} present={r.components_present} total={r.components_total} />
+                            ) : (
+                              <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} />
+                            )
                           ) : (
                             <span className="chip chip-plain">No score</span>
                           )}
@@ -295,7 +300,25 @@ export default function Calendar() {
                 ? "No real dated event on your names resolved in the last 45 days."
                 : `How each name moved after its dated event. A hit means it ${EVIDENCE.hitDefinition}, inside the window ${EVIDENCE.window}.`}
             </p>
-            {d.recent.length > 0 && (
+            {d.recent.length > 0 && simple && (
+              <ul className="namelist">
+                {d.recent.map((r) => (
+                  <li className="nameline" key={`${r.symbol}-${r.date}-${r.kind}`}>
+                    <Link className="sym" to={`/stock/${r.symbol}`}>
+                      {r.symbol}
+                    </Link>
+                    <span className="small">
+                      {kindPlain(r.kind)} on {dayMonth(r.date)}:{" "}
+                      {!r.resolved
+                        ? "the five-session window is still open."
+                        : `${pct(r.max_move_pct)} at the high, closed ${pct(r.close_move_pct)}; ${r.hit ? "moved" : "did not move"}${r.days_to_move != null ? ` in ${r.days_to_move}d` : ""}.`}
+                    </span>
+                    <span className="spacer" />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {d.recent.length > 0 && !simple && (
               <div className="tscroll">
                 <table className="hf reactions">
                   <thead>

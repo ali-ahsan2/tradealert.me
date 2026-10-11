@@ -5,7 +5,7 @@ import { useMe } from "../lib/me.jsx";
 import { alertsLabel, industriesLabel, plural, tzGuess } from "../lib/fmt.js";
 import { useMode } from "../lib/mode.js";
 import { DEFAULT_TRIGGERS, TRIGGER_PLAIN } from "../lib/glossary.js";
-import { CTA, firesSentence, verdict } from "../lib/plain.js";
+import { CTA, firesSentence, list, verdict } from "../lib/plain.js";
 import { fetchPulse, tallySentence } from "../lib/record.js";
 import { openUpgrade } from "../lib/upgrade.js";
 import Explain from "../components/Explain.jsx";
@@ -149,7 +149,7 @@ function WatchForMe({ symbol, pinned, onPin }) {
         className="btn btn-primary pn-btn"
         disabled={busy}
         onClick={go}
-        title={`Keep ${symbol} on my watchlist and tell me when it has a ${plainList.join(", a ")}.`}
+        title={`Keep ${symbol} on my watchlist and tell me the day a fact changes on it: ${list(plainList)}.`}
       >
         <Bell />
         <span>{busy ? "One moment…" : CTA.WATCH_FOR_ME}</span>

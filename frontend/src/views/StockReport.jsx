@@ -577,6 +577,7 @@ export default function StockReport({ symbol }) {
   }
 
   // Why, as three plain bullets.
+  const capped = (names) => (names.length <= 3 ? plainList(names) : `${plainList(names.slice(0, 3))} and ${names.length - 3} more`);
   const lifted = components.filter((c) => inputStatus(c)[0] === "up").map(inputName);
   const weighed = components.filter((c) => inputStatus(c)[0] === "down").map(inputName);
   const noData = [
@@ -588,15 +589,17 @@ export default function StockReport({ symbol }) {
   if (s) {
     whyBullets.push(
       <>
-        <b>What lifted it:</b> {lifted.length ? `${plainList(lifted)}.` : "nothing stood out."}
+        <b>What lifted it:</b> {lifted.length ? `${capped(lifted)}.` : "nothing stood out."}
       </>
     );
-    const held = [];
-    if (weighed.length) held.push(plainList(weighed));
-    if (noData.length) held.push(`no data yet for ${plainList(noData)}`);
+    // Three names at most, then a count; missing data is a count of all the inputs seen here.
+    const inputsTotal = lifted.length + weighed.length + noData.length;
+    const heldSentence = weighed.length ? `${capped(weighed)}.` : "nothing weighed on it.";
+    const noDataSentence = noData.length ? ` No data yet for ${noData.length} of ${inputsTotal} inputs.` : " Every input had data.";
     whyBullets.push(
       <>
-        <b>What held it back or had no data:</b> {held.length ? `${held.join("; ")}.` : "nothing weighed on it, and every input had data."}
+        <b>What held it back:</b> {heldSentence}
+        {noDataSentence}
       </>
     );
   }
@@ -1459,7 +1462,7 @@ export default function StockReport({ symbol }) {
                   More about {strat.label} →
                 </Link>
               </div>
-              <StrategyPlainCard strategy={stratPlain} />
+              <StrategyPlainCard strategy={stratPlain} compact={simple} />
             </section>
           )}
 

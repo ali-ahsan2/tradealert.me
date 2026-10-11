@@ -127,7 +127,7 @@ details.acc > .acc-body { padding: 0 0 var(--s-4); }
 .help-term:target { outline: 2px solid var(--accent); }
 
 /* Hints: a short muted line under a control or table. */
-.hint { font-size: var(--fs-xs); color: var(--ink-muted); margin: var(--s-1) 0 0; line-height: 1.45; }
+.hint { font-size: var(--fs-sm); color: var(--ink-muted); margin: var(--s-1) 0 0; line-height: 1.45; }
 
 /* HIT/MISS is a measured outcome, not a hard-filter verdict: no colour. */
 .outcome { font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; color: var(--ink-muted); white-space: nowrap; }

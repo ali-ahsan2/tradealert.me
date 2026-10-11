@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 
 export const MODES = [
   ["simple", "Simple"],
-  ["full", "Full"],
+  ["full", "More detail"],
 ];
 const KEY = "ta_mode";
 

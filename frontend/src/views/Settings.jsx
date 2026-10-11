@@ -272,7 +272,7 @@ export default function Settings() {
                     {CTA.STOP_WATCHING}
                   </button>
                 ) : (
-                  <button className="btn btn-primary btn-sm" disabled={!canFollow} onClick={() => follow(i.key)}>
+                  <button className="btn btn-secondary btn-sm" disabled={!canFollow} onClick={() => follow(i.key)}>
                     Watch for me
                   </button>
                 )}
@@ -411,7 +411,7 @@ export default function Settings() {
       <Section id="plan" title="My plan">
         <div className="plan-card">
           <div className="plan-top">
-            <span className="tierchip mono">{(tier ? tier.label : "Free").toUpperCase()}</span>
+            <span className="tierchip mono">{tier ? tier.label : "Free"}</span>
             <span className="price">
               {tier ? `${dollars(tier.price_monthly_cents)}/mo` : "$0/mo"}
               {ent.subscription && ent.subscription.current_period_end ? ` · renews ${shortDate(ent.subscription.current_period_end)}` : ""}
@@ -608,7 +608,7 @@ function PhoneField({ settings, onSave, status }) {
       <div className="row">
         <input id="phone" className="input mono" value={v} placeholder="+1 555 000 0000" onChange={(e) => setV(e.target.value)} style={{ flex: 1 }} />
         <button className="btn btn-secondary btn-sm" onClick={() => onSave(v)} disabled={v === (settings.phone_number || "")}>
-          Save
+          Save my number
         </button>
       </div>
       <span className="help">{settings.phone_verified ? "Verified." : "Unverified numbers receive nothing until confirmed."}</span>
@@ -626,7 +626,7 @@ function WebhookField({ settings, disabled, onSave, status }) {
       <div className="row">
         <input id="webhook-url" className="input mono" value={v} placeholder="https://" disabled={disabled} onChange={(e) => setV(e.target.value)} style={{ flex: 1 }} />
         <button className="btn btn-secondary btn-sm" disabled={disabled || v === (settings.webhook_url || "")} onClick={() => onSave(v)}>
-          Save
+          Save my webhook
         </button>
       </div>
       <span className="save-status" aria-live="polite">

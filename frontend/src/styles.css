@@ -519,9 +519,9 @@ table.data th {
   border-radius: var(--r-pill);
   background: var(--info-fill);
   color: var(--info);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   text-decoration: none;
 }
 
@@ -2835,10 +2835,10 @@ table.hf th.num {
 
 .welcome-k {
   margin: 0 0 var(--s-2);
-  font-size: var(--fs-xs);
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--ink-faint);
 }
 
@@ -4067,7 +4067,7 @@ a.tile:hover {
   gap: 6px;
   min-height: 30px;
   padding: 0 var(--s-3);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--r-pill);
   background: var(--surface);
   color: var(--ink-muted);
@@ -4314,8 +4314,8 @@ table.data.screen-table .name-cell .xs {
 
 .cal-day {
   font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--ink-muted);
 }
 
