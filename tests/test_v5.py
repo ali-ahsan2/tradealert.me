@@ -23,7 +23,7 @@ def _user(prefix, industries):
     token = body["token"]
     psql(f"UPDATE users SET verified=TRUE WHERE email='{email}';")
     for key in industries:
-        post("/me/industries", {"industry_key": key}, token)
+        post("/me/industries", {"key": key}, token)
     return email, token
 
 
