@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
-import { Link } from "../lib/router.jsx";
+import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { useMode } from "../lib/mode.js";
+import { openUpgrade } from "../lib/upgrade.js";
+import { fetchRecord } from "../lib/record.js";
+import { useReveal } from "../lib/motion.js";
 import { DAYS, age, dateTime, delta, inDays, plural, score as fmtScore, shortDate, signed, tone } from "../lib/fmt.js";
 import { TRIGGER_PLAIN } from "../lib/glossary.js";
 import { changeSentence, nextStep, triggerLabel, triggerSentence } from "../lib/plain.js";
@@ -13,7 +16,8 @@ import Icon from "../components/Icons.jsx";
 import Pin from "../components/Pin.jsx";
 import Explain from "../components/Explain.jsx";
 import NotifyButton, { useRulesFor } from "../components/NotifyButton.jsx";
-import { AgeChip, Empty, ErrorCard, Skeleton } from "../components/ui.jsx";
+import { YoudHaveKnown, YourRecord } from "../components/RecordCard.jsx";
+import { AgeChip, Empty, ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
 import "./overview.css";
 
 // Home as a daily brief (DESIGN_V4.md §6). The page reads top to bottom
@@ -166,9 +170,9 @@ function NameLine({ r, right, href }) {
 }
 
 // Section shell: a card with a plain heading, a muted note and one link out.
-function Section({ id, title, note, more, children }) {
+function Section({ id, title, note, more, children, className = "", sectionRef }) {
   return (
-    <section className="card brief-sec" aria-labelledby={id}>
+    <section className={`card brief-sec ${className}`} aria-labelledby={id} ref={sectionRef}>
       <div className="brief-head">
         <div className="brief-head-l">
           <h2 id={id}>{title}</h2>
@@ -179,6 +183,40 @@ function Section({ id, title, note, more, children }) {
       {children}
     </section>
   );
+}
+
+// A section that fades and rises 8px the first time it scrolls into view
+// (DESIGN_V5 §5); a no-op under reduced motion.
+function RevealSection(props) {
+  const [ref, seen] = useReveal();
+  return <Section {...props} sectionRef={ref} className={`reveal ${seen ? "in" : ""}`} />;
+}
+
+const WELCOME_KEY = "ta_welcome_done";
+
+// The first-brief banner (DESIGN_V5 §4.4): this month in your industries,
+// counted from the record, then what you are watching. A clause whose
+// number is not on hand is dropped, never estimated.
+function firstBriefSentence(record, w) {
+  const parts = [];
+  if (record && record.told && record.missed) {
+    const t = record.told.summary;
+    const m = record.missed.summary;
+    const fired = t.fired + m.fired;
+    if (fired > 0) {
+      // the two tallies may share a name, so the names count is exact only
+      // when one of them is empty
+      const names = t.fired === 0 ? m.names : m.fired === 0 ? t.names : null;
+      const measured = t.measured + m.measured;
+      let s = `This month in your industries: ${plural(fired, "alert")} fired${names != null ? ` on ${plural(names, "name")}` : ""}`;
+      if (measured > 0) s += `; ${t.moved_10 + m.moved_10} moved 10%+ within five sessions`;
+      parts.push(`${s}.`);
+    } else {
+      parts.push("No alert has fired in your industries this month yet.");
+    }
+  }
+  if (w && w.count != null) parts.push(`You are watching ${plural(w.count, "name")}.`);
+  return parts.join(" ");
 }
 
 function InlineError({ what, onRetry }) {
@@ -335,6 +373,34 @@ export default function Overview() {
   const [mktOpen, setMktOpen] = useState(full);
   useEffect(() => setMktOpen(full), [full]);
 
+  // the record: told, missed, beyond (DESIGN_V5 §3)
+  const [record, setRecord] = useState(null);
+  const [recErr, setRecErr] = useState(null);
+  const [recReload, setRecReload] = useState(0);
+
+  // ?welcome=1 (set by onboarding) shows the first-brief banner once
+  const q = useQuery();
+  const [welcomeDone, setWelcomeDone] = useState(() => {
+    try {
+      return localStorage.getItem(WELCOME_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const welcome = q.get("welcome") === "1" && !welcomeDone;
+  const dismissWelcome = () => {
+    setWelcomeDone(true);
+    try {
+      localStorage.setItem(WELCOME_KEY, "1");
+    } catch {
+      /* the banner just won't be remembered */
+    }
+    const qs = new URLSearchParams(window.location.search);
+    qs.delete("welcome");
+    const rest = qs.toString();
+    navigate(`${window.location.pathname}${rest ? `?${rest}` : ""}`, { replace: true });
+  };
+
   const locked = Boolean(me && me.tier && me.tier.alerts_limit === 0);
 
   useEffect(() => {
@@ -395,6 +461,24 @@ export default function Overview() {
       alive = false;
     };
   }, [reload, wlReload]);
+
+  useEffect(() => {
+    let alive = true;
+    setRecErr(null);
+    fetchRecord(30)
+      .then((x) => alive && setRecord(x))
+      .catch((e) => alive && setRecErr(e));
+    return () => {
+      alive = false;
+    };
+  }, [reload, recReload]);
+
+  // a plan change made in the upgrade sheet (sandbox) re-briefs in place
+  useEffect(() => {
+    const onPlan = () => setReload((n) => n + 1);
+    window.addEventListener("plan:changed", onPlan);
+    return () => window.removeEventListener("plan:changed", onPlan);
+  }, []);
 
   const onPin = (sym, on) => {
     setPinnedSet((s) => {
@@ -554,8 +638,17 @@ export default function Overview() {
   const unreadNow = recentEvents ? recentEvents.filter((e) => e.read === false).length : a.unread;
   const pickRows = picks && picks.slice(0, PREVIEW_ROWS);
 
+  const recReady = Boolean(record || recErr);
+
   return (
     <div className="wrap brief">
+      {welcome && recReady && (
+        <Notice tone="info" className="welcome" onDismiss={dismissWelcome}>
+          <p>
+            <b>Your first brief.</b> {firstBriefSentence(record, w)}
+          </p>
+        </Notice>
+      )}
       <div className="pagehead">
         <div className="brief-title">
           <h1>Your brief</h1>
@@ -668,6 +761,14 @@ export default function Overview() {
                   ? `${changes.summary.cleared} passed every filter and ${changes.summary.failed} failed one. `
                   : ""}
                 <Link to="/changes">See every change</Link>.
+                {changes.planClamped && changes.more > 0 && (
+                  <>
+                    {" "}
+                    <button type="button" className="btn-quiet hint-up" onClick={() => openUpgrade("names")}>
+                      See what the next plan lists
+                    </button>
+                  </>
+                )}
               </p>
             )}
           </Section>
@@ -692,9 +793,9 @@ export default function Overview() {
                 </p>
                 <p className="muted small">Alerts start on the Basic plan: each one is emailed to you with the fact that fired it.</p>
                 <div className="actrow">
-                  <Link to="/pricing" className="btn btn-primary btn-sm">
-                    See plans
-                  </Link>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => openUpgrade("alerts")}>
+                    See plans with alerts
+                  </button>
                   <Link to="/board" className="btn btn-secondary btn-sm">
                     Pin names meanwhile
                   </Link>
@@ -784,6 +885,49 @@ export default function Overview() {
             )}
           </Section>
 
+          {/* 3b. You'd have known: the misses, with the lead time ----------- */}
+          <RevealSection
+            id="br-known"
+            title="You'd have known"
+            note="alerts on names in your industries you were not watching, last 30 days"
+            more={
+              <Link to="/alerts?tab=outcomes" className="more">
+                Outcomes →
+              </Link>
+            }
+          >
+            {recErr ? (
+              <InlineError what="your record" onRetry={() => setRecReload((n) => n + 1)} />
+            ) : !record ? (
+              <Skeleton rows={2} height={64} />
+            ) : (
+              <>
+                <YoudHaveKnown record={record} />
+                {record.method && <p className="hint full-only">{record.method}</p>}
+              </>
+            )}
+          </RevealSection>
+
+          {/* 3c. Your record: told, then what the price did ----------------- */}
+          <RevealSection
+            id="br-rec"
+            title="Your record"
+            note="alerts you were told about, and the five sessions after"
+            more={
+              <Link to="/alerts" className="more">
+                All alerts →
+              </Link>
+            }
+          >
+            {recErr ? (
+              <InlineError what="your record" onRetry={() => setRecReload((n) => n + 1)} />
+            ) : !record ? (
+              <Skeleton rows={2} height={64} />
+            ) : (
+              <YourRecord record={record} topPinned={topPinned} canAlert={!locked} />
+            )}
+          </RevealSection>
+
           {/* 4. Coming up --------------------------------------------------- */}
           <Section
             id="br-cal"
@@ -831,6 +975,14 @@ export default function Overview() {
               <p className="hint">
                 {d.catalysts.next_14d - d.catalysts.upcoming.length} more in your industries; your plan shows the top {Math.min(5, K)}.{" "}
                 <Link to="/calendar?days=14">Open the calendar</Link>.
+                {d.catalysts.next_14d > K && (
+                  <>
+                    {" "}
+                    <button type="button" className="btn-quiet hint-up" onClick={() => openUpgrade("names")}>
+                      See what the next plan lists
+                    </button>
+                  </>
+                )}
               </p>
             )}
           </Section>

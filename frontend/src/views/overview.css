@@ -288,3 +288,35 @@
 .brief .xp-term[aria-expanded="true"] .chip {
   text-decoration-color: var(--accent);
 }
+
+/* v5 (DESIGN_V5 §4.4, §4.6): the first-brief banner and the way out of a
+   plan clamp. The record cards and the upgrade sheet carry their own
+   styles in components/upgrade.css. */
+
+/* first-brief banner: one dismissible notice above the title */
+.brief .welcome {
+  align-items: center;
+}
+
+.brief .welcome p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.brief .welcome .btn-quiet {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* a plan clamp's way out sits inline with the hint; the hit area is 44px
+   without inflating the line */
+.brief .hint .hint-up {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 6px;
+  margin: -12px 0;
+  font-size: var(--fs-xs);
+  vertical-align: middle;
+}
