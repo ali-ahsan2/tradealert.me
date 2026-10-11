@@ -119,3 +119,60 @@ user_id)` (migration 011).
   `components/UpgradeSheet.jsx`, `components/RecordCard.jsx`, `lib/upgrade.js`).
 - P-D Dossier, Alerts, Watchlist desire layer and optimistic actions.
 - P-E Shell, routing, code splitting, prefetch, motion tokens, docs, tests.
+
+## 8. What shipped
+
+Everything in §3–§7 landed on this branch; the differences from the plan are
+listed last.
+
+**Backend.** `app/record.py` with `/api/pulse` (anonymous, aggregate,
+ticker-less, cached five minutes per process, `Cache-Control: public`),
+`/api/me/record` (told, missed, beyond; `?symbol=` for one name, scoped like
+the dossier: a name outside the viewer's universe is a 404), and
+`digest_lines` for the weekly email. Migration 011 adds the two indexes.
+`/api/strategies`, `/api/industries` and `/api/runs/latest` carry cache
+headers. The verification email states the month's measured pulse; alert
+emails deep-link to the report; the digest ends with "Your week, measured".
+Five tests in `tests/test_v5.py` cover the pulse shape and bounds, record
+scoping (tickers clamped to the plan, counts beyond it), per-symbol scoping
+and auth. The suites present a distinct client address per test user so the
+signup limiter (five per hour per address) does not trip a long-lived dev
+server.
+
+**Frontend.**
+- Landing: dark hero on the live pulse (four counters that settle once),
+  "What you'd have been told" from the pulse examples (industry, trigger,
+  lead, move; no ticker), how it works with real product screens, the
+  record, who it is for, plans built from `/entitlements`, FAQ, final call
+  with the same measured line, a sticky phone bar.
+- Sign-up carries a pulse panel; onboarding states each industry's month
+  in numbers, locked industries open the upgrade sheet, and the last step
+  pins and arms alerts in one action, landing on Home with a welcome banner
+  (`?welcome=1`, dismissed once per browser).
+- Home gains "You'd have known" (told) and "Your record" (missed and
+  beyond) cards; the dossier gains "What you'd have known" for that name;
+  Alerts gains a "Your record" tab; Watchlist rows state the lead ("you
+  were told 5 sessions before a +9.7% peak"); Board, Find and Plans open
+  the upgrade sheet in place. Pin and notify are optimistic with roll-back.
+- Upgrade sheet (`components/UpgradeSheet.jsx`) opened through
+  `lib/upgrade.js` from anywhere, titled with the viewer's own missed count,
+  one primary action to checkout, "Compare plans" secondary, two sentences
+  of pitch at most. The plan chip and the Settings plan links use it too.
+- Motion: `useReveal` (one observer for the life of the component, reveal
+  on the first pixel, a fail-safe that shows the section only if the
+  observer never reports) and `useCountUp`; both respect reduced motion.
+- Performance: routes are code-split (dossier and its charting library load
+  on first use), dossier payloads prefetch on hover and focus, the main
+  bundle is 271 KB (80 KB gzipped) with the dossier a further 46 KB.
+
+**Deviations from the plan, stated.**
+- `moved_10` and `moved_20` count alerts, not names; a name alerted twice
+  that moved once counts twice. The copy says "alerts" everywhere it shows
+  them.
+- The landing's product screens are captured from the seeded development
+  account, so they carry seeded tickers and a seeded run date.
+- The pulse examples are the six largest measured moves (`max_5d ≥ 10`),
+  not a random sample; the section says "what you'd have been told", not
+  "a typical alert".
+- No countdowns, scarcity, testimonials or promised returns were added, as
+  §2 requires; the desire comes from the record alone.
