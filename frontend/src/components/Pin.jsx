@@ -12,9 +12,9 @@ import { Modal } from "./ui.jsx";
 // with a toast that names the way out, if the request fails. A 403 at
 // quota opens the quota card with two ways out, one of which costs nothing;
 // the paid one opens the upgrade sheet in place.
-// `label` shows words beside the star; `labels` is [off, on], defaulting
-// to "Watch" / "Watching" so a caller can ask "Watch this for me" instead.
-export default function Pin({ symbol, pinned, onChange, label = false, labels = [CTA.WATCH, CTA.WATCHING], className = "" }) {
+// `label` shows words beside the star: "Watch" / "Watching" unless the
+// caller passes `labels` as [off, on] (the dossier asks "Watch this for me").
+export default function Pin({ symbol, pinned, onChange, label = false, labels = null, className = "" }) {
   const inflight = useRef(false);
   const [quota, setQuota] = useState(null);
 
@@ -63,7 +63,7 @@ export default function Pin({ symbol, pinned, onChange, label = false, labels = 
             strokeLinejoin="round"
           />
         </svg>
-        {label && <span>{pinned ? labels[1] : labels[0]}</span>}
+        {label && <span>{labels ? (pinned ? labels[1] : labels[0]) : pinned ? CTA.WATCHING : CTA.WATCH}</span>}
       </button>
       {quota && (
         <Modal
