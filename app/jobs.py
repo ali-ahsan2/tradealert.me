@@ -1,8 +1,8 @@
 """Cron jobs (BUILD_SPEC stages 8 and 10): the alert sweep and the daily
 digest. Run via the cron table in deploy/crontab:
 
-  cd /opt/tradealert && .venv/bin/python -m app.jobs digest
-  cd /opt/tradealert && .venv/bin/python -m app.jobs sweep
+  cd /opt/tradealert.me && docker compose exec -T app python -m app.jobs digest
+  cd /opt/tradealert.me && docker compose exec -T app python -m app.jobs sweep
 
 Both are idempotent and safe to run back-to-back:
   sweep  - matches impersonal alert_events (last 24h) against armed rules,

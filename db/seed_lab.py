@@ -5,6 +5,10 @@ Run inside the app container after migrations:
 
     docker compose exec -T app python db/seed_lab.py
 
+The version records need an author: sign up the first admin before running
+this on a fresh database. Only db/bootstrap.py --fixture (DEV_FIXTURE=1, on
+a host checkout where db/seed_dev.py exists) creates the dev login itself.
+
 Idempotent. Version 1 is created once per strategy and never duplicated;
 scores are backfilled only when strategy_version_id is still NULL; fixture
 events are regenerated each run (they are explicitly synthetic and the Lab

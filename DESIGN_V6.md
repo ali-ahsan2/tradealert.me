@@ -205,16 +205,6 @@ matters and how to read it; plain labels beside technical ones; a glossary
 drawer; a "Start here" path for a new programmer. Raw JSON stays, behind a
 toggle, with a sentence above it.
 
-## 10. Packages
-
-Filled in from the code map (see §11) once the readers report; each package
-owns its files, builds clean, and is reviewed against this document before
-it merges.
-
-## 11. The code map
-
-Appended from the understand pass.
-
 ## 10. Packages, ownership and contracts
 
 Six packages run in parallel worktrees (wave 1), then one sweep (wave 2).
@@ -311,7 +301,9 @@ plan's coverage as a fact that opens the upgrade sheet; a how-this-works
 card shown until dismissed; everything else behind one "More on my names".
 
 **Lightness.** One sentence-case label style; no monospace in the
-subscriber product; body 16px; tables only in Full ("More detail"); Board,
+subscriber product; body 16px; tables only in Full ("More detail") on Board, Find, the
+Industry list, Coming up and the dossier, while My week and the Alerts
+record keep one capped table in Simple; Board,
 Find and the Industry list as name cards in Simple with ready-made screens
 and plain figures; the dossier opens with the verdict sentence and the
 chart, explains itself in three bullets, and keeps the rest behind one
@@ -339,7 +331,7 @@ account), buttons are requests (Alert me, Watch this for me, Show me the
 report, Take me to checkout), the three sentences recur on the landing, the
 consent screen, Home, Help and the tour, and the jargon table applies
 outside Full mode; the CTA and PLAIN_WORD maps live in `lib/plain.js` and
-thirty-one vocabulary tests keep the words from drifting.
+nineteen vocabulary tests keep the words from drifting.
 
 **The Lab.** A "What this lab is" panel with a start-here path, a head on
 every panel (what it shows, why it matters, how to read it), tooltips on
@@ -348,7 +340,9 @@ diffs in words with raw values behind a toggle, the floors stated where
 decisions are made and served from the API, and the server's own
 one-sentence verdict at the top of Versions. Nothing moved.
 
-**Verification.** 78 backend and vocabulary tests pass; the Playwright pass
+**Verification.** 86 backend and vocabulary tests pass on a database
+bootstrapped from scratch, and one skips where no compose container holds
+the reset link; the Playwright pass
 over nineteen screens in four contexts reports no console errors and no
 horizontal overflow; the consent journey was walked end to end; five
 adversarial reviews (journey, lightness, voice, legal, recipe) ran against

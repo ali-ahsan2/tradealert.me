@@ -77,17 +77,21 @@ Serve `preview-dist/` from any static host and open `preview.html`. Writes
 
 ## Tests
 
-The tests are live-API checks against a running server on `:8000` with a
-database they can reach through `docker compose exec postgres psql` (or
-set `POSTGRES_CMD` to another `psql` invocation):
+The tests are live-API checks against a running server (`API_BASE`,
+default `http://127.0.0.1:8000/api`) with a database they can reach through
+`docker compose exec postgres psql` (or set `POSTGRES_CMD` to another `psql`
+invocation, e.g. `psql postgresql://tradealert:dev-only-change-me@localhost:5432/tradealert`).
+Run them with pytest, so `tests/conftest.py` can give each test its own
+client address (the sign-up and log-in limiters are per address):
 
 ```sh
-python tests/test_404_uniformity.py
-python tests/test_account_flow.py
-python tests/test_product_v2.py
-python tests/test_product_v3.py
-python tests/test_lab.py
+pytest -q tests          # 86 passed, 1 skipped on a fresh `db/bootstrap.py --fixture` database
 ```
+
+The Lab suite signs in as `LAB_ADMIN_EMAIL` / `LAB_ADMIN_PASSWORD`, falling
+back to the dev fixture admin. `tests/test_v6_voice.py` reads the sources
+and needs no server; the reset-link test skips where no compose container
+holds the logged link.
 
 ## Deploy
 

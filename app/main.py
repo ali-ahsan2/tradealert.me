@@ -1,4 +1,8 @@
-"""Tradealert scaffold API: signup, login, me, verify. Mounted under /api."""
+"""App entrypoint: auth (sign-up with the consent tick, log-in, me, verify,
+unsubscribe), the public strategy, industry and run endpoints, board,
+dossier and search, the 403 consent_required gate shared with context.py,
+and the mounted product, account, billing, alerts and Lab routers. Mounted
+under /api; the SPA and /lab are served from static/."""
 import logging
 import os
 import re
