@@ -19,5 +19,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // `npm run dev` gives hot reload; the API stays on uvicorn at :8000
+    // (scripts/dev.sh), so proxy it rather than duplicating routes here.
+    proxy: {
+      "/api": "http://127.0.0.1:8000",
+    },
   },
 });

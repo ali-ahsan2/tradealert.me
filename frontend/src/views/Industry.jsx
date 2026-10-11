@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api, cached, getToken, toast } from "../api.js";
 import { Link, navigate } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
-import { coverage, dateTime, delta, deltaTone, industriesLabel, pct, price, score as fmtScore, shortDate } from "../lib/fmt.js";
+import { coverage, dateTime, delta, industriesLabel, pct, price, score as fmtScore, shortDate } from "../lib/fmt.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import BandBar from "../components/BandBar.jsx";
 import { EVIDENCE } from "../lib/evidence.js";
@@ -268,7 +268,7 @@ export default function Industry({ industryKey }) {
                           </span>
                           {r.components_present}/{r.components_total}
                         </td>
-                        <td className={`num c-delta ${deltaTone(r.delta_1d)}`} data-label="Δ">
+                        <td className="num c-delta" data-label="Δ">
                           {delta(r.delta_1d)}
                         </td>
                       </tr>

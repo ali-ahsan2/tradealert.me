@@ -40,7 +40,7 @@ export function AlertItem({ ev, tz, showSymbol = true, onRead }) {
       </div>
       <div className="r4">
         <Link to={`/stock/${ev.symbol}`} onClick={markRead}>
-          View report →
+          Open report →
         </Link>
         {unread && (
           <button className="btn-quiet" onClick={markRead}>

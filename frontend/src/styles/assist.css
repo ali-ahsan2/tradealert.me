@@ -1,0 +1,157 @@
+/* Newcomer assist layer (DESIGN_V4 §7): explainers, plain verdicts, the
+   Notify button, Simple/Full mode. Pure additions on top of styles.css. */
+
+/* Simple mode hides anything marked full-only; Full shows it. */
+html[data-mode="simple"] .full-only { display: none !important; }
+html[data-mode="full"] .simple-only { display: none !important; }
+
+/* Explain ---------------------------------------------------------------- */
+.xp { position: relative; display: inline; }
+.xp-term {
+  all: unset;
+  cursor: help;
+  text-decoration: underline dotted var(--ink-faint);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+.xp-term:hover, .xp-term[aria-expanded="true"] { text-decoration-color: var(--accent); color: inherit; }
+.xp-term:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.xp-q {
+  all: unset;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; margin-left: 4px; border-radius: 50%;
+  font: 700 11px/1 var(--font-sans); color: var(--ink-muted);
+  background: var(--surface-sunken); border: 1px solid var(--border);
+  cursor: pointer; vertical-align: middle;
+}
+.xp-q:hover, .xp-q[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+.xp-q:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.xp-pop {
+  position: absolute; top: calc(100% + 8px); z-index: 60;
+  display: block; width: min(320px, calc(100vw - 32px));
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface); color: var(--ink);
+  border-radius: var(--r-md); box-shadow: var(--shadow-lift);
+  border: 1px solid var(--border);
+  font: 400 var(--fs-sm)/1.5 var(--font-sans); text-align: left; white-space: normal;
+  text-decoration: none; letter-spacing: 0; text-transform: none;
+}
+.xp-left { left: 0; }
+.xp-right { right: 0; }
+.xp-h { display: block; font-weight: 700; margin-bottom: 4px; }
+.xp-b { display: block; color: var(--ink-muted); }
+.xp-see { display: block; margin-top: var(--s-2); font-size: var(--fs-xs); color: var(--ink-muted); }
+.xp-more { display: inline-block; margin-top: var(--s-2); font-size: var(--fs-xs); font-weight: 600; color: var(--accent); }
+th .xp-pop, .tile .xp-pop { font-weight: 400; }
+
+/* Plain verdict ---------------------------------------------------------- */
+/* block-level only: styles.css uses span.verdict for the PASS/FAIL word */
+div.verdict, section.verdict { margin: 0 0 var(--s-3); }
+.verdict-h { font-size: var(--fs-xl); font-weight: 700; line-height: 1.25; letter-spacing: -.01em; margin: 0 0 var(--s-2); }
+.verdict-d { margin: 0; color: var(--ink-muted); font-size: var(--fs-sm); line-height: 1.5; }
+.verdict-d + .verdict-d { margin-top: 2px; }
+@media (max-width: 600px) { .verdict-h { font-size: var(--fs-lg); } }
+
+/* Utility line: one sentence with real figures under a screen title. */
+.utility { margin: -4px 0 var(--s-4); color: var(--ink-muted); font-size: var(--fs-sm); line-height: 1.5; max-width: 72ch; }
+.utility b { color: var(--ink); font-weight: 600; }
+
+/* Next step card */
+.nextstep {
+  display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap;
+  padding: var(--s-3) var(--s-4); border-radius: var(--r-md);
+  background: var(--accent-soft, rgba(47,92,255,.08)); color: var(--ink);
+  font-size: var(--fs-sm);
+}
+.nextstep .nextstep-k { font-weight: 700; color: var(--accent); margin-right: 2px; }
+.nextstep .spacer { flex: 1; }
+
+/* Notify ----------------------------------------------------------------- */
+.btn-notify { gap: 6px; }
+.btn-notify svg { flex: none; }
+.btn-notify.on { color: var(--accent); }
+.btn-sm { padding: 6px 12px; font-size: var(--fs-sm); }
+
+/* Primary action row on a dossier, sticky on phones. */
+.actrow { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
+@media (max-width: 900px) {
+  .actrow.sticky {
+    position: sticky; bottom: calc(var(--bottombar-h, 64px) + 8px); z-index: 20;
+    margin: var(--s-3) 0; padding: var(--s-2);
+    background: var(--surface); border-radius: var(--r-pill);
+    box-shadow: var(--shadow-lift);
+  }
+  .actrow.sticky .btn, .actrow.sticky .btn-quiet { flex: 1; justify-content: center; display: inline-flex; }
+}
+
+/* Mode toggle */
+.modeseg { display: inline-flex; }
+.modeseg button { min-width: 60px; }
+.mode-note { font-size: var(--fs-xs); color: var(--ink-muted); margin: 4px 0 0; }
+
+/* Accordion sections (Details) */
+details.acc { border-top: 1px solid var(--border); padding: 0; }
+details.acc > summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-3) 0; font-weight: 600; font-size: var(--fs-base);
+}
+details.acc > summary::-webkit-details-marker { display: none; }
+details.acc > summary::after {
+  content: ""; margin-left: auto; width: 8px; height: 8px; flex: none;
+  border-right: 1.5px solid var(--ink-muted); border-bottom: 1.5px solid var(--ink-muted);
+  transform: rotate(45deg); transition: transform .15s;
+}
+details.acc[open] > summary::after { transform: rotate(-135deg); }
+details.acc > summary .sum-note { font-weight: 400; color: var(--ink-muted); font-size: var(--fs-sm); }
+details.acc > .acc-body { padding: 0 0 var(--s-4); }
+
+/* Tour / coachmarks */
+.tour-backdrop { position: fixed; inset: 0; z-index: 90; background: rgba(10,14,24,.45); }
+.tour {
+  position: fixed; z-index: 91; left: 50%; bottom: 24px; transform: translateX(-50%);
+  width: min(420px, calc(100vw - 32px)); padding: var(--s-4) var(--s-5);
+  background: var(--surface); color: var(--ink); border-radius: var(--r-lg); box-shadow: var(--shadow-lift);
+}
+.tour h3 { margin: 0 0 var(--s-2); font-size: var(--fs-lg); }
+.tour p { margin: 0 0 var(--s-3); color: var(--ink-muted); font-size: var(--fs-sm); line-height: 1.5; }
+.tour-steps { display: flex; gap: 6px; margin-right: auto; }
+.tour-steps i { width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong, var(--border)); }
+.tour-steps i.on { background: var(--accent); }
+.tour-foot { display: flex; align-items: center; gap: var(--s-2); }
+
+/* Help page */
+.help-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s-3); }
+.help-term { padding: var(--s-4); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); scroll-margin-top: 80px; }
+.help-term h3 { margin: 0 0 var(--s-1); font-size: var(--fs-base); }
+.help-term p { margin: 0; color: var(--ink-muted); font-size: var(--fs-sm); line-height: 1.5; }
+.help-term:target { outline: 2px solid var(--accent); }
+
+/* Hints: a short muted line under a control or table. */
+.hint { font-size: var(--fs-xs); color: var(--ink-muted); margin: var(--s-1) 0 0; line-height: 1.45; }
+
+/* Mode toggle in the header hides on narrow phones (it lives in the account menu too). */
+@media (max-width: 640px) { .apphead .modeseg-head { display: none; } }
+
+/* Plans: what you would be told, under each price. */
+.tutil { margin: var(--s-2) 0 0; font-size: var(--fs-xs); font-weight: 400; line-height: 1.45; color: var(--ink-muted); text-align: left; max-width: 26ch; }
+.plan .tutil { max-width: none; margin-bottom: var(--s-3); }
+
+/* Plans: one form per width, and the utility sentence tops each column. */
+@media (min-width: 900px) { .plans-cards.plans-mobile { display: none; } }
+.plans-table thead th { vertical-align: top; }
+
+/* HIT/MISS is a measured outcome, not a hard-filter verdict: no colour. */
+.outcome { font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; color: var(--ink-muted); white-space: nowrap; }
+
+/* The spelled-out provisional chip may wrap inside narrow cards. */
+.chip.chip-prov { max-width: 100%; white-space: normal; height: auto; line-height: 1.3; text-align: left; }
+
+/* Scroll containers inside accordions must not widen the column. */
+details.acc > .acc-body { min-width: 0; max-width: 100%; }
+details.acc > .acc-body .tscroll { max-width: 100%; }
+
+/* Desktop: the rail already carries the plan chip and the account menu. */
+@media (min-width: 900px) {
+  .app.authed .apphead-right .tierchip,
+  .app.authed .apphead-right .acct { display: none; }
+}

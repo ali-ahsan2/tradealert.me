@@ -1473,7 +1473,7 @@ function LabApp() {
     <>
       <div className="labbar">
         <span className="mark">LB</span>
-        <span className="muted">Lab</span>
+        <span className="surface-name">Analysis engine</span>
         <nav className="labnav">
           <button
             className={screen === "strategies" || STRATEGY_SCREENS.includes(screen) ? "active" : ""}
@@ -1552,6 +1552,24 @@ function LabApp() {
         )}
         {screen === "reports" && <ReportsScreen />}
         {screen === "log" && <LogScreen />}
+      </div>
+      <div className="labstatus" role="status" aria-label="Engine status">
+        <span className="live">ENGINE</span>
+        <span>
+          strategies <b>{options.length || "—"}</b>
+        </span>
+        <span>
+          fixture events <b>{strategies ? strategies.events_total : "—"}</b>
+        </span>
+        <span>
+          screen <b>{screen.toUpperCase()}</b>
+          {strat && STRATEGY_SCREENS.includes(screen) ? <> · <b>{strat}</b></> : null}
+        </span>
+        <span className="spacer" />
+        <span>synthetic rows never leave this surface</span>
+        <span>
+          <b>?</b> guide
+        </span>
       </div>
     </>
   );
