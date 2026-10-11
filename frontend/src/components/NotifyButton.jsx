@@ -1,16 +1,20 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { api, toast } from "../api.js";
 import { Link, navigate } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
+import { openUpgrade } from "../lib/upgrade.js";
 import { DEFAULT_TRIGGERS, TRIGGER_PLAIN } from "../lib/glossary.js";
 import { Modal } from "./ui.jsx";
 
 // One tap to be told about a name. Arms the three default triggers over
-// email, the facts a newcomer most wants to hear about. Every refusal from
-// the API (unverified email, a plan with no alerts, a plan at its quota)
-// opens a short card that says what we would watch and the way out, in
-// that order; the price is never the first sentence. Rules are shared
-// across every button on the page through one cached request.
+// email, the facts a newcomer most wants to hear about. The bell fills the
+// moment it is tapped (DESIGN_V5 §5) and goes back, with a card or a toast
+// that names the way out, if the API refuses. Every refusal (unverified
+// email, a plan with no alerts, a plan at its quota) opens a short card
+// that says what we would watch and the way out, in that order; the price
+// is never the first sentence, and the paid way out opens the upgrade
+// sheet in place. Rules are shared across every button on the page through
+// one cached request.
 
 let rulesCache = { t: 0, p: null };
 const TTL = 30000;
@@ -60,13 +64,20 @@ function Bell({ on }) {
 export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, label = "Notify me", onLabel = "Notifying", compact = false, className = "" }) {
   const { me } = useMe();
   const rules = useRulesFor(symbol, Boolean(me));
-  const [busy, setBusy] = useState(false);
+  const inflight = useRef(false);
+  // optimistic: on from the tap until the shared rules confirm or refuse it
+  const [assumed, setAssumed] = useState(false);
   const [card, setCard] = useState(null); // {kind, message}
   const armedKeys = new Set((rules || []).map((r) => r.trigger_key));
-  const on = rules ? triggers.every((k) => armedKeys.has(k)) : false;
+  const confirmed = rules ? triggers.every((k) => armedKeys.has(k)) : false;
+  const on = confirmed || assumed;
   const anyArmed = armedKeys.size > 0;
   const limit = me && me.tier ? me.tier.alerts_limit : null;
   const plainList = triggers.map((k) => (TRIGGER_PLAIN[k] ? TRIGGER_PLAIN[k][0].toLowerCase() : k));
+
+  useEffect(() => {
+    if (confirmed) setAssumed(false);
+  }, [confirmed]);
 
   const arm = async (e) => {
     if (e) {
@@ -74,10 +85,12 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
       e.stopPropagation();
     }
     if (!me) return navigate(`/signup?next=${encodeURIComponent(`/stock/${symbol}`)}`);
+    if (inflight.current) return undefined;
     if (on || (anyArmed && rules)) return navigate(`/alerts?symbol=${encodeURIComponent(symbol)}`);
     if (!me.verified) return setCard({ kind: "verify" });
     if (limit === 0) return setCard({ kind: "plan" });
-    setBusy(true);
+    inflight.current = true;
+    setAssumed(true);
     let armed = 0;
     try {
       for (const k of triggers) {
@@ -89,13 +102,17 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
       }
       toast(`Watching ${symbol}. We'll email you on ${plainList.length} triggers.`);
     } catch (err) {
+      // roll back to what the server holds; the shared rules reload below
+      setAssumed(false);
       if (err.status === 403 && /verify/i.test(err.detail || "")) setCard({ kind: "verify" });
       else if (err.status === 403) setCard({ kind: "quota", message: err.detail, armed });
-      else toast(err.detail || "That didn't work. Try again.");
+      else if (err.status === 0) toast(`Alerts on ${symbol} were not set: you appear to be offline. Check your connection and tap again.`);
+      else toast(`${err.detail || `Couldn't set alerts on ${symbol}.`} Tap again to retry.`);
     } finally {
-      setBusy(false);
+      inflight.current = false;
       invalidateRules();
     }
+    return undefined;
   };
 
   // In a list the button is quiet (tinted) so forty rows do not shout; as a
@@ -106,11 +123,16 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
     ? `Alerts on for ${symbol}: ${plainList.join(", ")}. Tap to manage.`
     : `Tell me when ${symbol} has a ${plainList.join(", a ")}.`;
 
+  const seePlans = (reason) => {
+    setCard(null);
+    openUpgrade(reason, { symbol });
+  };
+
   return (
     <>
-      <button type="button" className={cls} aria-pressed={on} title={title} disabled={busy} onClick={arm}>
+      <button type="button" className={cls} aria-pressed={on} title={title} onClick={arm}>
         <Bell on={on} />
-        <span>{busy ? "Setting up…" : text}</span>
+        <span>{text}</span>
       </button>
       {card && card.kind === "verify" && (
         <Modal
@@ -137,9 +159,9 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
               <Link to="/watchlist" className="btn btn-secondary" onClick={() => setCard(null)}>
                 Pin it instead
               </Link>
-              <Link to="/pricing" className="btn btn-primary" onClick={() => setCard(null)}>
+              <button type="button" className="btn btn-primary" onClick={() => seePlans("alerts")}>
                 See plans
-              </Link>
+              </button>
             </>
           }
         >
@@ -158,9 +180,9 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
               <Link to="/alerts" className="btn btn-secondary" onClick={() => setCard(null)}>
                 Manage alerts
               </Link>
-              <Link to="/pricing" className="btn btn-primary" onClick={() => setCard(null)}>
+              <button type="button" className="btn btn-primary" onClick={() => seePlans("alerts")}>
                 See plans
-              </Link>
+              </button>
             </>
           }
         >

@@ -8,6 +8,7 @@ import { PLAIN_FIELD } from "../lib/glossary.js";
 import { changeSentence } from "../lib/plain.js";
 import { useRowNav } from "../lib/rownav.js";
 import { useMode } from "../lib/mode.js";
+import { openUpgrade } from "../lib/upgrade.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Pin from "../components/Pin.jsx";
 import Spark, { Move } from "../components/Spark.jsx";
@@ -983,9 +984,9 @@ export default function Screen() {
                   </div>
                   {nextTier && (
                     <div className="actions">
-                      <Link to="/pricing" className="btn btn-primary btn-sm">
+                      <button type="button" className="btn btn-primary btn-sm" onClick={() => openUpgrade("names")}>
                         See plans — {dollars(nextTier.price_monthly_cents)}/mo
-                      </Link>
+                      </button>
                     </div>
                   )}
                 </div>
