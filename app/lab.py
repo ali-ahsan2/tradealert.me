@@ -43,7 +43,7 @@ def _admin_404():
 def _require_admin(creds):
     if creds is None:
         _admin_404()
-    row = user_from_creds(creds)
+    row = user_from_creds(creds, require_consent=False)  # non-admins 404 below; admins are exempt
     if not user_is_admin(row):
         _admin_404()
     return row

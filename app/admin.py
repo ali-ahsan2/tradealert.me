@@ -19,7 +19,7 @@ bearer = HTTPBearer(auto_error=False)
 
 
 def _require_admin(creds):
-    row = user_from_creds(creds)
+    row = user_from_creds(creds, require_consent=False)  # non-admins 404 below; admins are exempt
     if not user_is_admin(row):
         raise HTTPException(403, "admin only")
     return row

@@ -18,6 +18,7 @@ finding (STRATEGY_ANALYSIS_TOOL.md section 6.7). A real ingest path swaps
 the fixtures in without changing anything downstream.
 """
 import json
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
@@ -47,7 +48,10 @@ def _admin_id(cur):
     # the dev fixture so the fixture's events survive the synthetic purge
     # below. The version records need an author, so create the dev admin
     # login the fixture creates anyway (same helper, so the two agree).
-    from seed_dev import ensure_dev_user  # sibling script in db/
+    if os.environ.get("DEV_FIXTURE") != "1":
+        raise SystemExit("no account exists yet: sign up the first admin before seeding the Lab "
+                         "(or run db/bootstrap.py --fixture on a development database)")
+    from seed_dev import ensure_dev_user  # sibling script in db/, not in the image
     return ensure_dev_user(cur)
 
 

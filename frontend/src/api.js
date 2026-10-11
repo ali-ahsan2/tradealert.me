@@ -99,7 +99,10 @@ export async function api(path, opts = {}) {
       // the account has not ticked the current terms (DESIGN_V6 §6): the
       // API serves nothing but /me, consent, export and delete until it
       // has, so every screen hands over to the one that asks
-      if (window.location.pathname !== "/welcome") navigate("/welcome", { replace: true });
+      if (window.location.pathname !== "/welcome") {
+        const back = window.location.pathname + window.location.search;
+        navigate(`/welcome?next=${encodeURIComponent(back)}`, { replace: true });
+      }
     }
     if (res.status === 429) {
       throw new ApiError(429, "Too many requests. Try again in a minute.", body);

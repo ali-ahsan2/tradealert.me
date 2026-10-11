@@ -4,6 +4,8 @@ import { Link, Redirect, navigate, safeNext, useQuery } from "../lib/router.jsx"
 import { currentTermsVersion, hasConsent, useMe } from "../lib/me.jsx";
 import { CONSENT_LABEL } from "../lib/legal.js";
 import FinePrint from "../components/FinePrint.jsx";
+import { downloadText } from "../lib/fmt.js";
+import { DeleteModal } from "./Settings.jsx";
 
 // The consent gate (DESIGN_V6 §6, §10): one screen, one tick, one button.
 // Shown in place of any app screen until the account has accepted the
@@ -18,6 +20,17 @@ export default function Welcome() {
   const next = safeNext(q.get("next"));
   const [tick, setTick] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Someone who will not tick can still take their data or leave (§6, §12):
+  // both endpoints accept an account that has not consented.
+  const exportData = async () => {
+    try {
+      const doc = await api("/me/export");
+      downloadText(`tradealert-export-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(doc, null, 2), "application/json");
+    } catch (e) {
+      toast(e.detail || "Couldn't export right now.");
+    }
+  };
   const toHome = !next || next === "/home" || next.startsWith("/home?");
 
   if (me && hasConsent(me)) return <Redirect to={next || "/home"} />;
@@ -74,8 +87,21 @@ export default function Welcome() {
           >
             Sign out
           </button>
+          {me && (
+            <>
+              {" · "}
+              <button type="button" className="linkbtn" onClick={exportData}>
+                Export my data
+              </button>
+              {" · "}
+              <button type="button" className="linkbtn" onClick={() => setConfirmDelete(true)}>
+                Delete my account
+              </button>
+            </>
+          )}
         </p>
       </form>
+      {confirmDelete && <DeleteModal email={me ? me.email : ""} onClose={() => setConfirmDelete(false)} />}
     </div>
   );
 }

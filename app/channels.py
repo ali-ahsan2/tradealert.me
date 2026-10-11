@@ -46,8 +46,8 @@ def send_push(subscription_json, title, body):
 
 
 def send_sms(to_number, body):
-    sid = os.environ.get("TWILIO_SID")
-    token = os.environ.get("TWILIO_TOKEN")
+    sid = os.environ.get("TWILIO_ACCOUNT_SID") or os.environ.get("TWILIO_SID")
+    token = os.environ.get("TWILIO_AUTH_TOKEN") or os.environ.get("TWILIO_TOKEN")
     from_num = os.environ.get("TWILIO_FROM")
     if not (sid and token and from_num and to_number):
         log.info("sms skipped (Twilio not configured) to %s", to_number)

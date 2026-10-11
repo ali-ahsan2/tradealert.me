@@ -559,7 +559,7 @@ function PasswordForm() {
   );
 }
 
-function DeleteModal({ email, onClose }) {
+export function DeleteModal({ email, onClose }) {
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");

@@ -193,6 +193,12 @@ def run_daily_digest():
                     continue
                 if _now().hour < hour or hour is None:
                     continue
+                # the cron and the worker both call this pass: one digest
+                # per account per run, however often the pass runs
+                with conn.cursor() as c2:
+                    c2.execute("SELECT 1 FROM digests WHERE user_id = %s AND run_id = %s", (uid, run_id))
+                    if c2.fetchone():
+                        continue
                 _send_digest(conn, uid, run_id, email_addr)
     finally:
         conn.close()

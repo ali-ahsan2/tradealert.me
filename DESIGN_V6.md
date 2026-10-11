@@ -387,6 +387,14 @@ re-captured). The ones that changed a §10 decision or a shipped claim:
   switch reads Simple / More.
 - The not-running strategies disappear from Simple pickers and lists and
   are never counted as "provisional"; rates print only at ten or more.
+- The gate applies to the app, not to delivery. Alerts, SMS, push and the
+  weekly brief keep reaching accounts configured under the previous terms
+  until their next visit, because the person asked for them and every
+  message carries the long fine print and an unsubscribe link; the API
+  refuses those same accounts every screen until they tick. If counsel
+  wants delivery held too, the two recipient queries in `app/jobs.py` take
+  one more condition on the accepted terms version. The consent screen
+  also offers export and deletion, so declining is a real option.
 
 **Deviations, stated.**
 - The account menu reads My account, My plan, Help rather than §10's

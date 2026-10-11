@@ -21,6 +21,7 @@ MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 
 def main():
     conn = get_conn()
+    conn.set_client_encoding("UTF8")  # the files carry non-ASCII comments
     try:
         with conn.cursor() as cur:
             cur.execute(
