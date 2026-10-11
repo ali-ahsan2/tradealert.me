@@ -32,15 +32,15 @@ CONSENT_LABEL = (
 # Plain words for each alert trigger, for email subjects and push titles
 # (DESIGN_V6 §7: plain word first). Mirrors TRIGGER_PLAIN in lib/glossary.js.
 TRIGGER_PLAIN = {
-    "borrow_fee_2x": "Borrow fee doubles",
+    "borrow_fee_2x": "The cost to borrow doubles",
     "si_cross": "Short interest crosses a line",
     "volume_3x": "Unusual volume",
-    "catalyst_dated": "Catalyst coming up",
-    "s3_424b": "Dilution filing",
-    "band_change": "Score changes band",
+    "catalyst_dated": "A dated event ahead",
+    "s3_424b": "A share-sale filing",
+    "band_change": "The rating word changes",
     "insider_buying": "Insiders buying",
     "social_surge": "Social chatter spikes",
-    "contract_award": "Contract award",
+    "contract_award": "A contract award",
 }
 
 

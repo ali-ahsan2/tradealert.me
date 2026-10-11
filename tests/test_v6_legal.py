@@ -239,7 +239,7 @@ def test_alert_and_digest_emails_carry_fine_print_and_unsubscribe():
         assert legal.FINE_PRINT_LONG in m["body"], m["subject"]
         assert m["body"].rstrip().endswith(f"Change how you reach me: {ORIGIN}/settings")
         assert "/unsubscribe?" not in m["body"]
-    assert alert["subject"] == "[tradealert] LEU: Borrow fee doubles", alert["subject"]
+    assert alert["subject"] == "[tradealert] LEU: The cost to borrow doubles", alert["subject"]
     assert f"Show me the report: {ORIGIN}/stock/LEU" in alert["body"]
     assert legal.FINE_PRINT_LONG in alert["body"]
     assert f"{ORIGIN}/unsubscribe?token=" in alert["body"]

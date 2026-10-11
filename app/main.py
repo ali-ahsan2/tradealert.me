@@ -210,7 +210,7 @@ def _send_verification(email, user_id):
             conn.close()
         a = pz["alerts"]
         if a["fired"]:
-            pulse_line = (f"This month across the universe: {a['fired']} alerts fired on {a['names']} names; "
+            pulse_line = (f"This month across every industry we watch: {a['fired']} alerts fired on {a['names']} names; "
                           f"{a['moved_10']} of the {a['measured']} measured moved 10%+ within five sessions. "
                           "Measured, not predicted.\n\n")
     except Exception as e:  # noqa: BLE001 - the pulse never blocks a signup
