@@ -49,6 +49,7 @@ def _wait_for_db(seconds=60):
 def _apply_sql(path):
     sql = path.read_text(encoding="utf-8")
     conn = get_conn()
+    conn.set_client_encoding("UTF8")
     try:
         conn.autocommit = True
         with conn.cursor() as cur:
@@ -98,7 +99,7 @@ def main():
     if args.fixture:
         # seed_lab clears every synthetic backtest event before writing its own,
         # so it runs first and the dev fixture's events survive
-        _run(DB / "seed_lab.py")
+        _run(DB / "seed_lab.py", {"DEV_FIXTURE": "1"})
         _run(DB / "seed_dev.py", {"DEV_FIXTURE": "1"})
         _run(DB / "seed_demo.py")
     print("bootstrap complete")

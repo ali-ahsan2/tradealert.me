@@ -3,27 +3,28 @@ import { api, getToken } from "../api.js";
 import { navigate } from "../lib/router.jsx";
 import { score as fmtScore } from "../lib/fmt.js";
 
-// ⌘K / Ctrl+K: one box that finds a name in the subscriber's universe or
+// ⌘K / Ctrl+K: one box that finds a name in the subscriber's industries or
 // jumps to a screen. Opened by the shortcut, the nav button, or a
-// "palette:open" event from anywhere.
+// "palette:open" event from anywhere. The nav shows four destinations; the
+// palette keeps every screen under the same names (DESIGN_V6 §10).
 
 const SCREENS = [
-  { label: "Home · your brief", to: "/overview", hint: "g o" },
-  { label: "Board", to: "/board", hint: "g b" },
-  { label: "Find names", to: "/screen", hint: "g x" },
-  { label: "Find · names that cleared every hard filter", to: "/screen?hf=pass" },
-  { label: "Find · earnings within 14 days", to: "/screen?earnings_within=14&sort=earnings" },
-  { label: "What changed since the last run", to: "/changes", hint: "g c" },
-  { label: "Coming up · dated events", to: "/calendar", hint: "g l" },
-  { label: "Watchlist", to: "/watchlist", hint: "g w" },
+  { label: "Home", to: "/home", hint: "g o" },
   { label: "Alerts", to: "/alerts", hint: "g a" },
-  { label: "Alerts · the ones you have on", to: "/alerts?tab=armed" },
-  { label: "How it works and glossary", to: "/help" },
-  { label: "Strategies and evidence", to: "/strategies", hint: "g t" },
-  { label: "Digests", to: "/digests", hint: "g d" },
-  { label: "Compare names", to: "/compare" },
-  { label: "Account", to: "/settings", hint: "g s" },
-  { label: "Plans", to: "/pricing" },
+  { label: "Alerts · alerting me", to: "/alerts?tab=armed" },
+  { label: "Watchlist", to: "/watchlist", hint: "g w" },
+  { label: "Explore · Ranked", to: "/board", hint: "g b" },
+  { label: "Explore · Find", to: "/screen", hint: "g x" },
+  { label: "Find · names that passed every must-pass rule", to: "/screen?hf=pass" },
+  { label: "Find · earnings within 14 days", to: "/screen?earnings_within=14&sort=earnings" },
+  { label: "Explore · What changed", to: "/changes", hint: "g c" },
+  { label: "Explore · Coming up", to: "/calendar", hint: "g l" },
+  { label: "Strategies", to: "/strategies", hint: "g t" },
+  { label: "My week", to: "/digests", hint: "g d" },
+  { label: "Compare for me", to: "/compare" },
+  { label: "Help", to: "/help" },
+  { label: "My account", to: "/settings", hint: "g s" },
+  { label: "My plan", to: "/pricing", hint: "g p" },
 ];
 
 export default function CommandPalette() {
@@ -126,7 +127,7 @@ export default function CommandPalette() {
           aria-label="Search"
         />
         <ul className="palette-list" role="listbox">
-          {items.length === 0 && <li className="palette-empty">No matches in your universe.</li>}
+          {items.length === 0 && <li className="palette-empty">No names match in your industries or watchlist.</li>}
           {items.map((it, i) => (
             <li
               key={`${it.kind}-${it.label}`}

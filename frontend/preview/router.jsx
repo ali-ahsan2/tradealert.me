@@ -22,6 +22,8 @@ export function usePath() {
     const onChange = () => setPath(current());
     window.addEventListener("popstate", onChange);
     window.addEventListener("hashchange", onChange);
+    // a <Redirect> in the first render navigates before this listener exists
+    onChange();
     return () => {
       window.removeEventListener("popstate", onChange);
       window.removeEventListener("hashchange", onChange);
@@ -43,6 +45,10 @@ export function useQuery() {
   return new URLSearchParams(path.split("?")[1] || "");
 }
 
+export function safeNext(raw) {
+  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : null;
+}
+
 export function Link({ to, children, className, replace, ...rest }) {
   const href = to.startsWith("#") ? to : `#${to}`;
   return (
@@ -59,6 +65,13 @@ export function Link({ to, children, className, replace, ...rest }) {
       {children}
     </a>
   );
+}
+
+export function Redirect({ to, replace = true }) {
+  useEffect(() => {
+    navigate(to, { replace });
+  }, [to, replace]);
+  return null;
 }
 
 export function RequireAuth({ children }) {

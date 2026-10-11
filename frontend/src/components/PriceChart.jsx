@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createChart, CrosshairMode } from "lightweight-charts";
 import { api } from "../api.js";
 import { age, pct, price, seriesChange, shortDate } from "../lib/fmt.js";
+import { TRIGGER_PLAIN } from "../lib/glossary.js";
 import { ErrorCard, Skeleton } from "./ui.jsx";
 
 // TradingView's own charting library, so crosshair, zoom and pan behave the
@@ -31,12 +32,26 @@ const TRIGGER_GLYPH = {
   contract_award: "$",
 };
 
+// "B the cost to borrow doubles, SI short interest crosses a line": the
+// legend reads each glyph in the alert's own plain words (glossary.js) and
+// names only the alerts that fired inside the chart's window.
+function glyphLegend(alerts) {
+  const seen = new Set((alerts || []).map((a) => a.trigger_key));
+  return Object.entries(TRIGGER_GLYPH)
+    .filter(([k]) => seen.has(k))
+    .map(([k, g]) => `${g} ${TRIGGER_PLAIN[k] ? TRIGGER_PLAIN[k][0].toLowerCase() : k}`)
+    .join(", ");
+}
+
 function token(name, fallback) {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return v || fallback;
 }
 
-export default function PriceChart({ symbol, initialDays = 90 }) {
+// `placeholder` renders while the first series loads (the dossier passes
+// its 90-day sparkline so the page never shows an empty 340px box);
+// `lead` is an optional node for the card title, in place of "Price".
+export default function PriceChart({ symbol, initialDays = 90, placeholder = null, lead = null }) {
   const box = useRef(null);
   const [range, setRange] = useState(() => RANGES.find(([, d]) => d === initialDays) || RANGES[2]);
   const days = range[1];
@@ -188,7 +203,7 @@ export default function PriceChart({ symbol, initialDays = 90 }) {
   return (
     <section className="card chartwrap" aria-labelledby="chart-h">
       <div className="card-title">
-        <h2 id="chart-h">Price</h2>
+        <h2 id="chart-h">{lead || "Price"}</h2>
         <div className="row">
           <div className="seg" role="group" aria-label="Range">
             {RANGES.map((r) => (
@@ -197,17 +212,17 @@ export default function PriceChart({ symbol, initialDays = 90 }) {
               </button>
             ))}
           </div>
-          <button className="btn-quiet" aria-pressed={candles} onClick={() => setCandles((v) => !v)}>
+          <button className="btn-quiet full-only" aria-pressed={candles} onClick={() => setCandles((v) => !v)}>
             {candles ? "Line" : "Candles"}
           </button>
-          <button className="btn-quiet" aria-pressed={markers} onClick={() => setMarkers((m) => !m)}>
+          <button className="btn-quiet full-only" aria-pressed={markers} onClick={() => setMarkers((m) => !m)}>
             {markers ? "Hide events" : "Show events"}
           </button>
         </div>
       </div>
 
       {err && <ErrorCard error={err} onRetry={() => setReload((n) => n + 1)} title="Couldn't load price history." />}
-      {!err && loading && !data && <Skeleton rows={1} height={340} />}
+      {!err && loading && !data && (placeholder || <Skeleton rows={1} height={340} />)}
 
       {data && data.bars.length === 0 && (
         <p className="muted small" style={{ padding: "var(--s-5) 0", marginBottom: 0 }}>
@@ -242,9 +257,11 @@ export default function PriceChart({ symbol, initialDays = 90 }) {
             <span>
               <i className="lg-dot pos" /> E = dated event, filled when the name then moved 20% or traded 3x volume
             </span>
-            <span>
-              <i className="lg-arrow" /> alert fired (B borrow, SI short interest, V volume, C catalyst, F filing, Δ band, I insider, S social, $ contract)
-            </span>
+            {glyphLegend(data.alerts) && (
+              <span>
+                <i className="lg-arrow" /> an alert fired: {glyphLegend(data.alerts)}
+              </span>
+            )}
             <span className="spacer" />
             <span>{data.source.name}</span>
           </div>

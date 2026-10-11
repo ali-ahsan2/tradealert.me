@@ -1,88 +1,140 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import "./styles/assist.css";
 import { applyTheme } from "./lib/theme.js";
 import { applyMode } from "./lib/mode.js";
-import { usePath, RequireAuth, Link } from "./lib/router.jsx";
+import { getToken } from "./api.js";
+import { Link, Redirect, RequireAuth, safeNext, usePath } from "./lib/router.jsx";
 import { MeProvider } from "./lib/me.jsx";
-import { Shell } from "./components/Shell.jsx";
+import { AppShell, BareShell, PublicShell } from "./components/Shell.jsx";
 import Board from "./views/Board.jsx";
-import StockReport from "./views/StockReport.jsx";
+const StockReport = lazy(() => import("./views/StockReport.jsx"));
 import Landing from "./views/Landing.jsx";
-import Auth from "./views/Auth.jsx";
+import Auth, { AuthDone } from "./views/Auth.jsx";
 import Watchlist from "./views/Watchlist.jsx";
 import Alerts from "./views/Alerts.jsx";
-import Pricing from "./views/Pricing.jsx";
-import Settings from "./views/Settings.jsx";
-import Onboarding from "./views/Onboarding.jsx";
-import Reset from "./views/Reset.jsx";
-import Legal from "./views/Legal.jsx";
-import Compare from "./views/Compare.jsx";
-import Strategies, { StrategyDetail } from "./views/Strategies.jsx";
-import Digests, { DigestView } from "./views/Digests.jsx";
-import Industry from "./views/Industry.jsx";
+const Pricing = lazy(() => import("./views/Pricing.jsx"));
+const Settings = lazy(() => import("./views/Settings.jsx"));
+const Onboarding = lazy(() => import("./views/Onboarding.jsx"));
+const Reset = lazy(() => import("./views/Reset.jsx"));
+const Legal = lazy(() => import("./views/Legal.jsx"));
+const Compare = lazy(() => import("./views/Compare.jsx"));
+const Strategies = lazy(() => import("./views/Strategies.jsx"));
+const StrategyDetail = lazy(() => import("./views/Strategies.jsx").then((m) => ({ default: m.StrategyDetail })));
+const Digests = lazy(() => import("./views/Digests.jsx"));
+const DigestView = lazy(() => import("./views/Digests.jsx").then((m) => ({ default: m.DigestView })));
+const Industry = lazy(() => import("./views/Industry.jsx"));
+const Welcome = lazy(() => import("./views/Welcome.jsx"));
+const Verified = lazy(() => import("./views/Verified.jsx"));
+const Unsubscribe = lazy(() => import("./views/Unsubscribe.jsx"));
 import Overview from "./views/Overview.jsx";
 import Screen from "./views/Screen.jsx";
 import Changes from "./views/Changes.jsx";
 import Calendar from "./views/Calendar.jsx";
-import Help from "./views/Help.jsx";
+const Help = lazy(() => import("./views/Help.jsx"));
 
 function NotFound() {
+  const home = getToken() ? "/home" : "/";
   return (
     <div className="wrap wrap-narrow">
       <div className="card state-card">
         <p className="state-title">This page does not exist.</p>
-        <p className="muted">Check the address, or go back to your Board.</p>
-        <Link to="/board" className="btn btn-secondary">
-          Go to the Board
+        <p className="muted">Check the address, or go home.</p>
+        <Link to={home} className="btn btn-secondary">
+          {getToken() ? "Open my Home" : "Back to tradealert.me"}
         </Link>
       </div>
     </div>
   );
 }
 
-const authed = (el) => <RequireAuth>{el}</RequireAuth>;
+// The route table (DESIGN_V6 §3, §10). The layout is a property of the
+// route, so a public page never wears the rail and nothing flashes while
+// /api/me loads. `match` is an exact path or a RegExp; `element` receives
+// the match, the query and the raw search string. `auth` wraps the page in
+// RequireAuth; `gate` applies the consent check in the bare layout; layout
+// "none" is for a pure redirect, which must run before any shell could hold
+// the page behind the account load or the consent gate.
+const ROUTES = [
+  // public
+  { match: "/", layout: "public", element: () => (getToken() ? <Redirect to="/home" /> : <Landing />) },
+  { match: "/about", layout: "public", element: () => <Landing /> },
+  { match: "/pricing", layout: "public", element: () => <Pricing /> },
+  { match: "/help", layout: "public", element: () => <Help /> },
+  { match: "/strategies", layout: "public", element: () => <Strategies /> },
+  { match: /^\/strategies\/([a-z0-9_]+)$/, layout: "public", element: (m) => <StrategyDetail strategyKey={m[1]} /> },
+  { match: /^\/industries\/([a-z0-9_]+)$/, layout: "public", element: (m) => <Industry industryKey={m[1]} /> },
+  { match: /^\/legal\/(terms|privacy|disclaimer)$/, layout: "public", element: (m) => <Legal page={m[1]} /> },
+  { match: "/login", layout: "public", element: (_m, q) => (getToken() ? <Redirect to={safeNext(q.get("next")) || "/home"} /> : <Auth mode="login" />) },
+  { match: "/signup", layout: "public", element: (_m, q) => (getToken() ? <Redirect to={safeNext(q.get("next")) || "/home"} /> : <Auth mode="signup" />) },
+  { match: "/reset", layout: "public", element: () => <Reset /> },
+  { match: "/verified", layout: "public", element: () => <Verified /> },
+  { match: "/unsubscribe", layout: "public", element: () => <Unsubscribe /> },
+  // bare
+  { match: "/onboarding", layout: "bare", auth: true, gate: true, element: () => <Onboarding /> },
+  { match: "/welcome", layout: "bare", auth: true, element: () => <Welcome /> },
+  { match: "/auth/done", layout: "bare", element: () => <AuthDone /> },
+  // app
+  { match: "/overview", layout: "none", element: (_m, _q, search) => <Redirect to={`/home${search}`} /> },
+  { match: "/home", layout: "app", auth: true, element: () => <Overview /> },
+  { match: /^\/board(\/|$)/, layout: "app", auth: true, element: () => <Board /> },
+  { match: "/screen", layout: "app", auth: true, element: () => <Screen /> },
+  { match: "/changes", layout: "app", auth: true, element: () => <Changes /> },
+  { match: "/calendar", layout: "app", auth: true, element: () => <Calendar /> },
+  { match: /^\/stock\/([^/?#]+)/, layout: "app", auth: true, element: (m) => <StockReport symbol={decodeURIComponent(m[1])} /> },
+  { match: "/watchlist", layout: "app", auth: true, element: () => <Watchlist /> },
+  { match: "/alerts", layout: "app", auth: true, element: () => <Alerts /> },
+  { match: "/compare", layout: "app", auth: true, element: () => <Compare /> },
+  { match: "/digests", layout: "app", auth: true, element: () => <Digests /> },
+  { match: /^\/digests\/(\d+)$/, layout: "app", auth: true, element: (m) => <DigestView id={Number(m[1])} /> },
+  { match: "/settings", layout: "app", auth: true, element: () => <Settings /> },
+];
 
-function Route({ path }) {
-  const [pathname] = path.split("?");
-  if (pathname === "/") return <Landing />;
-  if (pathname === "/overview") return authed(<Overview />);
-  if (pathname === "/board" || pathname.startsWith("/board/")) return authed(<Board />);
-  if (pathname === "/screen") return authed(<Screen />);
-  if (pathname === "/changes") return authed(<Changes />);
-  if (pathname === "/calendar") return authed(<Calendar />);
-  const stockMatch = pathname.match(/^\/stock\/([^/?#]+)/);
-  if (stockMatch) return authed(<StockReport symbol={decodeURIComponent(stockMatch[1])} />);
-  if (pathname === "/login") return <Auth mode="login" />;
-  if (pathname === "/signup") return <Auth mode="signup" />;
-  if (pathname === "/watchlist") return authed(<Watchlist />);
-  if (pathname === "/alerts") return authed(<Alerts />);
-  if (pathname === "/compare") return authed(<Compare />);
-  if (pathname === "/digests") return authed(<Digests />);
-  const digestMatch = pathname.match(/^\/digests\/(\d+)$/);
-  if (digestMatch) return authed(<DigestView id={Number(digestMatch[1])} />);
-  if (pathname === "/strategies") return <Strategies />;
-  const stratMatch = pathname.match(/^\/strategies\/([a-z0-9_]+)$/);
-  if (stratMatch) return <StrategyDetail strategyKey={stratMatch[1]} />;
-  const indMatch = pathname.match(/^\/industries\/([a-z0-9_]+)$/);
-  if (indMatch) return <Industry industryKey={indMatch[1]} />;
-  if (pathname === "/pricing") return <Pricing />;
-  if (pathname === "/help") return <Help />;
-  if (pathname === "/settings") return authed(<Settings />);
-  if (pathname === "/onboarding") return authed(<Onboarding />);
-  if (pathname === "/reset") return <Reset />;
-  const legalMatch = pathname.match(/^\/legal\/(terms|privacy|disclaimer)$/);
-  if (legalMatch) return <Legal page={legalMatch[1]} />;
-  return <NotFound />;
+function resolve(path) {
+  const [pathname, qs = ""] = path.split("?");
+  const search = qs ? `?${qs}` : "";
+  const q = new URLSearchParams(qs);
+  for (const r of ROUTES) {
+    const m = typeof r.match === "string" ? (pathname === r.match ? [pathname] : null) : pathname.match(r.match);
+    if (!m) continue;
+    const el = r.element(m, q, search);
+    return { ...r, node: r.auth ? <RequireAuth>{el}</RequireAuth> : el };
+  }
+  // an unknown address: public for a visitor, inside the app for a member
+  return { layout: getToken() ? "app" : "public", node: <NotFound /> };
 }
+
+function RouteFallback() {
+  return (
+    <div className="wrap" aria-busy="true">
+      <div className="sk" aria-hidden="true">
+        <div className="sk-row" style={{ height: 44 }} />
+        <div className="sk-row" style={{ height: 160 }} />
+        <div className="sk-row" style={{ height: 120 }} />
+      </div>
+    </div>
+  );
+}
+
+function NoShell({ children }) {
+  return children;
+}
+
+const SHELLS = { public: PublicShell, bare: BareShell, app: AppShell, none: NoShell };
 
 function App() {
   const path = usePath();
+  const route = resolve(path);
+  const Shell = SHELLS[route.layout] || PublicShell;
   return (
     <MeProvider>
-      <Shell>
-        <Route path={path} />
+      <Shell gate={route.gate}>
+        <Suspense fallback={<RouteFallback />}>
+          <div className="page-enter" key={path.split("?")[0]}>
+            {route.node}
+          </div>
+        </Suspense>
       </Shell>
     </MeProvider>
   );
@@ -90,4 +142,15 @@ function App() {
 
 applyTheme();
 applyMode();
+// A tab opened before a deploy may ask for a route chunk the new build no
+// longer ships. Reload once so it picks up the current index page.
+window.addEventListener("vite:preloadError", (e) => {
+  try {
+    if (sessionStorage.getItem("ta_reloaded_for_chunk")) return;
+    sessionStorage.setItem("ta_reloaded_for_chunk", "1");
+  } catch {}
+  e.preventDefault();
+  window.location.reload();
+});
+
 createRoot(document.getElementById("root")).render(<App />);

@@ -1,0 +1,37 @@
+/* Legal pages (DESIGN_V6 §6): plain prose, visible placeholders, one
+   operator note at the foot. Everything else comes from .prose in styles.css. */
+
+.legal-fine {
+  margin: 0 0 var(--s-6);
+  padding: var(--s-3) var(--s-4);
+  border-left: 3px solid var(--border-strong);
+}
+
+.legal-ph {
+  background: rgba(240, 180, 0, 0.22);
+  border-radius: 3px;
+  padding: 0 1px;
+  font-weight: 600;
+  color: inherit;
+}
+
+.prose .legal-list {
+  margin: 0 0 var(--s-3);
+  padding-left: 1.25em;
+}
+
+.prose .legal-list li {
+  margin-bottom: var(--s-1);
+}
+
+.legal-back {
+  margin-top: var(--s-6);
+}
+
+.legal-note {
+  margin-top: var(--s-6);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  color: var(--ink-faint);
+}

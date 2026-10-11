@@ -11,9 +11,10 @@ entire path runs offline against the seeded test user
 user upsert are identical to the live flow.
 
 Credentials come from env (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).
-Without them the button returns 503 instead of emitting a broken
-redirect, matching the pattern of the other optional integrations
-(Stripe, Twilio, SES).
+Without them /start sends the visitor back to the form it came from with
+?oauth=unavailable (the form answers in one line) instead of emitting a
+broken redirect or a bare JSON error; the other optional integrations
+(Stripe, Twilio, SES) answer 503 because only scripts call them.
 """
 import base64
 import hashlib
@@ -74,12 +75,27 @@ def _provider(provider):
     return provider, _PROVIDERS[provider]
 
 
+def _configured(conf):
+    return bool(os.environ.get(conf["client_id_env"])
+                and os.environ.get(conf["client_secret_env"]))
+
+
 def _client_creds(provider, conf):
     cid = os.environ.get(conf["client_id_env"])
     secret = os.environ.get(conf["client_secret_env"])
     if not cid or not secret:
         raise HTTPException(503, f"{conf['label']} sign in is not configured")
     return cid, secret
+
+
+def _unavailable_url(screen, next_path):
+    """Back to the sign-up or log-in form (whichever the button sat on) with
+    the flag the form shows as one line; `next` rides along."""
+    page = "signup" if screen == "signup" else "login"
+    params = {"oauth": "unavailable"}
+    if _safe_next(next_path):
+        params["next"] = _safe_next(next_path)
+    return f"/{page}?{urlencode(params)}"
 
 
 def _b64url(n):
@@ -91,9 +107,18 @@ def _redirect_uri(provider):
     return f"{base}/api/oauth/callback/{provider}"
 
 
-def _store_state(provider):
+def _safe_next(raw):
+    """Only a same-origin path may be carried through the sign-in; never an
+    absolute URL or a protocol-relative one."""
+    if raw and raw.startswith("/") and not raw.startswith("//"):
+        return raw
+    return ""
+
+
+def _store_state(provider, next_path=""):
     state = _b64url(24)
-    _pending[state] = {"provider": provider, "created_at": time.time()}
+    _pending[state] = {"provider": provider, "created_at": time.time(),
+                       "next": _safe_next(next_path)}
     return state
 
 
@@ -143,12 +168,13 @@ def _get_json(url, bearer):
         raise HTTPException(502, "provider profile fetch failed") from None
 
 
-def _profile_from_provider(conf, code):
+def _profile_from_provider(conf, code, code_verifier):
     cid, secret = _client_creds("google", conf)
     token = _post_form(conf["token_uri"], {
         "client_id": cid,
         "client_secret": secret,
         "code": code,
+        "code_verifier": code_verifier,
         "grant_type": "authorization_code",
         "redirect_uri": _redirect_uri("google"),
     })
@@ -168,6 +194,11 @@ def _profile_from_provider(conf, code):
 
 
 def _upsert_user(provider, profile):
+    """Returns (user_id, created): whether this sign-in made the row. Consent
+    is never recorded here (DESIGN_V6 §6): a GET link cannot prove a tick,
+    so every Google account meets /welcome, where the tick is recorded by an
+    authenticated POST /api/me/consent."""
+    created = False
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -196,19 +227,22 @@ def _upsert_user(provider, profile):
                          profile["name"], uid),
                     )
             if not uid:
+                cols = "email, name, provider, provider_id, verified"
+                vals = "%s, %s, %s, %s, %s"
+                args = [profile["email"], profile["name"], provider,
+                        profile["provider_id"], profile["verified"]]
                 cur.execute(
-                    "INSERT INTO users (email, name, provider, provider_id, "
-                    "verified) VALUES (%s, %s, %s, %s, %s) "
+                    f"INSERT INTO users ({cols}) VALUES ({vals}) "
                     "ON CONFLICT (provider, provider_id) WHERE provider IS NOT NULL "
                     "DO UPDATE SET name = EXCLUDED.name "
                     "RETURNING id",
-                    (profile["email"], profile["name"], provider,
-                     profile["provider_id"], profile["verified"]),
+                    args,
                 )
                 uid = cur.fetchone()[0]
+                created = True
             _provision(conn, uid)
             conn.commit()
-            return uid
+            return uid, created
     finally:
         conn.close()
 
@@ -231,7 +265,18 @@ def _provision(conn, user_id):
         )
 
 
-def _store_token_page(provider, token, name):
+def _done_url(created, next_path):
+    """The client's /auth/done decides the first screen (onboarding for an
+    account that follows no industries, else `next` or Home)."""
+    params = {}
+    if created:
+        params["new"] = "1"
+    if next_path:
+        params["next"] = next_path
+    return "/auth/done" + (f"?{urlencode(params)}" if params else "")
+
+
+def _store_token_page(provider, token, name, created=False, next_path=""):
     display_name = html.escape(name) if name else "this account"
     return HTMLResponse(
         '<!doctype html><html><head><meta charset="utf-8">'
@@ -244,19 +289,21 @@ def _store_token_page(provider, token, name):
         '<script>'
         "try{localStorage.setItem('ta_token',"
         f"{json.dumps(token)});}}catch(e){{}}\n"
-        "location.href='/board';"
+        f"location.replace({json.dumps(_done_url(created, next_path))});"
         "</script></body></html>"
     )
 
 
 @router.get("/api/oauth/start/{provider}")
-def oauth_start(provider: str):
+def oauth_start(provider: str, next: str = "", screen: str = ""):
     provider, conf = _provider(provider)
+    if not _DEV and not _configured(conf):
+        return RedirectResponse(_unavailable_url(screen, next), status_code=303)
     _prune_pending()
-    state = _store_state(provider)
+    state = _store_state(provider, next)
     if _DEV:
         return RedirectResponse(
-            f"/api/oauth/callback/{provider}?state={state}&dev=1",
+            f"/api/oauth/callback/{provider}?state={state}",
             status_code=302,
         )
     cid, _secret = _client_creds(provider, conf)
@@ -280,19 +327,24 @@ def oauth_start(provider: str):
 
 
 @router.get("/api/oauth/callback/{provider}")
-def oauth_callback(provider: str, code: str = "",
-                   state: str = "", dev: str | None = None):
+def oauth_callback(provider: str, code: str = "", state: str = ""):
     provider, conf = _provider(provider)
     entry = _pop_state(provider, state)
-    if not entry.get("code_verifier") and not (_DEV or dev == "1"):
-        raise HTTPException(400, "missing pkce verifier")
-    if _DEV or dev == "1":
+    # The fixed dev profile is a server-side switch (OAUTH_DEV_MODE=1), never
+    # something a caller can ask for: outside it every sign-in goes through
+    # the provider with the PKCE verifier stored at /start.
+    if _DEV:
         profile = dict(_DEV_PROFILES[provider])
     else:
+        if not entry.get("code_verifier"):
+            raise HTTPException(400, "missing pkce verifier")
         if not code:
             raise HTTPException(400, "missing authorization code")
-        profile = _profile_from_provider(conf, code)
-    uid = _upsert_user(provider, profile)
+        profile = _profile_from_provider(conf, code, entry["code_verifier"])
+    uid, created = _upsert_user(provider, profile)
     token = security.make_token(uid)
-    log.info("oauth %s sign-in: user %s (dev=%s)", provider, uid, _DEV or dev == "1")
-    return _store_token_page(provider, token, profile.get("name"))
+    log.info("oauth %s sign-in: user %s (new=%s, dev=%s)", provider, uid,
+             created, _DEV)
+    return _store_token_page(provider, token, profile.get("name"),
+                             created=created,
+                             next_path=entry.get("next", ""))

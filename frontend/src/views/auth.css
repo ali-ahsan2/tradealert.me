@@ -1,0 +1,217 @@
+/* Sign up and sign in (DESIGN_V5 §4, step 2): the form beside the live
+   pulse, so what fired this month stays in view while the account is made.
+   Additive to styles.css (.card, .form-card, .field, .btn-*); tokens only,
+   so dark mode follows. */
+
+.auth {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: var(--s-4) var(--s-4) var(--s-7);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-4);
+  align-items: start;
+}
+
+.auth .form-card {
+  max-width: none;
+  min-width: 0;
+}
+
+.auth .form-card h1 {
+  font-size: var(--fs-xl);
+  letter-spacing: -0.02em;
+}
+
+.auth .form-card .sub {
+  line-height: 1.5;
+}
+
+/* the one line under the button: plan facts, no promise */
+.auth-after {
+  margin: var(--s-3) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.auth-after b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.auth-links {
+  margin: var(--s-4) 0 0;
+}
+
+.auth-legal {
+  margin: var(--s-3) 0 0;
+  line-height: 1.5;
+}
+
+/* The pulse panel. On phones a slim strip above the form; on desktop a
+   quiet dark column beside it. In light mode it inverts the ink tokens; in
+   dark mode it is a raised surface, so it stays quiet rather than bright. */
+.auth-pulse {
+  --pulse-bg: var(--ink);
+  --pulse-fg: var(--bg);
+  --pulse-muted: var(--border-strong);
+  --pulse-faint: var(--ink-faint);
+  order: -1;
+  min-width: 0;
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-lg);
+  background: var(--pulse-bg);
+  color: var(--pulse-fg);
+  display: grid;
+  gap: var(--s-2);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .auth-pulse {
+    --pulse-bg: var(--surface-raised);
+    --pulse-fg: var(--ink);
+    --pulse-muted: var(--ink-muted);
+    --pulse-faint: var(--ink-faint);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+}
+
+:root[data-theme="dark"] .auth-pulse {
+  --pulse-bg: var(--surface-raised);
+  --pulse-fg: var(--ink);
+  --pulse-muted: var(--ink-muted);
+  --pulse-faint: var(--ink-faint);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.auth-pulse-k {
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pulse-muted);
+}
+
+.auth-pulse-nums {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-2) var(--s-3);
+}
+
+.auth-pulse-num {
+  min-width: 0;
+}
+
+.auth-pulse-num .n {
+  display: block;
+  font-size: var(--fs-lg);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.auth-pulse-num .l {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+  line-height: 1.3;
+  color: var(--pulse-muted);
+}
+
+/* short labels on the strip, full ones in the column */
+.auth-pulse-num .l-long {
+  display: none;
+}
+
+.auth-pulse-ex {
+  display: none;
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--pulse-muted);
+}
+
+.auth-pulse-ex b {
+  color: var(--pulse-fg);
+  font-weight: 600;
+}
+
+.auth-pulse-foot {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--s-3);
+  font-size: var(--fs-xs);
+  color: var(--pulse-faint);
+}
+
+.auth-pulse-foot .m {
+  font-weight: 700;
+  color: var(--pulse-fg);
+}
+
+.auth-pulse-empty {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--pulse-muted);
+}
+
+@media (min-width: 900px) {
+  .auth {
+    grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
+    gap: var(--s-6);
+    padding: var(--s-7) var(--s-5) var(--s-8);
+    min-height: calc(100vh - 56px - 160px);
+    align-content: center;
+    align-items: stretch;
+  }
+
+  .auth-pulse {
+    order: 0;
+    padding: var(--s-6);
+    border-radius: var(--r-xl);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--s-5);
+  }
+
+  .auth-pulse-nums {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-4);
+  }
+
+  .auth-pulse-num .n {
+    font-size: var(--fs-3xl);
+    letter-spacing: -0.03em;
+  }
+
+  .auth-pulse-num .l {
+    margin-top: 6px;
+    font-size: var(--fs-sm);
+  }
+
+  .auth-pulse-num .l-short {
+    display: none;
+  }
+
+  .auth-pulse-num .l-long {
+    display: block;
+  }
+
+  .auth-pulse-ex {
+    display: block;
+    padding-top: var(--s-4);
+    border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  }
+
+  .auth-pulse-foot {
+    font-size: var(--fs-sm);
+  }
+}

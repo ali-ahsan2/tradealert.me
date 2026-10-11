@@ -339,3 +339,120 @@
 .indcard .etf .xp-term {
   color: inherit;
 }
+
+/* ---------- onboarding, v5 (DESIGN_V5 §4, step 3) ---------- */
+
+/* the progress bar stretches with the column */
+.ob-steps .bar {
+  flex: 1 1 auto;
+  max-width: 240px;
+}
+
+.ob-steps .bar span {
+  flex: 1;
+  width: auto;
+}
+
+/* a step opens with its title focused; the ring belongs to controls */
+.ob-head h1:focus {
+  outline: none;
+}
+
+.ob-head .utility {
+  margin: 0 0 var(--s-3);
+}
+
+/* the industry's month, from the public pulse: counts, never tickers */
+.indcard .ind-pulse {
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* span.n, not b: styles.css lays .indcard b out as a flex row */
+.indcard .ind-pulse .n {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* what tends to fire here, said only once ten alerts have fired */
+.indcard .ind-fires {
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+
+/* the fine print sits under the footer's buttons, full width */
+.sticky-foot .ob-fine {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--fs-xs);
+}
+
+/* a card beyond the plan's limit opens the upgrade sheet instead of toggling */
+.indcard.locked {
+  border-style: dashed;
+  cursor: pointer;
+}
+
+.indcard.locked:hover {
+  border-color: var(--info);
+}
+
+.indcard.locked .desc,
+.indcard.locked .facts,
+.indcard.locked .ind-pulse {
+  opacity: 0.75;
+}
+
+.indcard .ind-lock {
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--info);
+}
+
+.ob-foot-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--s-2);
+  min-width: 0;
+}
+
+/* tap targets: 44px throughout the first run */
+.pick-act .pin-labelled,
+.pick-act .btn-sm,
+.pick-act .btn-quiet,
+.sticky-foot .btn-quiet,
+.ob-skip,
+.ob-seg button,
+.ob-pref > summary,
+.ob-foot-left .btn-quiet {
+  min-height: 44px;
+}
+
+.pick-act .pin-labelled {
+  padding: 0 var(--s-4);
+}
+
+/* the one obvious action on a name */
+.pick-act .pn-btn {
+  gap: 6px;
+}
+
+.pick-act .pn-btn svg {
+  flex: none;
+}
+
+.pn-notify {
+  display: inline-flex;
+}
+
+@media (max-width: 600px) {
+  .pick-act .pn-btn {
+    flex: 1 1 100%;
+  }
+}

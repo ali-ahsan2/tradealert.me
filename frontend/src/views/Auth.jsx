@@ -1,6 +1,24 @@
-import React, { useState } from "react";
-import { login, signup } from "../api.js";
-import { Link, navigate, useQuery } from "../lib/router.jsx";
+import React, { useEffect, useRef, useState } from "react";
+import { api, getToken, login, setToken } from "../api.js";
+import { Link, navigate, safeNext, useQuery } from "../lib/router.jsx";
+import { useMe } from "../lib/me.jsx";
+import { CONSENT_LABEL } from "../lib/legal.js";
+import { fetchPulse, leadPhrase } from "../lib/record.js";
+import { plainTriggerFromLabel } from "../lib/plain.js";
+import { useCountUp, useReveal } from "../lib/motion.js";
+import { pct, plural, shortDate } from "../lib/fmt.js";
+import FinePrint from "../components/FinePrint.jsx";
+import { Notice } from "../components/ui.jsx";
+import "./auth.css";
+
+// Sign up and log in (DESIGN_V5 §4, step 2; DESIGN_V6 §3, §6). The form
+// sits beside the live pulse: three counts from /api/pulse (anonymous,
+// aggregate, no tickers) so what fired this month stays in view while the
+// account is made. Sign-up carries the consent tick; the request sends
+// accept_terms: true and the API refuses without it. Every door opens on
+// the same first screen: a new account goes to onboarding, a returning one
+// to `next` or Home. Nothing on this screen promises anything; every number
+// is measured.
 
 function GoogleMark() {
   return (
@@ -13,19 +31,109 @@ function GoogleMark() {
   );
 }
 
-function safeNext(raw) {
-  // only same-origin paths; never an absolute URL from the query string
-  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : null;
+// One live number with its plain label; counts up once on reveal. A null
+// value (still loading) shows a dash, never a zero we did not measure.
+function Num({ value, short, long, active }) {
+  const n = useCountUp(value == null ? null : value, { active });
+  return (
+    <div className="auth-pulse-num">
+      <span className="n">{value == null ? "—" : n}</span>
+      <span className="l l-short">{short}</span>
+      <span className="l l-long">{long}</span>
+    </div>
+  );
+}
+
+// The pulse's first example: industry, trigger, date, the measured move and
+// the lead. No ticker; the public pulse carries none. Only the price move
+// takes colour.
+function Example({ e }) {
+  if (!e || e.max_5d == null) return null;
+  const lead = leadPhrase(e);
+  return (
+    <p className="auth-pulse-ex">
+      <b>{e.industry_label}</b> · {plainTriggerFromLabel(e.trigger)} on {shortDate(e.date)} ·{" "}
+      <span className={e.max_5d >= 0 ? "pos" : "neg"}>{pct(e.max_5d)}</span> at the high within five sessions
+      {e.chg_5d != null && (
+        <>
+          , closed <span className={e.chg_5d >= 0 ? "pos" : "neg"}>{pct(e.chg_5d)}</span>
+        </>
+      )}
+      {lead ? ` · ${lead}` : ""}
+    </p>
+  );
+}
+
+// pulse: null while loading, false when the request failed, else the body.
+function PulsePanel({ pulse }) {
+  const [ref, seen] = useReveal();
+  const a = pulse ? pulse.alerts : null;
+  const u = pulse ? pulse.universe : null;
+  const lead = pulse ? pulse.lead_sessions_median : null;
+  const days = (pulse && pulse.days) || 30;
+  const ex = pulse && pulse.examples ? pulse.examples[0] : null;
+  return (
+    <aside ref={ref} className={`auth-pulse reveal ${seen ? "in" : ""}`} aria-label={`What fired across every industry in the last ${days} days`}>
+      <p className="auth-pulse-k">It tells you before the move is over. Last {days} days, every industry:</p>
+      {pulse === false ? (
+        <p className="auth-pulse-empty">
+          Every alert we send is a recorded event: the trigger, the date, and what the price did in the five sessions after.
+        </p>
+      ) : (
+        <div className="auth-pulse-nums">
+          <Num value={a ? a.fired : null} short="alerts fired" long={a ? `alerts fired on ${plural(a.names, "name")}` : "alerts fired"} active={seen} />
+          <Num
+            value={a ? a.moved_10 : null}
+            short="moved 10%+ after"
+            long={a && a.measured ? `of ${a.measured} measured, moved 10%+ within five sessions` : "moved 10%+ within five sessions after"}
+            active={seen}
+          />
+          {pulse && lead == null ? (
+            <Num
+              value={u ? u.names : null}
+              short="names scored"
+              long={u ? `names scored each morning across ${plural(u.industries, "industry", "industries")}` : "names scored"}
+              active={seen}
+            />
+          ) : (
+            <Num value={lead} short="sessions to peak" long="sessions from alert to peak, median" active={seen} />
+          )}
+        </div>
+      )}
+      <Example e={ex} />
+      <p className="auth-pulse-foot">
+        <span className="m">Measured, not predicted.</span>
+        {pulse && pulse.as_of && <span>As of {shortDate(pulse.as_of)}</span>}
+      </p>
+    </aside>
+  );
 }
 
 export default function Auth({ mode }) {
   const q = useQuery();
   const next = safeNext(q.get("next"));
+  // /api/oauth/start answers 303 back here with this flag when Google is
+  // not configured; the form says so in one line and offers email
+  const oauthDown = q.get("oauth") === "unavailable";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [accept, setAccept] = useState(false);
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [pulse, setPulse] = useState(null);
   const isSignup = mode === "signup";
+
+  // The pulse is public and cached server-side; a failure hides the numbers
+  // and nothing else on the screen depends on it.
+  useEffect(() => {
+    let alive = true;
+    fetchPulse(30)
+      .then((d) => alive && setPulse(d))
+      .catch(() => alive && setPulse(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -33,11 +141,13 @@ export default function Auth({ mode }) {
     setBusy(true);
     try {
       if (isSignup) {
-        await signup(email, password);
-        navigate("/onboarding");
+        if (!accept) throw Object.assign(new Error("Tick the box to continue."), { detail: "Tick the box to continue." });
+        const { token } = await api("/signup", { method: "POST", json: { email, password, accept_terms: true } });
+        setToken(token);
+        navigate(next ? `/onboarding?next=${encodeURIComponent(next)}` : "/onboarding");
       } else {
         await login(email, password);
-        navigate(next || "/overview");
+        navigate(next || "/home");
       }
     } catch (e2) {
       setErr(e2.detail || String(e2.message || e2));
@@ -46,34 +156,41 @@ export default function Auth({ mode }) {
   };
 
   return (
-    <div className="auth-shell">
+    <div className="auth">
       <div className="card form-card">
-        <h1>{isSignup ? "Create your account" : "Welcome back"}</h1>
-        <p className="sub">
-          {isSignup
-            ? "Free includes the top 5 names in one industry and a weekly digest. No card needed."
-            : "Sign in to your Board, watchlist and alerts."}
-        </p>
-        <button
-          type="button"
-          className="btn btn-google"
-          onClick={() => window.location.assign("/api/oauth/start/google")}
-        >
-          <GoogleMark />
-          Continue with Google
-        </button>
-        <div className="or">or with email</div>
+        <h1>{isSignup ? "Create my account" : "Welcome back"}</h1>
+        <p className="sub">{isSignup ? "Email, a password, one tick. Then pick what I should watch." : "Log in to my Home, watchlist and alerts."}</p>
+        {oauthDown ? (
+          <Notice tone="info" className="auth-note">
+            Google sign-in isn't available here yet. Use email.
+          </Notice>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="btn btn-google"
+              disabled={isSignup && !accept}
+              title={isSignup && !accept ? "Tick the box below first." : undefined}
+              onClick={() => {
+                // the tick here signals intent only; a Google account records
+                // its consent on /welcome, by an authenticated request.
+                // `screen` names the form to come back to if Google is off.
+                const p = new URLSearchParams();
+                p.set("screen", isSignup ? "signup" : "login");
+                if (next) p.set("next", next);
+                window.location.assign(`/api/oauth/start/google?${p.toString()}`);
+              }}
+            >
+              <GoogleMark />
+              Continue with Google
+            </button>
+            <div className="or">or with email</div>
+          </>
+        )}
         <form onSubmit={submit}>
           <div className="field">
             <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+            <input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="field">
             <label htmlFor="password">Password</label>
@@ -93,34 +210,88 @@ export default function Auth({ mode }) {
               </span>
             )}
           </div>
+          {isSignup && (
+            <label className="check consent">
+              <input type="checkbox" required checked={accept} onChange={(e) => setAccept(e.target.checked)} />
+              <span>
+                {CONSENT_LABEL}{" "}
+                <span className="consent-links">
+                  <Link to="/legal/terms">Terms</Link> · <Link to="/legal/privacy">Privacy</Link> · <Link to="/legal/disclaimer">Disclaimer</Link>
+                </span>
+              </span>
+            </label>
+          )}
           {err && (
             <p className="err" role="alert">
               {err}
             </p>
           )}
-          <button className="btn btn-primary btn-block" disabled={busy}>
-            {busy ? "One moment…" : isSignup ? "Create account" : "Sign in"}
+          <button className="btn btn-primary btn-block" disabled={busy || (isSignup && !accept)}>
+            {busy ? "One moment…" : isSignup ? "Create my account" : "Log in"}
           </button>
+          {isSignup && (
+            <p className="auth-after">
+              <b>Free plan, no card.</b> Your Home is one industry away.
+            </p>
+          )}
+          <FinePrint short links={false} className="auth-legal" />
         </form>
-        <p className="small muted" style={{ marginTop: "var(--s-4)", marginBottom: 0 }}>
+        <p className="small muted auth-links">
           {isSignup ? (
             <>
-              Already have an account? <Link to={next ? `/login?next=${encodeURIComponent(next)}` : "/login"}>Sign in</Link>
+              Already have an account? <Link to={next ? `/login?next=${encodeURIComponent(next)}` : "/login"}>Log in</Link>
             </>
           ) : (
             <>
-              New here? <Link to="/signup">Create an account</Link> · <Link to="/reset">Forgot password</Link>
+              New here? <Link to={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}>Create my account</Link> ·{" "}
+              <Link to="/reset">Forgot password</Link>
             </>
           )}
         </p>
-        {isSignup && (
-          <p className="xs faint" style={{ marginTop: "var(--s-3)", marginBottom: 0 }}>
-            By creating an account you agree to the <Link to="/legal/terms">terms</Link> and{" "}
-            <Link to="/legal/privacy">privacy policy</Link>. Research and information only; never
-            investment advice.
-          </p>
-        )}
       </div>
+      <PulsePanel pulse={pulse} />
+    </div>
+  );
+}
+
+// /auth/done: where Google sign-in lands (app/oauth.py stores the token and
+// comes here with ?new=1 for a fresh row and the `next` it was started
+// with). Refresh the account, then onboarding when it follows no industries,
+// else `next` or Home. A session that failed to stick goes to log in.
+export function AuthDone() {
+  const q = useQuery();
+  const next = safeNext(q.get("next"));
+  const { refresh } = useMe();
+  const ran = useRef(false);
+  useEffect(() => {
+    if (ran.current) return;
+    ran.current = true;
+    if (!getToken()) {
+      navigate(next ? `/login?next=${encodeURIComponent(next)}` : "/login", { replace: true });
+      return;
+    }
+    refresh().then((me) => {
+      if (!me) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      // ?new=1 says the row was just created; the account's own count is
+      // what decides, so a returning user who never picked is sent too.
+      if (me.industries_following_count === 0) {
+        navigate(next ? `/onboarding?next=${encodeURIComponent(next)}` : "/onboarding", { replace: true });
+      } else {
+        navigate(next || "/home", { replace: true });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div className="wrap wrap-narrow" aria-busy="true">
+      <div className="sk" aria-hidden="true">
+        <div className="sk-row" style={{ height: 44 }} />
+        <div className="sk-row" style={{ height: 120 }} />
+      </div>
+      <p className="muted small">Signing you in…</p>
     </div>
   );
 }

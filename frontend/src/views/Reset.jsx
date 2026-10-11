@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { api } from "../api.js";
 import { Link, useQuery } from "../lib/router.jsx";
+import FinePrint from "../components/FinePrint.jsx";
 
 export default function Reset() {
   const q = useQuery();
@@ -48,8 +49,8 @@ export default function Reset() {
       <div className="card form-card">
         {!token && !sent && (
           <form onSubmit={request}>
-            <h1>Reset your password</h1>
-            <p className="sub">We'll email you a link that works for one hour.</p>
+            <h1>Reset my password</h1>
+            <p className="sub">We'll email you a link that works for 24 hours.</p>
             <div className="field">
               <label htmlFor="reset-email">Email</label>
               <input id="reset-email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -60,8 +61,9 @@ export default function Reset() {
               </p>
             )}
             <button className="btn btn-primary btn-block" disabled={busy}>
-              {busy ? "Sending…" : "Send reset link"}
+              {busy ? "Sending…" : "Send me a reset link"}
             </button>
+            <FinePrint short links={false} className="auth-legal" />
           </form>
         )}
         {!token && sent && (
@@ -88,21 +90,22 @@ export default function Reset() {
               </p>
             )}
             <button className="btn btn-primary btn-block" disabled={busy}>
-              {busy ? "Saving…" : "Set password"}
+              {busy ? "Saving…" : "Set my password"}
             </button>
+            <FinePrint short links={false} className="auth-legal" />
           </form>
         )}
         {token && done && (
           <div>
             <h1>Password updated</h1>
-            <p className="muted">Sign in with the new password.</p>
+            <p className="muted">Log in with the new password.</p>
             <Link to="/login" className="btn btn-primary btn-block">
-              Sign in
+              Log in
             </Link>
           </div>
         )}
         <p className="small muted" style={{ marginTop: "var(--s-4)", marginBottom: 0 }}>
-          <Link to="/login">Back to sign in</Link>
+          <Link to="/login">Back to log in</Link>
         </p>
       </div>
     </div>

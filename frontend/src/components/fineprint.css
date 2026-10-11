@@ -1,0 +1,41 @@
+/* The one fine-print component (DESIGN_V6 §6): muted, 13px, never shouting.
+   Lives beside the component so every page that renders it gets the rules. */
+
+.fineprint {
+  max-width: 68ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: inherit;
+}
+
+.fineprint p,
+.prose .fineprint p {
+  margin: 0 0 var(--s-2);
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
+.fineprint p:last-child,
+.prose .fineprint p:last-child {
+  margin-bottom: 0;
+}
+
+.fineprint a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.fineprint a:hover,
+.fineprint a:focus-visible {
+  color: var(--ink);
+}
+
+/* the single line under a primary action area or in a footer */
+.fineprint-short {
+  margin: var(--s-3) 0 0;
+}

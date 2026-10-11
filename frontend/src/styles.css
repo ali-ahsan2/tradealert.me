@@ -3,6 +3,13 @@
    theme-override.css (loaded after tokens.css) always wins. One mobile-first
    breakpoint at 900px, a second at 1280px for the board only. */
 
+/* One face for everything a subscriber reads (DESIGN_V6 §5). Numbers keep
+   their columns through tabular figures; only .kbd and the Lab use the code
+   face. tokens.css is shared with the Lab, so the swap lives here. */
+:root {
+  --font-mono: var(--font-sans);
+}
+
 *,
 *::before,
 *::after {
@@ -24,7 +31,7 @@ body {
   color: var(--ink);
   font-family: var(--font-sans);
   font-size: var(--fs-base);
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
@@ -64,9 +71,30 @@ h3,
 h4 {
   line-height: 1.15;
   margin: 0;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.02em;
   text-wrap: balance;
+}
+
+/* The one small label (DESIGN_V6 §5): sentence case, no tracking. It
+   replaces the uppercase microlabels v3 and v4 used for column headers,
+   chips, tile labels, key-stat labels and eyebrows. Uppercase stays only
+   for ticker symbols and the PASS/FAIL word. */
+.label,
+.eyebrow,
+.tile-label,
+.hero-label,
+.kstat .k,
+table.data th,
+table.hf th,
+.sidebar h3,
+.haircuts h3,
+.opnote .lab {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-muted);
 }
 
 p {
@@ -157,7 +185,7 @@ table.data th {
 }
 
 .stack > * + * {
-  margin-top: var(--s-4);
+  margin-top: var(--s-5);
 }
 
 /* ---------- shell ---------- */
@@ -224,8 +252,8 @@ table.data th {
 }
 
 .brand-tld {
-  color: var(--ink-faint);
-  font-weight: 600;
+  color: var(--ink);
+  font-weight: 800;
 }
 
 /* visitors: a classic top bar */
@@ -276,7 +304,72 @@ table.data th {
   box-shadow: var(--shadow);
 }
 
-/* subscribers: rail + frame */
+/* the bare layout (onboarding, welcome): the brand and nothing else */
+.barebar {
+  border-bottom: 1px solid var(--border);
+}
+
+.barebar-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 var(--s-4);
+  height: 64px;
+  display: flex;
+  align-items: center;
+}
+
+/* Explore: one tab strip over Ranked, Find, What changed and Coming up */
+.xtabs-wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--s-4) var(--s-4) 0;
+}
+
+.xtabs {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--s-2);
+}
+
+.xtab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  color: var(--ink-muted);
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.xtab:hover {
+  color: var(--ink);
+  background: var(--surface-sunken);
+  text-decoration: none;
+}
+
+.xtab[aria-current="page"] {
+  color: var(--info);
+  background: var(--info-fill);
+}
+
+.xtabs-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+@media (max-width: 599px) {
+  .xtabs-mode .xs {
+    display: none;
+  }
+}
+
+/* members: rail + frame on desktop, header + tabs on phones */
 .rail {
   display: none;
 }
@@ -299,12 +392,6 @@ table.data th {
   display: flex;
   align-items: center;
   gap: var(--s-3);
-}
-
-.apphead-right {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
 }
 
 .searchpill {
@@ -333,7 +420,8 @@ table.data th {
   display: none;
 }
 
-.searchpill.wide {
+.searchpill.wide,
+.searchpill {
   width: 40px;
   justify-content: center;
   padding: 0;
@@ -431,9 +519,9 @@ table.data th {
   border-radius: var(--r-pill);
   background: var(--info-fill);
   color: var(--info);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   text-decoration: none;
 }
 
@@ -450,7 +538,8 @@ table.data th {
   bottom: 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: saturate(1.4) blur(12px);
   -webkit-backdrop-filter: saturate(1.4) blur(12px);
@@ -500,7 +589,7 @@ table.data th {
 
 /* room for the fixed tab bar goes on the last thing in flow, the footer */
 @media (max-width: 899px) {
-  .app.authed .footer-inner {
+  .app.layout-app .footer-inner {
     padding-bottom: calc(var(--s-7) + 64px + env(safe-area-inset-bottom));
   }
 }
@@ -510,8 +599,13 @@ table.data th {
     display: flex;
   }
 
-  .app.authed {
+  .app.layout-app {
     flex-direction: row;
+  }
+
+  /* the phone header is gone; the rail is the one piece of chrome */
+  .app.layout-app .apphead {
+    display: none;
   }
 
   .rail {
@@ -530,6 +624,17 @@ table.data th {
   }
 
   .rail-top {
+    display: flex;
+    justify-content: center;
+    padding: 0 var(--s-3);
+    width: 100%;
+  }
+
+  .rail .brand-word {
+    display: none;
+  }
+
+  .rail-search {
     display: flex;
     justify-content: center;
     padding: 0 var(--s-3);
@@ -598,31 +703,11 @@ table.data th {
     gap: var(--s-3);
   }
 
-  .apphead-brand {
-    display: none;
-  }
-
-  .searchpill.wide {
-    width: min(420px, 100%);
-    justify-content: flex-start;
-    padding: 0 var(--s-4);
-  }
-
-  .searchpill-text,
-  .searchpill .kbd {
-    display: inline-block;
-  }
-
-  .searchpill-text {
-    flex: 1;
-    text-align: left;
-  }
-
   .bottombar {
     display: none;
   }
 
-  .app.authed .main {
+  .app.layout-app .main {
     padding-bottom: 0;
   }
 }
@@ -636,6 +721,30 @@ table.data th {
   .rail-top {
     justify-content: flex-start;
     padding: 0 var(--s-5);
+  }
+
+  .rail .brand-word {
+    display: inline;
+  }
+
+  .rail-search {
+    padding: 0 var(--s-4);
+  }
+
+  .rail-search .searchpill {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 0 var(--s-4);
+  }
+
+  .rail-search .searchpill-text,
+  .rail-search .searchpill .kbd {
+    display: inline-block;
+  }
+
+  .rail-search .searchpill-text {
+    flex: 1;
+    text-align: left;
   }
 
   .rail-item {
@@ -702,11 +811,8 @@ table.data th {
 }
 
 .eyebrow {
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-muted);
-  font-weight: 600;
+  display: block;
+  margin-bottom: var(--s-1);
 }
 
 .section {
@@ -968,6 +1074,7 @@ select.inline {
 .state-card {
   text-align: center;
   padding: var(--s-6) var(--s-4);
+  border-radius: var(--r-lg);
 }
 
 .state-title {
@@ -1024,27 +1131,26 @@ select.inline {
 .chip {
   display: inline-flex;
   align-items: center;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: var(--r-sm);
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--r-pill);
+  border: 1px solid transparent;
   font-size: var(--fs-xs);
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
   white-space: nowrap;
   vertical-align: middle;
 }
 
 .chip-cal {
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
+  color: var(--info);
+  background: var(--info-fill);
 }
 
 .chip-prov {
   color: var(--warn);
   background: var(--warn-fill);
-  border: 1px solid transparent;
 }
 
 .chip-plain {
@@ -1054,13 +1160,13 @@ select.inline {
 
 .agechip {
   display: inline-block;
-  font-family: var(--font-mono);
   font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
   color: var(--ink-faint);
   background: var(--surface-sunken);
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 0 5px;
+  border-radius: var(--r-pill);
+  padding: 0 7px;
   line-height: 18px;
   white-space: nowrap;
 }
@@ -1083,17 +1189,15 @@ select.inline {
   border-radius: var(--r-sm);
   background: var(--surface-sunken);
   color: var(--ink-muted);
-  font-family: var(--font-mono);
   font-size: var(--fs-xs);
   font-weight: 600;
   flex-shrink: 0;
 }
 
 .sym {
-  font-family: var(--font-mono);
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   color: var(--ink);
 }
 
@@ -1116,9 +1220,9 @@ a.sym:hover {
 
 .badge .word {
   font-size: var(--fs-sm);
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .badge .num {
@@ -1126,6 +1230,18 @@ a.sym:hover {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   opacity: 0.9;
+}
+
+/* the band word as text with the score after it (Simple rows): no pill */
+.bandtext {
+  font-size: 15px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.bandtext b {
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .badge .cov {
@@ -1159,21 +1275,26 @@ a.sym:hover {
 }
 
 .badge.neutral {
-  background: var(--band-neutral-bg);
+  background: transparent;
   color: var(--band-neutral-fg);
   border-color: var(--band-neutral-bd);
 }
 
 .badge.weak {
-  background: var(--band-weak-bg);
+  background: transparent;
   color: var(--band-weak-fg);
   border-color: var(--band-weak-bd);
 }
 
 .badge.excluded {
-  background: var(--band-excluded-bg);
+  background: transparent;
   color: var(--band-excluded-fg);
   border-color: var(--band-excluded-bd);
+}
+
+/* In Simple the ~ on the integer carries thin coverage; the bar is Full. */
+html[data-mode="simple"] .badge .cov {
+  display: none;
 }
 
 .badge.compact {
@@ -1185,7 +1306,7 @@ a.sym:hover {
 }
 
 .badge.compact .word {
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 
 .badge.compact .num {
@@ -1209,7 +1330,7 @@ a.sym:hover {
 
 .badge.full .num {
   font-size: var(--fs-2xl);
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.02em;
   opacity: 1;
 }
@@ -1411,8 +1532,8 @@ a.sym:hover {
 
 .table-card {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  border: 0;
+  border-radius: var(--r-lg);
   box-shadow: var(--shadow);
   overflow-x: auto;
   overflow-y: hidden;
@@ -1426,13 +1547,8 @@ table.data {
 
 table.data th {
   text-align: left;
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-muted);
-  border-bottom: 1px solid var(--border-strong);
-  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--border);
+  padding: var(--s-3) var(--s-4);
   white-space: nowrap;
   background: var(--surface);
 }
@@ -1440,14 +1556,14 @@ table.data th {
 table.data th.num,
 table.data td.num {
   text-align: right;
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
+/* hairlines only: no zebra, rows at least 56px tall */
 table.data td {
   border-bottom: 1px solid var(--border);
-  padding: var(--s-2) var(--s-3);
+  padding: var(--s-4);
   vertical-align: middle;
 }
 
@@ -1455,18 +1571,8 @@ table.data tbody tr:last-child td {
   border-bottom: 0;
 }
 
-table.data tbody tr:nth-child(even) td {
-  background: var(--surface-sunken);
-}
-
-table.data.comfortable td {
-  height: 48px;
-}
-
 table.data.compact td {
-  height: 32px;
-  padding-top: var(--s-1);
-  padding-bottom: var(--s-1);
+  padding: 10px var(--s-4);
 }
 
 table.data tr.rowlink {
@@ -1474,13 +1580,18 @@ table.data tr.rowlink {
 }
 
 table.data tr.rowlink:hover td {
-  background: var(--info-fill);
+  background: var(--surface-sunken);
 }
 
 table.data .rank {
   color: var(--ink-faint);
   width: 2.5em;
-  font-family: var(--font-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+table.data .sym {
+  font-size: var(--fs-base);
 }
 
 table.data .name-cell {
@@ -1604,14 +1715,6 @@ th[aria-sort="ascending"] button::after {
     min-height: 56px;
   }
 
-  .table-card.cards tbody tr:nth-child(even) td {
-    background: transparent;
-  }
-
-  .table-card.cards tbody tr:nth-child(even) {
-    background: var(--surface-sunken);
-  }
-
   .table-card.cards tr:last-child {
     border-bottom: 0;
   }
@@ -1677,6 +1780,10 @@ th[aria-sort="ascending"] button::after {
   font-size: var(--fs-sm);
   color: var(--ink-muted);
   margin-bottom: var(--s-3);
+}
+
+.boardhead {
+  font-weight: 600;
 }
 
 .boardhead b {
@@ -1856,10 +1963,8 @@ th[aria-sort="ascending"] button::after {
 }
 
 .rhead h1 {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xl);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  font-size: var(--fs-2xl);
+  letter-spacing: -0.02em;
   display: flex;
   align-items: center;
   gap: var(--s-3);
@@ -1867,10 +1972,8 @@ th[aria-sort="ascending"] button::after {
 }
 
 .rhead .company {
-  font-family: var(--font-sans);
   font-size: var(--fs-base);
-  font-weight: 400;
-  text-transform: none;
+  font-weight: 600;
   letter-spacing: 0;
   color: var(--ink-muted);
 }
@@ -1963,12 +2066,8 @@ table.hf {
 
 table.hf th {
   text-align: left;
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-muted);
   padding: var(--s-2) var(--s-3);
-  border-bottom: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border);
 }
 
 table.hf td {
@@ -1976,24 +2075,20 @@ table.hf td {
   border-bottom: 1px solid var(--border);
 }
 
-table.hf tbody tr:nth-child(even) td {
-  background: var(--surface-sunken);
-}
-
 table.hf td.num,
 table.hf th.num {
   text-align: right;
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
+/* PASS / FAIL: the one word that keeps its capitals and its colour */
 .verdict {
-  font-family: var(--font-mono);
   font-weight: 700;
   font-size: var(--fs-xs);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   white-space: nowrap;
+  border-radius: var(--r-pill);
 }
 
 .verdict.pass {
@@ -2064,18 +2159,16 @@ table.hf th.num {
   color: var(--ink-faint);
 }
 
+/* a penalty is a score fact, not a price move: amber, never red (DESIGN_V5 §2) */
 .haircuts {
-  border-left: 3px solid var(--neg);
-  background: var(--neg-fill);
+  border-left: 3px solid var(--warn);
+  background: var(--warn-fill);
   border-radius: 0 var(--r-md) var(--r-md) 0;
   padding: var(--s-3) var(--s-4);
 }
 
 .haircuts h3 {
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--neg);
+  color: var(--warn);
   margin-bottom: var(--s-2);
 }
 
@@ -2086,10 +2179,6 @@ table.hf th.num {
 }
 
 .opnote .lab {
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-muted);
   border-left: 2px solid var(--border-strong);
   padding-left: var(--s-2);
   margin-bottom: var(--s-3);
@@ -2118,12 +2207,7 @@ table.hf th.num {
 }
 
 .sidebar h3 {
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-muted);
   margin: 0 0 var(--s-2);
-  font-weight: 600;
 }
 
 .sidebar h3 + * {
@@ -2152,7 +2236,6 @@ table.hf th.num {
 }
 
 .kv .v {
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   text-align: right;
   display: inline-flex;
@@ -2466,148 +2549,118 @@ table.hf th.num {
 
 /* ---------- pricing ---------- */
 
-/* four columns on desktop; four stacked cards on mobile, never a
-   horizontally scrolling table */
-.plans-mobile {
-  display: flex;
-}
-
-.plans-desktop {
-  display: none;
-}
-
-@media (min-width: 900px) {
-  .plans-mobile {
-    display: none;
-  }
-
-  .plans-desktop {
-    display: block;
-  }
-}
-
-.plans-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-sm);
-}
-
-.plans-table th,
-.plans-table td {
-  padding: var(--s-3);
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-  vertical-align: top;
-}
-
-.plans-table thead th {
-  vertical-align: bottom;
-  border-bottom: 1px solid var(--border-strong);
-}
-
-.plans-table th[scope="row"] {
-  color: var(--ink-muted);
-  font-weight: 500;
-  width: 24%;
-}
-
-.plans-table td {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-.plans-table .tcol {
-  position: relative;
-}
-
-.plans-table .tcol.popular {
-  box-shadow: inset 0 0 0 1px var(--info);
-  background: var(--info-fill);
-}
-
-.plans-table .tname {
-  font-size: var(--fs-md);
-  font-weight: 600;
-  font-family: var(--font-sans);
-}
-
-.plans-table .tprice {
-  font-family: var(--font-mono);
-  font-size: var(--fs-lg);
-  font-weight: 600;
-  margin-top: var(--s-1);
-}
-
-.plans-table .tprice .per {
-  font-size: var(--fs-xs);
-  color: var(--ink-faint);
-  font-weight: 400;
-}
-
-.plans-table .tflag {
-  font-size: var(--fs-xs);
-  color: var(--info);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-family: var(--font-sans);
-}
-
-.plans-table tfoot td {
-  border-bottom: 0;
-  font-family: var(--font-sans);
-}
-
+/* one card per plan at every width; the promise, the price, six facts, one
+   button. The current plan is marked; no plan is "popular". */
 .plans-cards {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: var(--s-3);
+}
+
+@media (min-width: 700px) {
+  .plans-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1040px) {
+  .plans-cards {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .plan {
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
+  padding: var(--s-5);
+  min-width: 0;
 }
 
-.plan.popular {
+.plan.current {
   border-color: var(--info);
   box-shadow: inset 0 0 0 1px var(--info);
 }
 
 .plan .tname {
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 700;
+}
+
+.plan .tpromise {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.4;
+  color: var(--ink);
+  min-height: 3lh;
 }
 
 .plan .tprice {
-  font-family: var(--font-mono);
-  font-size: var(--fs-lg);
-  font-weight: 600;
+  font-size: var(--fs-2xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  margin-top: var(--s-1);
 }
 
 .plan .tprice .per {
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   color: var(--ink-faint);
-  font-weight: 400;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
-.plan dl {
-  margin: 0;
+.plan .tfacts {
+  list-style: none;
+  margin: var(--s-2) 0 var(--s-3);
+  padding: 0;
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--s-1) var(--s-3);
+  gap: 6px;
+  font-size: var(--fs-sm);
+  flex: 1;
+}
+
+.plan .tfacts li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.plan .tfacts li:last-child {
+  border-bottom: 0;
+}
+
+.plan .tfacts .k {
+  color: var(--ink-muted);
+  flex: 1 1 auto;
+}
+
+/* the value keeps its width; the label is what wraps */
+.plan .tfacts .v {
+  flex: 0 1 auto;
+  max-width: 60%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.plan .plan-current {
+  align-self: flex-start;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.plans-fine {
+  margin: var(--s-3) 0 0;
+  color: var(--ink-muted);
   font-size: var(--fs-sm);
 }
 
-.plan dt {
-  color: var(--ink-muted);
-}
-
-.plan dd {
-  margin: 0;
-  font-family: var(--font-mono);
-  text-align: right;
+.plans .plans-fineprint {
+  margin-top: var(--s-6);
 }
 
 .faq details {
@@ -2735,6 +2788,88 @@ table.hf th.num {
   .sticky-foot {
     bottom: var(--s-4);
   }
+}
+
+/* the bare layout has no tab bar under the footer */
+.layout-bare .sticky-foot {
+  bottom: var(--s-4);
+}
+
+.indcard .ind-plain {
+  margin: 2px 0 0;
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+.ob-verify .notice-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+}
+
+.ob-tz {
+  margin: var(--s-3) 0 var(--s-4);
+}
+
+.resend-btn {
+  margin-left: var(--s-2);
+  vertical-align: middle;
+}
+
+/* the consent tick, on the sign-up form and the welcome screen */
+.check.consent {
+  align-items: flex-start;
+  margin: var(--s-3) 0 var(--s-4);
+  line-height: 1.5;
+}
+
+.check.consent input {
+  margin-top: 3px;
+}
+
+.consent-links {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+}
+
+.welcome {
+  padding-top: var(--s-6);
+}
+
+.welcome-card {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: var(--s-6) var(--s-5);
+}
+
+.welcome-k {
+  margin: 0 0 var(--s-2);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-faint);
+}
+
+.welcome-card h1 {
+  font-size: var(--fs-xl);
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--s-3);
+}
+
+.welcome-lede {
+  font-size: 17px;
+  line-height: 1.5;
+  font-weight: 600;
+  margin: 0 0 var(--s-3);
+}
+
+.welcome-out {
+  margin: var(--s-4) 0 0;
 }
 
 /* ---------- auth ---------- */
@@ -2930,6 +3065,33 @@ table.hf th.num {
   line-height: 1.6;
 }
 
+/* ".me" read aloud, where the name is explained */
+.footer-tag {
+  margin: var(--s-3) 0 0;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+/* the one fine-print component (DESIGN_V6 §6) */
+.fineprint {
+  color: var(--ink-faint);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  max-width: 72ch;
+}
+
+.fineprint p {
+  margin: 0 0 var(--s-2);
+}
+
+.fineprint a {
+  color: var(--ink-muted);
+}
+
+.fineprint-short {
+  margin: 0;
+}
+
 /* ---------- v2: chart, palette, shortcuts, badges ---------- */
 
 .chartbox {
@@ -3111,7 +3273,7 @@ table.hf th.num {
 
 .kbd {
   display: inline-block;
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: 11px;
   line-height: 18px;
   padding: 0 5px;
@@ -3220,8 +3382,7 @@ table.hf th.num {
 
 .mover h3 {
   font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-weight: 600;
   color: var(--ink-muted);
   margin-bottom: var(--s-2);
 }
@@ -3751,17 +3912,14 @@ a.tile:hover {
   text-decoration: none;
 }
 
-.tile-label {
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-muted);
+.tile {
+  border-radius: var(--r-lg);
 }
 
 .tile-value {
-  font-family: var(--font-mono);
   font-size: var(--fs-xl);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   line-height: 1.2;
   color: var(--ink);
 }
@@ -3920,13 +4078,14 @@ a.tile:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
+  min-height: 30px;
   padding: 0 var(--s-3);
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
   background: var(--surface);
   color: var(--ink-muted);
   font-size: var(--fs-xs);
+  font-weight: 600;
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
@@ -4051,8 +4210,7 @@ a.tile:hover {
 .fgroup-label {
   display: block;
   font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-weight: 600;
   color: var(--ink-muted);
   margin-bottom: 6px;
 }
@@ -4169,8 +4327,8 @@ table.data.screen-table .name-cell .xs {
 
 .cal-day {
   font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--ink-muted);
 }
 
@@ -4278,78 +4436,7 @@ table.data.outcomes th.num {
 
 
 
-/* ---------- v4: type, tables, tiles, hero, movers, key stats ---------- */
-
-.pagehead .meta {
-  font-weight: 500;
-}
-
-.tile {
-  border-radius: var(--r-lg);
-}
-
-.tile-value {
-  font-size: var(--fs-2xl);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  font-family: var(--font-sans);
-}
-
-.tile-label {
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  font-size: 11px;
-}
-
-/* data tables: hairline rows, roomy cells, labels in small caps */
-.table-card {
-  border: 0;
-  border-radius: var(--r-lg);
-}
-
-table.data th {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--ink-faint);
-  border-bottom: 1px solid var(--border);
-  padding: 12px 14px;
-  background: var(--surface);
-}
-
-table.data td {
-  border-bottom: 1px solid var(--border);
-  padding: 14px;
-  vertical-align: middle;
-}
-
-table.data.compact td {
-  padding: 9px 12px;
-}
-
-table.data tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-table.data tr.rowlink:hover td {
-  background: var(--surface-sunken);
-}
-
-table.data .sym {
-  font-weight: 800;
-  letter-spacing: 0;
-  font-family: var(--font-sans);
-  font-size: var(--fs-base);
-}
-
-table.data .theme {
-  font-weight: 500;
-}
-
-table.data td.rank {
-  color: var(--ink-faint);
-  font-weight: 600;
-}
+/* ---------- v4: hero, movers, key stats, price header ---------- */
 
 /* a coloured market move; green and red mean exactly this */
 .move {
@@ -4357,7 +4444,7 @@ table.data td.rank {
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  font-weight: 800;
+  font-weight: 700;
   font-size: var(--fs-sm);
   white-space: nowrap;
 }
@@ -4380,7 +4467,7 @@ table.data td.rank {
   height: 26px;
   padding: 0 10px;
   border-radius: var(--r-pill);
-  font-weight: 800;
+  font-weight: 700;
   font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
   background: var(--surface-sunken);
@@ -4464,17 +4551,12 @@ td.c-move {
 }
 
 .hero-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
   margin-bottom: 6px;
 }
 
 .hero-num {
   font-size: var(--fs-3xl);
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1;
 }
@@ -4592,7 +4674,7 @@ td.c-move {
 }
 
 .mover-card .sym {
-  font-weight: 800;
+  font-weight: 700;
   font-size: var(--fs-md);
   letter-spacing: -0.01em;
   color: var(--ink);
@@ -4638,17 +4720,9 @@ td.c-move {
   min-width: 0;
 }
 
-.kstat .k {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
 .kstat .v {
   font-size: var(--fs-md);
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.01em;
   display: flex;
   align-items: baseline;
@@ -4668,7 +4742,7 @@ td.c-move {
 
 .pricehead .px {
   font-size: var(--fs-3xl);
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1;
 }
@@ -4683,34 +4757,10 @@ td.c-move {
   align-items: center;
 }
 
-.rhead h1 {
-  font-size: var(--fs-2xl);
-}
-
-.rhead {
-  flex-wrap: wrap;
-}
-
 .rhead .actions {
   flex-wrap: wrap;
   min-width: 0;
   max-width: 100%;
-}
-
-.rhead .company {
-  font-weight: 600;
-}
-
-/* chips and filters in pill form */
-.fchip,
-.preset,
-.chip {
-  border-radius: var(--r-pill);
-}
-
-.fchip {
-  min-height: 30px;
-  font-weight: 700;
 }
 
 .preset {
@@ -4729,28 +4779,6 @@ td.c-move {
   color: var(--on-accent);
 }
 
-.chip {
-  font-weight: 700;
-}
-
-.chip-cal {
-  background: var(--info-fill);
-  color: var(--info);
-  border-color: transparent;
-}
-
-.chip-prov {
-  background: var(--warn-fill);
-  color: var(--warn);
-  border-color: transparent;
-}
-
-.chip-plain {
-  background: var(--surface-sunken);
-  border-color: transparent;
-  color: var(--ink-muted);
-}
-
 .input,
 .field input,
 .field select,
@@ -4759,10 +4787,6 @@ select.inline,
 .fnum input,
 .fnum select {
   border-radius: var(--r-md);
-}
-
-.boardhead {
-  font-weight: 600;
 }
 
 .upgrade-card {
@@ -4779,11 +4803,6 @@ select.inline,
   border-radius: var(--r-lg);
 }
 
-.verdict {
-  border-radius: var(--r-pill);
-  font-weight: 800;
-}
-
 .ovind,
 .wl-card,
 .alert,
@@ -4797,16 +4816,7 @@ select.inline,
 .alert .sym,
 .nameline .sym,
 .cal-who .sym {
-  font-family: var(--font-sans);
-  font-weight: 800;
   font-size: var(--fs-base);
-  letter-spacing: 0;
-}
-
-.sym {
-  font-family: var(--font-sans);
-  font-weight: 800;
-  letter-spacing: 0;
 }
 
 .palette {
@@ -4825,16 +4835,8 @@ select.inline,
   border-radius: 6px;
 }
 
-.agechip {
-  border-radius: var(--r-pill);
-}
-
 .covbar span {
   border-radius: 2px;
-}
-
-.state-card {
-  border-radius: var(--r-lg);
 }
 
 .footer {
@@ -4854,11 +4856,25 @@ select.inline,
   gap: 8px;
 }
 
+/* ---------- v6 Simple: one column, cards, a page's width ---------- */
+
+html[data-mode="simple"] .report {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+html[data-mode="simple"] .wrap.sr-wrap {
+  max-width: calc(800px + 2 * var(--s-4));
+}
+
+html[data-mode="simple"] .sidebar {
+  position: static;
+}
+
 /* ---------- print: a report should fit one page and keep its dates ---------- */
 
 @media print {
-  .app.authed { display: block; }
-  .app.authed .main { padding-bottom: 0; }
+  .app.layout-app { display: block; }
+  .app.layout-app .main { padding-bottom: 0; }
   .rail,
   .apphead,
   .acct-menu,

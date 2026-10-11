@@ -1,37 +1,364 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
-import { Link } from "../lib/router.jsx";
+import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { useMode } from "../lib/mode.js";
-import { DAYS, age, dateTime, delta, inDays, plural, score as fmtScore, shortDate, signed, tone } from "../lib/fmt.js";
+import { openUpgrade } from "../lib/upgrade.js";
+import { HOME_ROWS } from "../lib/caps.js";
+import { bestToldEvent, beyondPlanSentence, dayMonth, fetchRecord, missedCardSentence, toldCardLatest, toldCardSentence, toldHeadline } from "../lib/record.js";
+import { prefersReducedMotion, useCountUp, useReveal } from "../lib/motion.js";
+import { DAYS, age, dateTime, delta, plural, score as fmtScore, shortDate, signed, tone, zoneName } from "../lib/fmt.js";
 import { TRIGGER_PLAIN } from "../lib/glossary.js";
-import { changeSentence, nextStep, triggerLabel, triggerSentence } from "../lib/plain.js";
+import { changeSentence, triggerLabel, triggerSentence } from "../lib/plain.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import BandBar from "../components/BandBar.jsx";
 import Spark, { Move, MoveChip } from "../components/Spark.jsx";
 import Icon from "../components/Icons.jsx";
-import Pin from "../components/Pin.jsx";
 import Explain from "../components/Explain.jsx";
-import NotifyButton, { useRulesFor } from "../components/NotifyButton.jsx";
-import { AgeChip, Empty, ErrorCard, Skeleton } from "../components/ui.jsx";
+import NotifyButton from "../components/NotifyButton.jsx";
+import FinePrint from "../components/FinePrint.jsx";
+import { YoudHaveKnown, YourRecord, withMoveColour } from "../components/RecordCard.jsx";
+import { Empty, ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
 import "./overview.css";
 
-// Home as a daily brief (DESIGN_V4.md §6). The page reads top to bottom
-// the way an assistant would tell it: what changed on your names since
-// the previous run, the alerts that fired, the dated events ahead, your
-// pinned names, one next step. The rebased index, the movers and the
-// industry cards stay, folded under "Markets" as price context: closed by
-// default in Simple mode, open in Full. Every figure comes from the API
-// as stored; nothing here is computed from data the product does not hold.
+// Home (DESIGN_V6 §4): what happened for me and what should I look at, in
+// one glance. Above the fold: a greeting, one line with today's counts and
+// one action, three equal cards (told me, I'd have known, coming up), one
+// line of record, three rows of what changed. Then a quiet plan line, the
+// how-it-works card until dismissed, and everything else inside one
+// <details>, fetched on first open. Above the fold the page makes two
+// requests: the overview payload and the record. Every figure comes from
+// the API as stored; nothing here is computed from data the product does
+// not hold, and nothing promises anything.
 
+const HOW_KEY = "ta_how_done";
 const RANGES = [
   ["1M", 30],
   ["3M", 90],
   ["1Y", 365],
 ];
-
-const PREVIEW_ROWS = 6;
 const BAND_RANK = { strong: 4, elevated: 3, neutral: 2, weak: 1, excluded: 0 };
+
+function readFlag(key) {
+  try {
+    return localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeFlag(key) {
+  try {
+    localStorage.setItem(key, "1");
+  } catch {
+    /* the card just won't be remembered */
+  }
+}
+
+function stripParam(name) {
+  const qs = new URLSearchParams(window.location.search);
+  if (!qs.has(name)) return;
+  qs.delete(name);
+  const rest = qs.toString();
+  navigate(`${window.location.pathname}${rest ? `?${rest}` : ""}`, { replace: true });
+}
+
+const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+// "Good morning, Ali." by the viewer's clock; the first word of the name.
+function greeting(name) {
+  const h = new Date().getHours();
+  const part = h >= 5 && h < 12 ? "morning" : h >= 12 && h < 18 ? "afternoon" : "evening";
+  const first = name ? String(name).trim().split(/\s+/)[0] : "";
+  return first ? `Good ${part}, ${first}.` : `Good ${part}.`;
+}
+
+// "this morning's scoring" / "yesterday's scoring" / "the scoring on Aug 9",
+// by the viewer's calendar day ("run" stays a Full-mode word).
+function runWhen(asOf, tz) {
+  const day = (t) => {
+    try {
+      return new Date(t).toLocaleDateString("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", ...(tz ? { timeZone: tz } : {}) });
+    } catch {
+      return new Date(t).toLocaleDateString("en-CA");
+    }
+  };
+  const r = day(asOf);
+  if (r === day(Date.now())) return "this morning's scoring";
+  if (r === day(Date.now() - 864e5)) return "yesterday's scoring";
+  return `the scoring on ${dayMonth(asOf)}`;
+}
+
+// "today", "tomorrow", "in 3 days", "yesterday", "4 days ago"
+function inWords(days) {
+  if (days == null) return "";
+  if (days === 0) return "today";
+  if (days === 1) return "tomorrow";
+  if (days === -1) return "yesterday";
+  return days > 0 ? `in ${days} days` : `${-days} days ago`;
+}
+
+// "2 hours ago", "3 days ago"; null when the stamp cannot be read
+function agoWords(iso) {
+  const a = age(iso);
+  if (!a) return null;
+  if (a.hours < 1) return "just now";
+  if (a.hours < 48) return `${plural(Math.round(a.hours), "hour")} ago`;
+  return `${plural(Math.round(a.hours / 24), "day")} ago`;
+}
+
+// A stored alert fact that is a key with underscores or a fixture tag is not
+// a sentence; the trigger's plain sentence stands in for it.
+function machineShaped(s) {
+  return !s || /_/.test(s) || /^\W*(dev\s+)?fixture/i.test(s);
+}
+
+// Coverage for a pinned name: the pick row carries it; the stats row is the
+// fallback. [present, total], or [undefined, undefined] when neither has it.
+function pickCoverage(p, st) {
+  if (p && p.components_total != null) return [p.components_present, p.components_total];
+  if (st && st.components_total != null) return [st.components_present, st.components_total];
+  return [undefined, undefined];
+}
+
+// Plain line for a pinned name: score since the pin date, then the next
+// dated event on file. Facts only; no colour on score moves.
+function pinSentence(p, st, tz) {
+  const parts = [];
+  const when = p.pinned_at ? ` on ${shortDate(p.pinned_at, tz)}` : "";
+  const [cp, ct] = pickCoverage(p, st);
+  if (p.value == null) parts.push("No score in this morning's scoring.");
+  else if (p.score_at_pin == null) parts.push(`Scores ${fmtScore(p.value, cp, ct)} now; no score was recorded when you started watching it.`);
+  else {
+    const r = Math.round(p.value - p.score_at_pin);
+    if (r === 0) parts.push(`Unchanged since you started watching it${when}.`);
+    else parts.push(`${r > 0 ? "Up" : "Down"} ${Math.abs(r)} point${Math.abs(r) === 1 ? "" : "s"} since you started watching it${when}.`);
+  }
+  if (st && st.earnings) parts.push(`Earnings ${inWords(st.earnings.days)}.`);
+  return parts.join(" ");
+}
+
+function InlineError({ what, onRetry }) {
+  return (
+    <p className="muted brief-inline-err">
+      Couldn't load {what}.{" "}
+      {onRetry && (
+        <button type="button" className="btn-quiet" onClick={onRetry}>
+          Retry
+        </button>
+      )}
+    </p>
+  );
+}
+
+// Section shell: a card with a plain heading, a muted note and one link out.
+function Section({ id, title, note, more, children, className = "", level = 2 }) {
+  const H = level === 3 ? "h3" : "h2";
+  return (
+    <section className={`card brief-sec ${className}`} aria-labelledby={`${id}-h`} id={id}>
+      <div className="brief-head">
+        <div className="brief-head-l">
+          <H id={`${id}-h`}>{title}</H>
+          {note && <span className="sum-note">{note}</span>}
+        </div>
+        {more}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+// A link label whose last word keeps the arrow beside it when the label
+// wraps, so the arrow never sits alone on a line.
+function Tail({ text }) {
+  const i = text.lastIndexOf(" ");
+  return (
+    <>
+      {i > 0 ? `${text.slice(0, i)} ` : ""}
+      <span className="nowrap">
+        {i > 0 ? text.slice(i + 1) : text}
+        <Icon name="arrow" size={16} />
+      </span>
+    </>
+  );
+}
+
+// One of the three cards: a big number that counts up once it is seen, one
+// sentence, an optional short second line, one link. The number is a count
+// of recorded events.
+function SumCard({ id, title, n, say, sub = null, to, cta, loading = false, error = null, onRetry }) {
+  const [ref, seen] = useReveal();
+  const v = useCountUp(n == null ? 0 : n, { active: seen && !loading && !error });
+  return (
+    <section className={`card sumcard reveal ${seen ? "in" : ""}`} ref={ref} aria-labelledby={`${id}-h`}>
+      <h2 id={`${id}-h`}>{title}</h2>
+      <div className="sum-body">
+        {loading ? (
+          <Skeleton rows={1} height={64} />
+        ) : error ? (
+          <InlineError what={title.toLowerCase()} onRetry={onRetry} />
+        ) : (
+          <>
+            <p className="sum-n" aria-label={String(n)}>
+              {v}
+            </p>
+            <p className="sum-say">{say}</p>
+            {sub && <p className="sum-sub">{sub}</p>}
+          </>
+        )}
+      </div>
+      <Link to={to} className="sum-link">
+        <Tail text={cta} />
+      </Link>
+    </section>
+  );
+}
+
+// The line under the greeting: today's counts, every number a fact.
+function TheLine({ d, locked, tz }) {
+  const a = d.alerts;
+  const c = d.changes;
+  const cats = d.catalysts.next_14d;
+  const parts = [];
+  if (locked || a.limit === 0) {
+    parts.push(
+      a.fired_7d > 0 ? (
+        <>
+          <b>{a.fired_7d}</b> {a.fired_7d === 1 ? "alert" : "alerts"} fired in your {d.industries.length === 1 ? "industry" : "industries"} this week
+        </>
+      ) : (
+        <>no alerts fired this week</>
+      )
+    );
+  } else {
+    parts.push(
+      a.unread > 0 ? (
+        <>
+          <b>{a.unread}</b> {a.unread === 1 ? "alert" : "alerts"} for you
+        </>
+      ) : (
+        <>no alerts waiting</>
+      )
+    );
+  }
+  if (c) {
+    const moved = c.summary.band_up + c.summary.band_down;
+    parts.push(
+      moved > 0 ? (
+        <>
+          <b>{moved}</b> {moved === 1 ? "name" : "names"} changed rating
+        </>
+      ) : (
+        <>no rating changes</>
+      )
+    );
+  }
+  parts.push(
+    cats > 0 ? (
+      <>
+        <b>{cats}</b> {cats === 1 ? "date" : "dates"} in the next two weeks
+      </>
+    ) : (
+      <>no dates in the next two weeks</>
+    )
+  );
+  return (
+    <p className="home-line">
+      Since {runWhen(d.run.as_of, tz)}:{" "}
+      {parts.map((p, i) => (
+        <React.Fragment key={i}>
+          {i > 0 ? ", " : ""}
+          {p}
+        </React.Fragment>
+      ))}
+      .
+    </p>
+  );
+}
+
+// How this works: the three sentences, shown until dismissed once per
+// browser. The first visit (?welcome=1) titles it "Your first brief", puts
+// it first in the brief and points at the page's one action (DESIGN_V6 §3,
+// step 5): `action` is {to, label} or {run, label}; taking it dismisses the
+// card too.
+function HowCard({ welcome, onDone, action = null }) {
+  const take = () => {
+    onDone();
+    if (action && action.run) requestAnimationFrame(action.run);
+  };
+  return (
+    <section className="card howcard" aria-labelledby="how-h">
+      <div className="brief-head">
+        <h2 id="how-h">{welcome ? "Your first brief" : "How this works"}</h2>
+      </div>
+      <ul className="how-list">
+        <li>
+          <span className="how-ic" aria-hidden="true">
+            <Icon name="check" size={18} />
+          </span>
+          <span>It watches my industries: every name in them, every morning.</span>
+        </li>
+        <li>
+          <span className="how-ic" aria-hidden="true">
+            <Icon name="search" size={18} />
+          </span>
+          <span>It tells me before the move is over: the day a fact changes.</span>
+        </li>
+        <li>
+          <span className="how-ic" aria-hidden="true">
+            <Icon name="alerts" size={18} />
+          </span>
+          <span>Measured, not predicted: it keeps score of how early it told me.</span>
+        </li>
+      </ul>
+      <div className="row howcard-acts">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={onDone}>
+          Got it
+        </button>
+        {welcome && action && action.to && (
+          <Link to={action.to} className="btn-quiet" onClickCapture={onDone}>
+            {action.label} <Icon name="arrow" size={16} />
+          </Link>
+        )}
+        {welcome && action && !action.to && (
+          <button type="button" className="btn-quiet" onClick={take}>
+            {action.label} <Icon name="arrow" size={16} />
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// One row of what changed: symbol, theme, the plain sentence, the band word
+// as text, one action. Full mode adds the before and after under it.
+function ChangeRow({ r }) {
+  return (
+    <li className="brow">
+      <div className="brow-main">
+        <div className="brow-top">
+          <Link className="sym" to={`/stock/${r.symbol}`}>
+            {r.symbol}
+          </Link>
+          <span className="theme" title={r.theme}>
+            {r.theme}
+          </span>
+        </div>
+        <p className="brow-say">{changeSentence(r.delta, r.now && r.now.band, r.prev && r.prev.band)}</p>
+        <div className="brow-detail full-only">
+          {r.prev ? <ScoreBadge band={r.prev.band} value={r.prev.value} present={r.prev.present} total={r.prev.total} /> : <span className="chip chip-plain">not scored</span>}
+          <span aria-hidden="true">→</span>
+          {r.now ? <ScoreBadge band={r.now.band} value={r.now.value} present={r.now.present} total={r.now.total} /> : <span className="chip chip-plain">not scored</span>}
+          {r.delta != null && <span>{delta(r.delta)} points</span>}
+        </div>
+      </div>
+      <span className="bandword simple-only">{r.now ? cap(r.now.band) : "Not scored"}</span>
+      <div className="brow-act">
+        <NotifyButton symbol={r.symbol} compact label="Alert me" onLabel="Alerting me" />
+      </div>
+    </li>
+  );
+}
 
 function IndexChart({ series, ghost, label }) {
   const pts = series || [];
@@ -59,7 +386,7 @@ function IndexChart({ series, ghost, label }) {
   );
 }
 
-// The rebased index: unchanged from v4 §2.5, now context under "Markets".
+// The rebased index: price context inside Markets, fetched when opened.
 function Hero() {
   const [days, setDays] = useState(90);
   const [d, setD] = useState(null);
@@ -80,7 +407,7 @@ function Hero() {
   const main = hasWatch ? d.watchlist.points : bench[0] ? bench[0].points : [];
   const chg = hasWatch ? d.watchlist.change_pct : bench[0] ? bench[0].change_pct : null;
   const ghost = hasWatch && bench[0] ? bench[0].points : null;
-  const title = hasWatch ? "Your watchlist" : bench[0] ? bench[0].industry_label : "Your universe";
+  const title = hasWatch ? "My watchlist" : bench[0] ? bench[0].industry_label : "My names";
   return (
     <section className="card hero" aria-labelledby="hero-h">
       <div className="hero-top">
@@ -92,7 +419,7 @@ function Hero() {
           <div className="hero-sub">
             {hasWatch ? (
               <>
-                <span>{plural(d.watchlist.symbols.length, "pinned name")}, equal-weight</span>
+                <span>{plural(d.watchlist.symbols.length, "watched name")}, equal weight</span>
                 {bench[0] && bench[0].change_pct != null && (
                   <span>
                     vs {bench[0].symbol} <Move value={bench[0].change_pct} />
@@ -101,7 +428,7 @@ function Hero() {
               </>
             ) : bench[0] ? (
               <span>
-                {bench[0].symbol} · {bench[0].label}. Pin names to track your own list here.
+                {bench[0].symbol} · {bench[0].label}. Watch names and this becomes your own list.
               </span>
             ) : (
               <span>No bars on file yet.</span>
@@ -122,7 +449,7 @@ function Hero() {
         </div>
       ) : (
         <p className="muted small" style={{ marginTop: "var(--s-4)" }}>
-          Nothing to chart yet. <Link to="/board">Pin a few names from the Board</Link> and this becomes your list.
+          Nothing to chart yet. <Link to="/board">Watch a few names from Explore</Link> and this becomes your list.
         </p>
       )}
       <div className="hero-foot">
@@ -165,184 +492,12 @@ function NameLine({ r, right, href }) {
   );
 }
 
-// Section shell: a card with a plain heading, a muted note and one link out.
-function Section({ id, title, note, more, children }) {
-  return (
-    <section className="card brief-sec" aria-labelledby={id}>
-      <div className="brief-head">
-        <div className="brief-head-l">
-          <h2 id={id}>{title}</h2>
-          {note && <span className="sum-note">{note}</span>}
-        </div>
-        {more}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function InlineError({ what, onRetry }) {
-  return (
-    <p className="muted small brief-inline-err">
-      Couldn't load {what}.{" "}
-      {onRetry && (
-        <button type="button" className="btn-quiet" onClick={onRetry}>
-          Retry
-        </button>
-      )}
-    </p>
-  );
-}
-
-// One sentence with the subscriber's own figures, under the title.
-function Utility({ d, locked }) {
-  const run = d.run;
-  const inds = d.industries.length;
-  if (!run) {
-    return (
-      <p className="utility">
-        No completed <Explain term="run">run</Explain> yet. What changed, the alerts that fired and the events ahead appear here after the first run completes.
-      </p>
-    );
-  }
-  if (inds === 0) {
-    return (
-      <p className="utility">
-        You are not following any industries yet, so there is nothing to brief. Choose the industries you want watched and this page fills from the next{" "}
-        <Explain term="run">run</Explain>.
-      </p>
-    );
-  }
-  const scored = d.industries.reduce((acc, i) => acc + (i.scored || 0), 0);
-  const c = d.changes;
-  const moved = c ? c.summary.band_up + c.summary.band_down : null;
-  const a = d.alerts;
-  const cats = d.catalysts.next_14d;
-  const indWord = inds === 1 ? "industry" : "industries";
-  const alertsClause =
-    locked || a.limit === 0 ? (
-      <>
-        <b>{a.fired_7d}</b> {a.fired_7d === 1 ? "alert" : "alerts"} fired in your industries this week
-      </>
-    ) : a.unread > 0 ? (
-      <>
-        <b>{a.unread}</b> {a.unread === 1 ? "alert is" : "alerts are"} waiting for you
-      </>
-    ) : (
-      <>no alerts are waiting for you</>
-    );
-  const catsClause = (
-    <>
-      <b>{cats}</b> <Explain term="catalyst">{cats === 1 ? "catalyst" : "catalysts"}</Explain> {cats === 1 ? "falls" : "fall"} in the next 14 days
-    </>
-  );
-  if (!c) {
-    return (
-      <p className="utility">
-        On the first <Explain term="run">run</Explain> on record, <b>{scored}</b> names were <Explain term="score">scored</Explain> across your <b>{inds}</b> {indWord};{" "}
-        <Explain term="band">band</Explain> changes appear from the second run. Meanwhile {alertsClause} and {catsClause}.
-      </p>
-    );
-  }
-  return (
-    <p className="utility">
-      Since the previous <Explain term="run">run</Explain>, <b>{moved}</b> of the <b>{scored}</b> names we <Explain term="score">score</Explain> across your <b>{inds}</b>{" "}
-      {indWord} changed <Explain term="band">band</Explain>, {alertsClause}, and {catsClause}.
-    </p>
-  );
-}
-
-// Coverage for a pinned name: the pick row carries it; the stats row is the
-// fallback. [present, total], or [undefined, undefined] when neither has it.
-function pickCoverage(p, st) {
-  if (p && p.components_total != null) return [p.components_present, p.components_total];
-  if (st && st.components_total != null) return [st.components_present, st.components_total];
-  return [undefined, undefined];
-}
-
-// A score whose coverage was not recorded: the band word and the integer
-// with no coverage bar, so the pill never claims a coverage it cannot show.
-function BandWord({ band, value }) {
-  return (
-    <span className={`badge ${band} compact`} aria-label={`${band}, score ${fmtScore(value)}, coverage not recorded`} title="Coverage was not recorded for this score">
-      <span className="word">{band}</span>
-      {value != null && <span className="num">{fmtScore(value)}</span>}
-    </span>
-  );
-}
-
-// A stored alert fact that is a key with underscores or a fixture tag is not
-// a sentence; the trigger's plain sentence stands in for it.
-function machineShaped(s) {
-  return !s || /_/.test(s) || /^\W*(dev\s+)?fixture/i.test(s);
-}
-
-// nextStep() reads the triggers armed on the name to pick its "nothing to
-// do" sentence. Until the rules have loaded the set is unknown, so the card
-// says only what is always true instead of the band-change hint.
-function armedSet(rules) {
-  return rules ? new Set(rules.map((r) => r.trigger_key)) : undefined;
-}
-
-function stepFor(args) {
-  const s = nextStep(args);
-  if (s.kind === "wait" && args.armedKeys === undefined && args.alertsLimit !== 0 && args.verified !== false) {
-    return { text: "Nothing to do. We keep watching; your digest carries its latest band.", kind: "wait" };
-  }
-  return s;
-}
-
-// Plain line for a pinned name: score since the pin date, then the next
-// dated event on file. Facts only; no colour on score moves.
-function pinSentence(p, st, tz) {
-  const parts = [];
-  const when = p.pinned_at ? ` on ${shortDate(p.pinned_at, tz)}` : "";
-  const [cp, ct] = pickCoverage(p, st);
-  if (p.value == null) parts.push("No score on this run.");
-  else if (p.score_at_pin == null) parts.push(`Scores ${fmtScore(p.value, cp, ct)} now; no score was recorded when you pinned it.`);
-  else {
-    const r = Math.round(p.value - p.score_at_pin);
-    if (r === 0) parts.push(`Unchanged since you pinned it${when}.`);
-    else parts.push(`${r > 0 ? "Up" : "Down"} ${Math.abs(r)} point${Math.abs(r) === 1 ? "" : "s"} since you pinned it${when}.`);
-  }
-  if (st && st.earnings) parts.push(`Earnings ${inDays(st.earnings.days)}.`);
-  else if (st) parts.push("No dated event on file.");
-  return parts.join(" ");
-}
-
-export default function Overview() {
-  const { me } = useMe();
-  const { full } = useMode();
-  const [d, setD] = useState(null);
+// Markets: the rebased index, the biggest 30-day moves and the industry
+// cards. Mounted on first open, so its three requests wait until asked for.
+function Markets({ d, K, reload }) {
   const [screen, setScreen] = useState(null);
-  const [err, setErr] = useState(null);
-  const [reload, setReload] = useState(0);
-
-  const [chg, setChg] = useState(null);
-  const [chgErr, setChgErr] = useState(null);
-  const [showAllChg, setShowAllChg] = useState(false);
-
-  const [events, setEvents] = useState(null);
-  const [eventsErr, setEventsErr] = useState(null);
-  const [evReload, setEvReload] = useState(0);
-
-  const [picks, setPicks] = useState(null);
-  const [picksErr, setPicksErr] = useState(null);
-  const [stats, setStats] = useState(null);
-  const [wlReload, setWlReload] = useState(0);
-  const [pinnedSet, setPinnedSet] = useState(null);
-
-  const [mktOpen, setMktOpen] = useState(full);
-  useEffect(() => setMktOpen(full), [full]);
-
-  const locked = Boolean(me && me.tier && me.tier.alerts_limit === 0);
-
   useEffect(() => {
     let alive = true;
-    setErr(null);
-    api("/overview")
-      .then((x) => alive && setD(x))
-      .catch((e) => alive && setErr(e));
     // movers: the biggest 30-day price moves among the names on the board,
     // fetched from both ends so the strip shows real decliners (the server
     // clamps each list to the plan's names_shown_limit)
@@ -353,17 +508,123 @@ export default function Overview() {
         down: dn.status === "fulfilled" ? dn.value : { rows: [], meta: {} },
       });
     });
-    // every band move since the previous run, up to the plan's limit (the
-    // overview carries only the top three each way)
-    setChg(null);
-    setChgErr(null);
-    api("/changes?strategy=fast_mover&vs=prev")
-      .then((x) => alive && setChg(x))
-      .catch((e) => alive && setChgErr(e));
     return () => {
       alive = false;
     };
   }, [reload]);
+
+  const movers = useMemo(() => {
+    if (!screen) return [];
+    const priced = (x) => ((x && x.rows) || []).filter((r) => r.price && r.price.chg_30d != null);
+    const up = priced(screen.up).filter((r) => r.price.chg_30d > 0);
+    const down = priced(screen.down).filter((r) => r.price.chg_30d < 0);
+    const seen = new Set();
+    return [...up, ...down].filter((r) => !seen.has(r.symbol) && seen.add(r.symbol));
+  }, [screen]);
+  // caption only on a genuine plan clamp (matched beyond the names the plan shows), not on our own limit
+  const planClamped = (m) => Boolean(m && m.names_shown_limit != null && m.matched > m.names_shown_limit);
+  const moversClamped = Boolean(screen && (planClamped(screen.up.meta) || planClamped(screen.down.meta)));
+
+  return (
+    <div className="acc-body">
+      <Hero />
+
+      {movers.length > 0 && (
+        <>
+          <div className="section-head">
+            <h3>Biggest price moves, 30 days</h3>
+            <span className="muted small">{moversClamped ? "among the names your plan shows" : "among your names"} · daily closes</span>
+          </div>
+          <div className="movers-row">
+            {movers.map((r) => (
+              <Link key={r.symbol} to={`/stock/${r.symbol}`} className="mover-card">
+                <span className="sym">{r.symbol}</span>
+                <span className="theme">{r.theme}</span>
+                <Spark closes={r.price.closes} width={140} height={36} />
+                <Move value={r.price.chg_30d} />
+                <span className="xs faint">
+                  {r.band} {fmtScore(r.value, r.components_present, r.components_total)}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
+
+      <section className="section" aria-labelledby="ov-ind" style={{ marginTop: 0 }}>
+        <div className="section-head">
+          <h3 id="ov-ind">My industries</h3>
+          <span className="muted small">this morning's scoring · the top {Math.min(3, K)} names in each</span>
+        </div>
+        <div className="ovgrid">
+          {d.industries.map((ind) => (
+            <article className="card ovind" key={ind.key}>
+              <div className="ovind-head">
+                <Link to={`/industries/${ind.key}`} className="ovind-title">
+                  {ind.label}
+                </Link>
+                {ind.benchmark && (
+                  <span className="row" style={{ gap: 8 }}>
+                    <Spark closes={ind.benchmark.closes} width={64} height={22} />
+                    <span className="xs faint">{ind.benchmark.symbol}</span>
+                    <MoveChip value={ind.benchmark.chg_30d} />
+                  </span>
+                )}
+              </div>
+              <BandBar distribution={ind.distribution} />
+              <div className="ovind-facts xs faint">
+                <span>{ind.scored} scored</span>
+                <span>{ind.cleared} passed every must-pass rule</span>
+                {ind.new > 0 && <span>{ind.new} new</span>}
+              </div>
+              <ul className="namelist">
+                {ind.top.map((r) => (
+                  <NameLine
+                    key={r.symbol}
+                    r={r}
+                    right={
+                      <>
+                        {r.delta_1d != null && (
+                          <span className="xs faint full-only nowrap" title="since the last run">
+                            {delta(r.delta_1d)} since last run
+                          </span>
+                        )}
+                        <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} />
+                      </>
+                    }
+                  />
+                ))}
+              </ul>
+              <div className="ovind-links small">
+                <Link to={`/board?industry=${ind.key}`}>Board</Link>
+                <Link to={`/screen?industries=${ind.key}`}>Find</Link>
+                <Link to={`/industries/${ind.key}`}>Industry</Link>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// Everything below the fold: the alerts that fired, the full "I'd have
+// known" and record lists, coming up, the watchlist and Markets. Mounted on
+// the first open of "More on my names", so its requests wait until then.
+function MoreOnMyNames({ d, record, recErr, onRecRetry, locked, tz, full, K, reload }) {
+  const [events, setEvents] = useState(null);
+  const [eventsErr, setEventsErr] = useState(null);
+  const [evReload, setEvReload] = useState(0);
+  const [picks, setPicks] = useState(null);
+  const [picksErr, setPicksErr] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [wlReload, setWlReload] = useState(0);
+  const [mktOpen, setMktOpen] = useState(full);
+  const [mktSeen, setMktSeen] = useState(full);
+  useEffect(() => setMktOpen(full), [full]);
+  useEffect(() => {
+    if (mktOpen) setMktSeen(true);
+  }, [mktOpen]);
 
   useEffect(() => {
     if (locked) return undefined;
@@ -382,11 +643,7 @@ export default function Overview() {
     let alive = true;
     setPicksErr(null);
     api("/me/picks")
-      .then((x) => {
-        if (!alive) return;
-        setPicks(x.picks || []);
-        setPinnedSet(new Set((x.picks || []).map((p) => p.symbol)));
-      })
+      .then((x) => alive && setPicks(x.picks || []))
       .catch((e) => alive && setPicksErr(e));
     api("/me/watchlist/stats")
       .then((x) => alive && setStats(x))
@@ -396,70 +653,22 @@ export default function Overview() {
     };
   }, [reload, wlReload]);
 
-  const onPin = (sym, on) => {
-    setPinnedSet((s) => {
-      const n = new Set(s || []);
-      if (on) n.add(sym);
-      else n.delete(sym);
-      return n;
-    });
-    setWlReload((n) => n + 1);
-  };
-  const isPinned = (sym, fallback) => (pinnedSet ? pinnedSet.has(sym) : Boolean(fallback));
-
-  const movers = useMemo(() => {
-    if (!screen) return [];
-    const priced = (x) => ((x && x.rows) || []).filter((r) => r.price && r.price.chg_30d != null);
-    const up = priced(screen.up).filter((r) => r.price.chg_30d > 0);
-    const down = priced(screen.down).filter((r) => r.price.chg_30d < 0);
-    const seen = new Set();
-    return [...up, ...down].filter((r) => !seen.has(r.symbol) && seen.add(r.symbol));
-  }, [screen]);
-  // either list was cut to the plan's names_shown_limit
-  // caption only on a genuine plan clamp (matched beyond the names the plan shows), not on our own limit
-  const planClamped = (m) => Boolean(m && m.names_shown_limit != null && m.matched > m.names_shown_limit);
-  const moversClamped = Boolean(screen && (planClamped(screen.up.meta) || planClamped(screen.down.meta)));
-
-  // Band moves, ups first (largest first), then downs (largest first).
-  const changes = useMemo(() => {
-    if (chg && chg.prev_run) {
-      const rows = [...chg.band_up.rows, ...chg.band_down.rows];
-      const total = chg.band_up.total + chg.band_down.total;
-      return {
-        rows,
-        total,
-        more: total - rows.length,
-        // the only thing that clamps /changes is the plan's names_shown_limit
-        planClamped: chg.band_up.truncated || chg.band_down.truncated,
-        k: chg.names_shown_limit,
-        summary: chg.summary,
-        prev_as_of: chg.prev_run.as_of,
-      };
-    }
-    if (chg && !chg.prev_run) return { rows: [], total: 0, more: 0, planClamped: false, summary: null, prev_as_of: null, onlyOne: true };
-    if (chgErr && d && d.changes) {
-      // fallback: the overview's own top three each way; the rest is a count
-      const c = d.changes;
-      const rows = [...c.band_up, ...c.band_down];
-      const total = c.summary.band_up + c.summary.band_down;
-      return { rows, total, more: total - rows.length, planClamped: false, k: d.tier ? d.tier.names_shown_limit : 5, summary: c.summary, prev_as_of: c.prev_as_of };
-    }
-    if (chgErr && d && !d.changes) return { rows: [], total: 0, truncated: false, summary: null, prev_as_of: null, onlyOne: true };
-    return null;
-  }, [chg, chgErr, d]);
-
   const recentEvents = useMemo(() => {
     if (!events) return null;
-    return [...events].sort((a, b) => (a.read === false) === (b.read === false) ? new Date(b.fired_at) - new Date(a.fired_at) : a.read === false ? -1 : 1);
+    return [...events].sort((a, b) => ((a.read === false) === (b.read === false) ? new Date(b.fired_at) - new Date(a.fired_at) : a.read === false ? -1 : 1));
   }, [events]);
+  // Alerts sent to this account lead; the ones that merely fired across the
+  // subscriber's industries are a count, the same split the Alerts page makes.
+  const sentEvents = recentEvents ? recentEvents.filter((ev) => ev.channels && ev.channels.length) : null;
+  const eventRows = recentEvents ? (sentEvents.length ? sentEvents : recentEvents).slice(0, HOME_ROWS) : null;
+  const otherCount = recentEvents && sentEvents ? recentEvents.length - sentEvents.length : 0;
 
   const statBySym = useMemo(() => Object.fromEntries(((stats && stats.picks) || []).map((p) => [p.symbol, p])), [stats]);
   const topPinned = useMemo(() => {
     if (!picks || picks.length === 0) return null;
     return [...picks].sort((a, b) => (BAND_RANK[b.band] ?? -1) - (BAND_RANK[a.band] ?? -1) || (b.value ?? -1) - (a.value ?? -1))[0];
   }, [picks]);
-  // the triggers armed on that name, for the next-step sentence
-  const topRules = useRulesFor(topPinned ? topPinned.symbol : null, Boolean(me));
+  const pickRows = picks && picks.slice(0, HOME_ROWS);
 
   const markRead = (ev) => {
     if (ev.read !== false || !ev.id) return;
@@ -471,7 +680,380 @@ export default function Overview() {
       .catch(() => {});
   };
 
+  const a = d.alerts;
+  const w = d.watchlist;
+  // coming up: dated events ahead first, nearest first
+  const upcoming = [...(d.catalysts.upcoming || [])].sort((x, y) => x.days - y.days);
+  const ahead = upcoming.filter((r) => r.days >= 0);
+  const calRows = (ahead.length ? ahead : upcoming).slice(0, HOME_ROWS);
+  const calTotal = d.catalysts.next_14d;
+
+  return (
+    <div className="acc-body">
+      {/* Alerts that fired ------------------------------------------------ */}
+      <Section
+        id="more-alerts"
+        level={3}
+        title="Alerts that fired"
+        note={locked ? null : "last 30 days, unread first"}
+        more={
+          !locked && recentEvents && recentEvents.length > 0 ? (
+            <Link to="/alerts" className="more-all">
+              {recentEvents.length > (eventRows || []).length ? `Show all ${recentEvents.length}` : "My alerts"}
+            </Link>
+          ) : null
+        }
+      >
+        {locked ? (
+          <div className="brief-locked">
+            <p>
+              Your plan does not send alerts yet. This week <b>{a.fired_7d}</b> {a.fired_7d === 1 ? "alert" : "alerts"} fired on <b>{a.fired_7d_names}</b>{" "}
+              {a.fired_7d_names === 1 ? "name" : "names"} in your {d.industries.length === 1 ? "industry" : "industries"}.
+            </p>
+            <div className="actrow">
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => openUpgrade("alerts")}>
+                Show me plans with alerts
+              </button>
+            </div>
+          </div>
+        ) : eventsErr ? (
+          <InlineError what="recent alerts" onRetry={() => setEvReload((n) => n + 1)} />
+        ) : !recentEvents ? (
+          <Skeleton rows={2} height={56} />
+        ) : recentEvents.length === 0 ? (
+          <div className="brief-empty">
+            <p>
+              Nothing fired on your names in the last 30 days.{" "}
+              {a.armed > 0 ? `You have ${plural(a.armed, "alert")} on.` : "You have asked for no alerts yet."}
+            </p>
+            <div className="actrow">
+              {topPinned ? (
+                <>
+                  <NotifyButton symbol={topPinned.symbol} compact label="Alert me" onLabel="Alerting me" />
+                  <span className="xs faint">{triggerSentence("catalyst_dated", topPinned.symbol)}</span>
+                </>
+              ) : (
+                <Link to="/board" className="btn btn-secondary btn-sm">
+                  Watch a name for me
+                </Link>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            <ul className="brows">
+              {eventRows.map((ev) => {
+                const unread = ev.read === false;
+                const ago = agoWords(ev.fired_at);
+                return (
+                  <li className={`brow ${unread ? "unread" : ""}`} key={ev.id}>
+                    <div className="brow-main">
+                      <div className="brow-top">
+                        {unread && <span className="brow-dot" aria-label="Unread" />}
+                        <Link className="sym" to={`/stock/${ev.symbol}`} onClick={() => markRead(ev)}>
+                          {ev.symbol}
+                        </Link>
+                        <Explain
+                          title={TRIGGER_PLAIN[ev.trigger_key] ? TRIGGER_PLAIN[ev.trigger_key][0] : undefined}
+                          text={TRIGGER_PLAIN[ev.trigger_key] ? `We tell you when ${TRIGGER_PLAIN[ev.trigger_key][1]}.` : undefined}
+                        >
+                          <span className="chip chip-plain">{triggerLabel(ev.trigger_key)}</span>
+                        </Explain>
+                        <span className="when" title={dateTime(ev.fired_at, tz)}>
+                          {ago || shortDate(ev.fired_at, tz)}
+                        </span>
+                      </div>
+                      <p className="brow-say">{machineShaped(ev.detail) ? triggerSentence(ev.trigger_key, ev.symbol) : ev.detail}</p>
+                      <div className="brow-detail full-only">
+                        {ev.theme ? <span>{ev.theme}</span> : null}
+                        <span>
+                          {ev.channels && ev.channels.length
+                            ? `delivered by ${ev.channels.join(", ")}${ev.delivered_at ? ` · ${shortDate(ev.delivered_at, tz)}` : ""}`
+                            : "not armed on your account; shown because the name is in your industries"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="brow-act">
+                      <Link to={`/stock/${ev.symbol}`} className="btn btn-secondary btn-sm" onClick={() => markRead(ev)}>
+                        Read it
+                      </Link>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            {sentEvents.length > 0 && otherCount > 0 && (
+              <p className="brief-line">
+                {otherCount} more fired in your industries on names you weren't watching. <Link to="/alerts?tab=outcomes">Show me</Link>.
+              </p>
+            )}
+          </>
+        )}
+      </Section>
+
+      {/* What I'd have known: the misses, with the lead time ----------- */}
+      <Section
+        id="more-known"
+        level={3}
+        title="What I'd have known"
+        note="alerts on names you weren't watching, last 30 days"
+        more={
+          <Link to="/alerts?tab=outcomes" className="more-all">
+            Show me what I missed
+          </Link>
+        }
+      >
+        {recErr ? <InlineError what="your record" onRetry={onRecRetry} /> : !record ? <Skeleton rows={2} height={56} /> : <YoudHaveKnown record={record} />}
+      </Section>
+
+      {/* My record: told, then what the price did ------------------------ */}
+      <Section
+        id="more-record"
+        level={3}
+        title="My record"
+        note="what you were told, and the five sessions after"
+        more={
+          <Link to="/alerts?tab=outcomes" className="more-all">
+            My record
+          </Link>
+        }
+      >
+        {recErr ? <InlineError what="your record" onRetry={onRecRetry} /> : !record ? <Skeleton rows={2} height={56} /> : <YourRecord record={record} topPinned={topPinned} canAlert={!locked} />}
+        {record && record.method && <p className="brief-line full-only">{record.method}</p>}
+      </Section>
+
+      {/* Coming up ------------------------------------------------------- */}
+      <Section
+        id="more-cal"
+        level={3}
+        title="Coming up"
+        note="dated events in the next 14 days"
+        more={
+          <Link to="/calendar?days=14" className="more-all">
+            {calTotal > calRows.length ? `Show all ${calTotal}` : "See the calendar"}
+          </Link>
+        }
+      >
+        {calRows.length === 0 ? (
+          <p className="brief-line">No dated event on file for your names in the next two weeks. A name with no date on file is not listed.</p>
+        ) : (
+          <ul className="brows">
+            {calRows.map((r) => (
+              <li className="brow brow-cal" key={`${r.symbol}-${r.date}`}>
+                <div className="brow-main">
+                  <div className="brow-top">
+                    <Link className="sym" to={`/stock/${r.symbol}`}>
+                      {r.symbol}
+                    </Link>
+                    <span className="theme" title={r.theme}>
+                      {r.theme}
+                    </span>
+                  </div>
+                  <p className="brow-say">
+                    Earnings {inWords(r.days)}, {dayMonth(r.date)}.{r.armed ? " You asked to be alerted." : ""}
+                    {r.pinned ? " Watching." : ""}
+                    {r.confidence ? <span className="full-only"> Date {r.confidence}.</span> : null}
+                  </p>
+                </div>
+                <span className="bandword simple-only">{r.band ? cap(r.band) : "No score"}</span>
+                <div className="brow-act full-only">
+                  {r.band ? <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} /> : <span className="chip chip-plain">No score</span>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        {calTotal > K && (
+          <p className="brief-line">
+            Your plan shows the top {K} of them.{" "}
+            <button type="button" className="btn-quiet hint-up" onClick={() => openUpgrade("names")}>
+              See what the next plan lists
+            </button>
+          </p>
+        )}
+      </Section>
+
+      {/* My watchlist ---------------------------------------------------- */}
+      <Section
+        id="more-wl"
+        level={3}
+        title="My watchlist"
+        note={w.count > 0 ? (w.limit != null ? `${w.count} of ${w.limit} names watched` : plural(w.count, "name watched", "names watched")) : null}
+        more={
+          picks && picks.length > 0 ? (
+            <Link to="/watchlist" className="more-all">
+              {picks.length > HOME_ROWS ? `Show all ${picks.length}` : "My watchlist"}
+            </Link>
+          ) : null
+        }
+      >
+        {picksErr ? (
+          <InlineError what="your watchlist" onRetry={() => setWlReload((n) => n + 1)} />
+        ) : !picks ? (
+          <Skeleton rows={2} height={56} />
+        ) : picks.length === 0 ? (
+          <div className="brief-empty">
+            <p>
+              Nothing watched yet. A watched name stays on this page and in your weekly brief.
+              {w.limit != null ? ` Your plan watches up to ${plural(w.limit, "name")} for you.` : ""}
+            </p>
+            <div className="actrow">
+              <Link to="/board" className="btn btn-secondary btn-sm">
+                Show me the Board
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <ul className="brows">
+            {pickRows.map((p) => {
+              const st = statBySym[p.symbol];
+              const [cp, ct] = pickCoverage(p, st);
+              return (
+                <li className="brow" key={p.symbol}>
+                  <div className="brow-main">
+                    <div className="brow-top">
+                      <Link className="sym" to={`/stock/${p.symbol}`}>
+                        {p.symbol}
+                      </Link>
+                      <span className="theme" title={p.theme}>
+                        {p.theme}
+                      </span>
+                      {st && st.unread > 0 && (
+                        <Link to={`/alerts?symbol=${p.symbol}&unread=1`} className="chip chip-plain">
+                          {st.unread} unread
+                        </Link>
+                      )}
+                    </div>
+                    <p className="brow-say">{pinSentence(p, st, tz)}</p>
+                    {st && (
+                      <div className="brow-detail full-only">
+                        {st.closes && st.closes.length > 1 && <Spark closes={st.closes} width={90} height={24} />}
+                        {st.chg_30d != null && (
+                          <span>
+                            30d <Move value={st.chg_30d} />
+                          </span>
+                        )}
+                        {st.chg_since_pin != null && (
+                          <span>
+                            since added <b className={tone(st.chg_since_pin)}>{signed(st.chg_since_pin, 1, "%")}</b>
+                            {st.benchmark_chg_since_pin != null ? (
+                              <>
+                                {" "}
+                                vs {st.benchmark} <span className={tone(st.benchmark_chg_since_pin)}>{signed(st.benchmark_chg_since_pin, 1, "%")}</span>
+                              </>
+                            ) : null}
+                          </span>
+                        )}
+                        {p.band && ct != null && <ScoreBadge band={p.band} value={p.value} present={cp} total={ct} />}
+                      </div>
+                    )}
+                  </div>
+                  <span className="bandword simple-only">{p.band ? cap(p.band) : "No score"}</span>
+                  <div className="brow-act">
+                    <NotifyButton symbol={p.symbol} compact label="Alert me" onLabel="Alerting me" />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Section>
+
+      {/* Markets: price context, folded --------------------------------- */}
+      <details className="acc mkt" open={mktOpen} onToggle={(e) => setMktOpen(e.currentTarget.open)}>
+        <summary>
+          <h3>Markets</h3>
+          <span className="sum-note">your watched names as an index, the biggest 30-day moves, your industries</span>
+        </summary>
+        {mktSeen && <Markets d={d} K={K} reload={reload} />}
+      </details>
+    </div>
+  );
+}
+
+export default function Overview() {
+  const { me } = useMe();
+  const { full } = useMode();
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState(null);
+  const [reload, setReload] = useState(0);
+
+  // the record: told, missed, beyond (DESIGN_V5 §3)
+  const [record, setRecord] = useState(null);
+  const [recErr, setRecErr] = useState(null);
+  const [recReload, setRecReload] = useState(0);
+
+  // ?welcome=1 (set by onboarding) titles the how-it-works card "Your first
+  // brief"; the card itself shows until dismissed once per browser
+  const q = useQuery();
+  const welcome = q.get("welcome") === "1";
+  const [howDone, setHowDone] = useState(() => readFlag(HOW_KEY));
+  const dismissHow = () => {
+    setHowDone(true);
+    writeFlag(HOW_KEY);
+    stripParam("welcome");
+  };
+  const showHow = welcome || !howDone;
+
+  // ?verified=1: one line, then the flag leaves the address bar
+  const [verifiedNote, setVerifiedNote] = useState(() => new URLSearchParams(window.location.search).get("verified") === "1");
+  useEffect(() => {
+    if (verifiedNote) stripParam("verified");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ?plans=1 (onboarding, for a visitor who arrived for a paid plan): the
+  // upgrade sheet opens once over the first brief, then the flag leaves.
+  // Deferred a tick so the sheet, mounted after this page, is listening.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("plans") !== "1") return undefined;
+    stripParam("plans");
+    const t = setTimeout(() => openUpgrade("general"), 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  // everything below the fold: closed in Simple, open in Full, mounted on
+  // the first open so its requests wait until then
+  const [moreOpen, setMoreOpen] = useState(full);
+  const [moreSeen, setMoreSeen] = useState(full);
+  useEffect(() => setMoreOpen(full), [full]);
+  useEffect(() => {
+    if (moreOpen) setMoreSeen(true);
+  }, [moreOpen]);
+
+  const locked = Boolean(me && me.tier && me.tier.alerts_limit === 0);
   const tz = me && me.settings ? me.settings.timezone : undefined;
+
+  useEffect(() => {
+    let alive = true;
+    setErr(null);
+    api("/overview")
+      .then((x) => alive && setD(x))
+      .catch((e) => alive && setErr(e));
+    return () => {
+      alive = false;
+    };
+  }, [reload]);
+
+  useEffect(() => {
+    let alive = true;
+    setRecErr(null);
+    fetchRecord(30)
+      .then((x) => alive && setRecord(x))
+      .catch((e) => alive && setRecErr(e));
+    return () => {
+      alive = false;
+    };
+  }, [reload, recReload]);
+
+  // a plan change made in the upgrade sheet (sandbox) re-briefs in place
+  useEffect(() => {
+    const onPlan = () => setReload((n) => n + 1);
+    window.addEventListener("plan:changed", onPlan);
+    return () => window.removeEventListener("plan:changed", onPlan);
+  }, []);
+
+  const hello = greeting(me && me.name);
 
   if (err) {
     return (
@@ -483,590 +1065,270 @@ export default function Overview() {
   if (!d) {
     return (
       <div className="wrap brief">
-        <div className="pagehead">
-          <div>
-            <h1>Your brief</h1>
-          </div>
+        <header className="home-head">
+          <h1>{hello}</h1>
+          <Skeleton rows={1} height={28} />
+        </header>
+        <div className="home-sk three">
+          <Skeleton rows={1} height={150} />
+          <Skeleton rows={1} height={150} />
+          <Skeleton rows={1} height={150} />
         </div>
-        <Skeleton rows={1} height={48} />
-        <Skeleton rows={3} height={84} />
+        <Skeleton rows={3} height={56} />
       </div>
     );
   }
 
   const run = d.run;
-  const w = d.watchlist;
   const a = d.alerts;
   const K = d.tier ? d.tier.names_shown_limit : 5;
   const noIndustries = d.industries.length === 0;
 
-  // One next step for the account, from the same rule the dossier uses.
-  let step;
+  const verified = verifiedNote && (
+    <Notice tone="info" className="home-notice" onDismiss={() => setVerifiedNote(false)}>
+      <p>Email verified. Alerts and the weekly brief can now reach this address.</p>
+    </Notice>
+  );
+
+  // One line and one button: the page cannot brief without industries.
   if (noIndustries) {
-    step = {
-      text: "Choose the industries you want watched. Everything on this page is built from them.",
-      action: (
-        <Link to="/onboarding" className="btn btn-primary btn-sm">
-          Choose industries
-        </Link>
-      ),
-    };
-  } else if (picks) {
-    const s = stepFor({
-      pinned: picks.length > 0,
-      armed: a.armed > 0,
-      band: run && topPinned ? topPinned.band : null,
-      verified: me ? me.verified : undefined,
-      alertsLimit: a.limit,
-      armedKeys: armedSet(topRules),
-    });
-    if (s.kind === "pin") {
-      step = {
-        text: "Pin a name from the Board. Pinned names stay on this page and in your digest, and we track their score from the day you pinned them.",
-        action: (
-          <Link to="/board" className="btn btn-primary btn-sm">
-            Open the Board
-          </Link>
-        ),
-      };
-    } else if (s.kind === "notify" && topPinned) {
-      step = { text: `Turn on alerts for ${topPinned.symbol} so you hear the moment something changes on it.`, action: <NotifyButton symbol={topPinned.symbol} compact /> };
-    } else if (s.kind === "why" && topPinned) {
-      step = {
-        text: `${topPinned.symbol} is ${topPinned.band} on this run. ${s.text}`,
-        action: (
-          <Link to={`/stock/${topPinned.symbol}`} className="btn btn-secondary btn-sm">
-            Read why
-          </Link>
-        ),
-      };
-    } else {
-      step = { text: s.text, action: null };
-    }
+    return (
+      <div className="wrap brief">
+        {verified}
+        {showHow && welcome && <HowCard welcome onDone={dismissHow} action={{ to: "/onboarding", label: "Pick my industries" }} />}
+        <header className="home-head">
+          <h1>{hello}</h1>
+          <p className="home-line">You follow no industries yet, so there is nothing to brief.</p>
+          <div className="home-cta">
+            <Link to="/onboarding" className="btn btn-primary">
+              Pick my industries <Icon name="arrow" size={16} />
+            </Link>
+          </div>
+          <FinePrint short links={false} />
+        </header>
+        {showHow && !welcome && <HowCard onDone={dismissHow} />}
+      </div>
+    );
   }
 
-  const changeRows = changes && (showAllChg ? changes.rows : changes.rows.slice(0, PREVIEW_ROWS));
-  // Alerts sent to this account lead; the ones that merely fired across the
-  // subscriber's industries are a count, the same split the Alerts page makes.
-  const sentEvents = recentEvents ? recentEvents.filter((ev) => ev.channels && ev.channels.length) : null;
-  const otherCount = recentEvents && sentEvents ? recentEvents.length - sentEvents.length : 0;
-  const eventRows = recentEvents && (sentEvents.length ? sentEvents : recentEvents).slice(0, 5);
-  const unreadNow = recentEvents ? recentEvents.filter((e) => e.read === false).length : a.unread;
-  const pickRows = picks && picks.slice(0, PREVIEW_ROWS);
+  if (!run) {
+    return (
+      <div className="wrap brief">
+        {verified}
+        {showHow && welcome && <HowCard welcome onDone={dismissHow} />}
+        <header className="home-head">
+          <h1>{hello}</h1>
+          <p className="home-line">No morning scoring has finished yet. Your brief fills after the first one.</p>
+        </header>
+        <Empty title="Nothing scored yet.">The engine runs each morning; what changed, the alerts and the dates ahead appear here after it.</Empty>
+        {showHow && !welcome && <HowCard onDone={dismissHow} />}
+      </div>
+    );
+  }
+
+  // The one action, by urgency: unread alerts; else a dated event on a name
+  // you watch; else the first change on the page.
+  const upcoming = d.catalysts.upcoming || [];
+  const watchedEvent = upcoming.find((r) => r.days >= 0 && (r.pinned || r.armed));
+  const scrollToChanged = () => {
+    const el = document.getElementById("changed");
+    if (el) el.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+  };
+  // howAction is the same destination for the first-visit card's link.
+  let primary;
+  let howAction;
+  if (!locked && a.unread > 0) {
+    primary = (
+      <Link to="/alerts" className="btn btn-primary">
+        Read my alerts <Icon name="arrow" size={16} />
+      </Link>
+    );
+    howAction = { to: "/alerts", label: "Read my alerts" };
+  } else if (watchedEvent) {
+    primary = (
+      <Link to="/calendar?days=14" className="btn btn-primary">
+        See what's coming <Icon name="arrow" size={16} />
+      </Link>
+    );
+    howAction = { to: "/calendar?days=14", label: "See what's coming" };
+  } else {
+    primary = (
+      <button type="button" className="btn btn-primary" onClick={scrollToChanged}>
+        Show me what changed
+      </button>
+    );
+    howAction = { run: scrollToChanged, label: "Show me what changed" };
+  }
+
+  // the three cards
+  const recLoading = !record && !recErr;
+  const told = record ? record.told : null;
+  const missed = record ? record.missed : null;
+  const cats = d.catalysts.next_14d;
+  const nearest = [...upcoming].sort((x, y) => x.days - y.days).find((r) => r.days >= 0) || null;
+  const comingSay = cats === 0 ? "No dated event on file in the next two weeks." : `${plural(cats, "date")} in the next two weeks.`;
+  const comingSub = cats > 0 && nearest ? `Nearest: ${nearest.symbol} earnings ${inWords(nearest.days)}.` : null;
+
+  // one line of record, only once a told alert has been measured
+  const recordLine = told && bestToldEvent(told) ? toldHeadline(told) : null;
+
+  // what changed: the overview's own top names each way; the rest is a count
+  const c = d.changes;
+  const changeRows = c ? [...c.band_up, ...c.band_down].slice(0, HOME_ROWS) : [];
+  const changeTotal = c ? c.summary.band_up + c.summary.band_down : 0;
+
+  // my plan: the industries the plan watches, and what fired in the others
+  const tier = me && me.tier;
+  const followed = d.industries.length;
+  const limit = tier ? tier.industries_limit : null;
+  const showPlan = Boolean(tier) && limit != null && limit < 999;
+  const planFirst =
+    limit != null && followed < limit
+      ? `Your plan watches up to ${plural(limit, "industry", "industries")}; you follow ${followed}.`
+      : `Your plan watches ${plural(followed, "industry", "industries")}.`;
+  const planSecond = record ? beyondPlanSentence(record.beyond) : null;
 
   return (
     <div className="wrap brief">
-      <div className="pagehead">
-        <div className="brief-title">
-          <h1>Your brief</h1>
-          <Utility d={d} locked={locked} />
-          <div className="meta">
-            {run ? (
-              <>
-                Run {dateTime(run.as_of, tz)} <AgeChip asOf={run.as_of} words />
-                {me && me.name ? ` · for ${me.name}` : ""}
-              </>
-            ) : (
-              "No completed run yet."
-            )}
-          </div>
-        </div>
-        <div className="actions">
-          <Link to="/screen" className="btn btn-secondary btn-sm">
-            <Icon name="screen" size={16} /> Find names
-          </Link>
-          <Link to="/board" className="btn btn-primary btn-sm">
-            Open the Board <Icon name="arrow" size={16} />
-          </Link>
-        </div>
+      {verified}
+
+      {/* 0. The first visit: the three sentences, then the one action ------ */}
+      {showHow && welcome && <HowCard welcome onDone={dismissHow} action={howAction} />}
+
+      {/* 1. The greeting, the line, one action --------------------------- */}
+      <header className="home-head">
+        <h1>{hello}</h1>
+        <TheLine d={d} locked={locked} tz={tz} />
+        <div className="home-cta">{primary}</div>
+        <FinePrint short links={false} />
+      </header>
+
+      {/* 2. Three cards --------------------------------------------------- */}
+      <div className="sumgrid">
+        <SumCard
+          id="sum-told"
+          title="Told me"
+          n={locked ? 0 : told ? told.summary.fired : null}
+          say={toldCardSentence(told, { locked })}
+          sub={locked ? null : toldCardLatest(told)}
+          to="/alerts"
+          cta="My alerts"
+          loading={!locked && recLoading}
+          error={!locked && recErr ? recErr : null}
+          onRetry={() => setRecReload((n) => n + 1)}
+        />
+        <SumCard
+          id="sum-missed"
+          title="I'd have known"
+          n={missed ? missed.summary.fired : null}
+          say={missedCardSentence(missed)}
+          to="/alerts?tab=outcomes"
+          cta="Show me what I missed"
+          loading={recLoading}
+          error={recErr}
+          onRetry={() => setRecReload((n) => n + 1)}
+        />
+        <SumCard id="sum-cal" title="Coming up" n={cats} say={comingSay} sub={comingSub} to="/calendar?days=14" cta="See the calendar" />
       </div>
 
-      {!run && (
-        <>
-          <Empty title="No scored run yet.">Scores appear after the first run completes; the engine runs each morning.</Empty>
-          {step && (
-            <div className="nextstep" role="note">
-              <span className="nextstep-k">Next step</span>
-              <span>{step.text}</span>
-              <span className="spacer" />
-              {step.action}
-            </div>
-          )}
-        </>
+      {/* 3. My record, one line ------------------------------------------- */}
+      {recordLine && (
+        <div className="home-record">
+          <p>{withMoveColour(recordLine)}</p>
+          <Link to="/alerts?tab=outcomes" className="more-all">
+            <Tail text="My record" />
+          </Link>
+        </div>
       )}
 
-      {run && (
-        <>
-          {/* 2. What changed ------------------------------------------------ */}
-          <Section
-            id="br-chg"
-            title="What changed"
-            note={changes && changes.prev_as_of ? `since the run on ${shortDate(changes.prev_as_of, tz)}` : null}
-            more={
-              <Link to="/changes" className="more">
-                All changes →
-              </Link>
-            }
-          >
-            {!changes && <Skeleton rows={2} height={64} />}
-            {changes && changes.onlyOne && <p className="muted small">Only one run is on record. Changes appear once a second run completes.</p>}
-            {changes && !changes.onlyOne && changes.rows.length === 0 && (
-              <p className="muted small">
-                No name changed band since the previous run.
-                {changes.summary ? ` ${changes.summary.up} scores went up and ${changes.summary.down} went down without crossing a band line.` : ""}
-              </p>
-            )}
-            {changes && changes.rows.length > 0 && (
-              <ul className="brows">
-                {changeRows.map((r) => (
-                  <li className="brow" key={r.symbol}>
-                    <div className="brow-main">
-                      <div className="brow-top">
-                        <Link className="sym" to={`/stock/${r.symbol}`}>
-                          {r.symbol}
-                        </Link>
-                        <span className="theme" title={r.theme}>
-                          {r.theme}
-                        </span>
-                        <Link className="ind" to={`/industries/${r.industry.key}`}>
-                          {r.industry.label}
-                        </Link>
-                      </div>
-                      <p className="brow-say">{changeSentence(r.delta, r.now && r.now.band, r.prev && r.prev.band)}</p>
-                      <div className="brow-detail full-only">
-                        {r.prev ? <ScoreBadge band={r.prev.band} value={r.prev.value} present={r.prev.present} total={r.prev.total} /> : <span className="chip chip-plain">not scored</span>}
-                        <span aria-hidden="true">→</span>
-                        {r.now ? <ScoreBadge band={r.now.band} value={r.now.value} present={r.now.present} total={r.now.total} /> : <span className="chip chip-plain">not scored</span>}
-                        <span className="mono">Δ {delta(r.delta)}</span>
-                      </div>
-                    </div>
-                    <div className="brow-side">
-                      {r.now ? <ScoreBadge band={r.now.band} value={r.now.value} present={r.now.present} total={r.now.total} /> : <span className="chip chip-plain">not scored</span>}
-                    </div>
-                    <div className="brow-act">
-                      <Pin symbol={r.symbol} pinned={isPinned(r.symbol, r.pinned)} onChange={onPin} />
-                      <NotifyButton symbol={r.symbol} compact />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {changes && changes.rows.length > PREVIEW_ROWS && (
-              <button type="button" className="btn-quiet brief-toggle" onClick={() => setShowAllChg((v) => !v)} aria-expanded={showAllChg}>
-                {showAllChg ? "Show fewer" : `Show all ${changes.rows.length}`}
-              </button>
-            )}
-            {changes && changes.summary && (changes.more > 0 || changes.summary.new > 0 || changes.summary.cleared > 0 || changes.summary.failed > 0) && (
-              <p className="hint">
-                {changes.more > 0
-                  ? changes.planClamped
-                    ? `${changes.more} more changed band in your industries; your plan shows the top ${changes.k}. `
-                    : `${changes.more} more changed band in your industries. `
-                  : ""}
-                {changes.summary.new > 0 ? `${plural(changes.summary.new, "name was", "names were")} scored for the first time on this run. ` : ""}
-                {changes.summary.cleared > 0 || changes.summary.failed > 0
-                  ? `${changes.summary.cleared} passed every filter and ${changes.summary.failed} failed one. `
-                  : ""}
-                <Link to="/changes">See every change</Link>.
-              </p>
-            )}
-          </Section>
-
-          {/* 3. Alerts that fired ------------------------------------------- */}
-          <Section
-            id="br-al"
-            title="Alerts that fired"
-            note={locked ? null : "last 30 days, unread first"}
-            more={
-              <Link to="/alerts" className="more">
-                All alerts →
-              </Link>
-            }
-          >
-            {locked ? (
-              <div className="brief-locked">
-                <p>
-                  An <Explain term="alert">alert</Explain> is a message we send when a specific fact prints on a name you asked us to watch: a borrow fee doubling,
-                  volume at three times normal, a dated catalyst landing in range. This week <b>{a.fired_7d}</b> {a.fired_7d === 1 ? "alert" : "alerts"} fired on{" "}
-                  <b>{a.fired_7d_names}</b> {a.fired_7d_names === 1 ? "name" : "names"} in your industries.
-                </p>
-                <p className="muted small">Alerts start on the Basic plan: each one is emailed to you with the fact that fired it.</p>
-                <div className="actrow">
-                  <Link to="/pricing" className="btn btn-primary btn-sm">
-                    See plans
-                  </Link>
-                  <Link to="/board" className="btn btn-secondary btn-sm">
-                    Pin names meanwhile
-                  </Link>
-                </div>
-              </div>
-            ) : eventsErr ? (
-              <InlineError what="recent alerts" onRetry={() => setEvReload((n) => n + 1)} />
-            ) : !recentEvents ? (
-              <Skeleton rows={2} height={64} />
-            ) : recentEvents.length === 0 ? (
-              <div className="brief-empty">
-                <p>
-                  Nothing fired on your names in the last 30 days. An <Explain term="alert">alert</Explain> is a message we send when a specific fact prints on a
-                  name you asked us to watch, such as a borrow fee doubling or volume at three times normal.{" "}
-                  {a.armed > 0 ? `You have ${plural(a.armed, "trigger")} armed.` : "You have no triggers armed yet."}
-                </p>
-                <div className="actrow">
-                  {topPinned ? (
-                    <>
-                      <NotifyButton symbol={topPinned.symbol} compact />
-                      <span className="xs faint">{triggerSentence("catalyst_dated", topPinned.symbol)}</span>
-                    </>
-                  ) : (
-                    <Link to="/board" className="btn btn-secondary btn-sm">
-                      Pin a name to watch
-                    </Link>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <>
-                <ul className="brows">
-                  {eventRows.map((ev) => {
-                    const unread = ev.read === false;
-                    const ag = age(ev.fired_at);
-                    return (
-                      <li className={`brow ${unread ? "unread" : ""}`} key={ev.id}>
-                        <div className="brow-main">
-                          <div className="brow-top">
-                            {unread && <span className="brow-dot" aria-label="Unread" />}
-                            <Link className="sym" to={`/stock/${ev.symbol}`} onClick={() => markRead(ev)}>
-                              {ev.symbol}
-                            </Link>
-                            <Explain
-                              title={TRIGGER_PLAIN[ev.trigger_key] ? TRIGGER_PLAIN[ev.trigger_key][0] : undefined}
-                              text={TRIGGER_PLAIN[ev.trigger_key] ? `We tell you when ${TRIGGER_PLAIN[ev.trigger_key][1]}.` : undefined}
-                            >
-                              <span className="chip chip-plain">{triggerLabel(ev.trigger_key)}</span>
-                            </Explain>
-                            <span className="when" title={dateTime(ev.fired_at, tz)}>
-                              {ag ? `${ag.label} ago` : shortDate(ev.fired_at, tz)}
-                            </span>
-                          </div>
-                          <p className="brow-say">{machineShaped(ev.detail) ? triggerSentence(ev.trigger_key, ev.symbol) : ev.detail}</p>
-                          <div className="brow-detail full-only">
-                            {ev.theme ? <span>{ev.theme}</span> : null}
-                            <span>
-                              {ev.channels && ev.channels.length
-                                ? `delivered by ${ev.channels.join(", ")}${ev.delivered_at ? ` · ${shortDate(ev.delivered_at, tz)}` : ""}`
-                                : "not armed on your account; shown because the name is in your universe"}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="brow-act">
-                          <Link to={`/stock/${ev.symbol}`} className="btn btn-secondary btn-sm" onClick={() => markRead(ev)}>
-                            Open report
-                          </Link>
-                          {unread && (
-                            <button type="button" className="btn-quiet" onClick={() => markRead(ev)}>
-                              Mark read
-                            </button>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-                <p className="hint">
-                  {sentEvents.length > eventRows.length ? `${sentEvents.length - eventRows.length} more were sent to you in the last 30 days. ` : ""}
-                  {sentEvents.length > 0 && otherCount > 0 ? `${otherCount} more fired across your industries on names you were not watching. ` : ""}
-                  {unreadNow > 0 ? `${plural(unreadNow, "alert")} unread. ` : ""}
-                  {a.armed > 0
-                    ? `${plural(a.armed, "trigger")} armed.`
-                    : "No triggers armed yet; these fired across your industries on names you were not watching."}
-                </p>
-              </>
-            )}
-          </Section>
-
-          {/* 4. Coming up --------------------------------------------------- */}
-          <Section
-            id="br-cal"
-            title="Coming up"
-            note="dated events in the next 14 days"
-            more={
-              <Link to="/calendar?days=14" className="more">
-                Calendar →
-              </Link>
-            }
-          >
-            {d.catalysts.upcoming.length === 0 ? (
-              <p className="muted small">
-                No dated event on file for your names in the next two weeks. Dates come from each name's latest snapshot; a name with no date on file is not
-                listed, which is not the same as having no event.
-              </p>
-            ) : (
-              <ul className="brows">
-                {d.catalysts.upcoming.map((r) => (
-                  <li className="brow brow-cal" key={`${r.symbol}-${r.date}`}>
-                    <div className="brow-main">
-                      <div className="brow-top">
-                        <Link className="sym" to={`/stock/${r.symbol}`}>
-                          {r.symbol}
-                        </Link>
-                        <span className="theme" title={r.theme}>
-                          {r.theme}
-                        </span>
-                      </div>
-                      <p className="brow-say">
-                        Earnings <b>{inDays(r.days)}</b>, {shortDate(r.date)}
-                        {r.confidence ? <span className="full-only"> · date {r.confidence}</span> : null}
-                        {r.armed ? " · alert armed" : ""}
-                        {r.pinned ? " · pinned" : ""}
-                      </p>
-                    </div>
-                    <div className="brow-side">
-                      {r.band ? <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} /> : <span className="chip chip-plain">No score</span>}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {d.catalysts.next_14d > d.catalysts.upcoming.length && (
-              <p className="hint">
-                {d.catalysts.next_14d - d.catalysts.upcoming.length} more in your industries; your plan shows the top {Math.min(5, K)}.{" "}
-                <Link to="/calendar?days=14">Open the calendar</Link>.
-              </p>
-            )}
-          </Section>
-
-          {/* 5. Your watchlist ---------------------------------------------- */}
-          <Section
-            id="br-wl"
-            title="Your watchlist"
-            note={
-              w.count > 0
-                ? `${w.limit != null ? `${w.count} of ${w.limit} pins` : plural(w.count, "pin")} · ${w.strong_or_elevated} strong or elevated · ${w.cleared} pass every filter`
-                : null
-            }
-            more={
-              <Link to="/watchlist" className="more">
-                Watchlist →
-              </Link>
-            }
-          >
-            {picksErr ? (
-              <InlineError what="your watchlist" onRetry={() => setWlReload((n) => n + 1)} />
-            ) : !picks ? (
-              <Skeleton rows={2} height={64} />
-            ) : picks.length === 0 ? (
-              <div className="brief-empty">
-                <p>
-                  Nothing pinned yet. <Explain term="pin">Pinning</Explain> a name keeps it on this page and in your weekly digest, and from then on we track how its
-                  score moved since the day you pinned it.
-                  {w.limit != null ? ` Your plan holds ${plural(w.limit, "pin")}.` : ""}
-                </p>
-                <div className="actrow">
-                  <Link to="/board" className="btn btn-primary btn-sm">
-                    Open the Board
-                  </Link>
-                  <Link to="/screen" className="btn btn-secondary btn-sm">
-                    Find names
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <>
-                <ul className="brows">
-                  {pickRows.map((p) => {
-                    const st = statBySym[p.symbol];
-                    const [cp, ct] = pickCoverage(p, st);
-                    return (
-                      <li className="brow" key={p.symbol}>
-                        <div className="brow-main">
-                          <div className="brow-top">
-                            <Link className="sym" to={`/stock/${p.symbol}`}>
-                              {p.symbol}
-                            </Link>
-                            <span className="theme" title={p.theme}>
-                              {p.theme}
-                            </span>
-                            <Link className="ind" to={`/industries/${p.industry.key}`}>
-                              {p.industry.label}
-                            </Link>
-                          </div>
-                          <p className="brow-say">{pinSentence(p, st, tz)}</p>
-                          {st && (
-                            <div className="brow-detail full-only">
-                              {st.closes && st.closes.length > 1 && <Spark closes={st.closes} width={90} height={24} />}
-                              {st.chg_30d != null && (
-                                <span>
-                                  30d <Move value={st.chg_30d} />
-                                </span>
-                              )}
-                              {st.chg_since_pin != null && (
-                                <span>
-                                  since pin <b className={tone(st.chg_since_pin)}>{signed(st.chg_since_pin, 1, "%")}</b>
-                                  {st.benchmark_chg_since_pin != null ? (
-                                    <>
-                                      {" "}
-                                      vs {st.benchmark} <span className={tone(st.benchmark_chg_since_pin)}>{signed(st.benchmark_chg_since_pin, 1, "%")}</span>
-                                    </>
-                                  ) : null}
-                                </span>
-                              )}
-                              {st.hf_pass != null && <span className={`verdict ${st.hf_pass ? "pass" : "fail"}`}>{st.hf_pass ? "PASS" : "FAIL"}</span>}
-                              {p.delta_1d != null && <span className="mono">Δ run {delta(p.delta_1d)}</span>}
-                            </div>
-                          )}
-                        </div>
-                        <div className="brow-side">
-                          {st && st.unread > 0 && (
-                            <Link to={`/alerts?symbol=${p.symbol}&unread=1`} className="chip chip-plain">
-                              {st.unread} unread
-                            </Link>
-                          )}
-                          {p.band ? (
-                            ct != null ? (
-                              <ScoreBadge band={p.band} value={p.value} present={cp} total={ct} />
-                            ) : (
-                              <BandWord band={p.band} value={p.value} />
-                            )
-                          ) : (
-                            <span className="chip chip-plain">No score</span>
-                          )}
-                        </div>
-                        <div className="brow-act">
-                          <Pin symbol={p.symbol} pinned={isPinned(p.symbol, true)} onChange={onPin} />
-                          <NotifyButton symbol={p.symbol} compact />
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-                {picks.length > pickRows.length && (
-                  <p className="hint">
-                    {picks.length - pickRows.length} more pinned. <Link to="/watchlist">Open the watchlist</Link>.
-                  </p>
-                )}
-              </>
-            )}
-          </Section>
-
-          {/* 6. One next step ----------------------------------------------- */}
-          {step && (
-            <div className="nextstep" role="note">
-              <span className="nextstep-k">Next step</span>
-              <span>{step.text}</span>
-              <span className="spacer" />
-              {step.action}
-            </div>
-          )}
-
-          {/* 7. Markets: price context, folded ------------------------------ */}
-          <details className="acc mkt" open={mktOpen} onToggle={(e) => setMktOpen(e.currentTarget.open)}>
-            <summary>
-              <h2>Markets</h2>
-              <span className="sum-note">price context: your pins as a rebased index, the biggest 30-day moves, your industries</span>
-            </summary>
-            <div className="acc-body">
-              <Hero />
-
-              {movers.length > 0 && (
-                <>
-                  <div className="section-head">
-                    <h2>Biggest price moves, 30 days</h2>
-                    <span className="muted small">{moversClamped ? "among the names your plan shows" : "among your names"} · daily closes</span>
-                  </div>
-                  <div className="movers-row">
-                    {movers.map((r) => (
-                      <Link key={r.symbol} to={`/stock/${r.symbol}`} className="mover-card">
-                        <span className="sym">{r.symbol}</span>
-                        <span className="theme">{r.theme}</span>
-                        <Spark closes={r.price.closes} width={140} height={36} />
-                        <Move value={r.price.chg_30d} />
-                        <span className="xs faint">
-                          {r.band} {fmtScore(r.value, r.components_present, r.components_total)}
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                </>
-              )}
-
-              <section className="section" aria-labelledby="ov-ind" style={{ marginTop: 0 }}>
-                <div className="section-head">
-                  <h2 id="ov-ind">Your industries</h2>
-                  <span className="muted small">Fast Mover on the latest run · names are your top {Math.min(3, K)}</span>
-                </div>
-                {noIndustries ? (
-                  <Empty
-                    title="You're not following any industries yet."
-                    action={
-                      <Link to="/onboarding" className="btn btn-primary">
-                        Choose industries
-                      </Link>
-                    }
-                  />
-                ) : (
-                  <div className="ovgrid">
-                    {d.industries.map((ind) => (
-                      <article className="card ovind" key={ind.key}>
-                        <div className="ovind-head">
-                          <Link to={`/industries/${ind.key}`} className="ovind-title">
-                            {ind.label}
-                          </Link>
-                          {ind.benchmark && (
-                            <span className="row" style={{ gap: 8 }}>
-                              <Spark closes={ind.benchmark.closes} width={64} height={22} />
-                              <span className="xs faint">{ind.benchmark.symbol}</span>
-                              <MoveChip value={ind.benchmark.chg_30d} />
-                            </span>
-                          )}
-                        </div>
-                        <BandBar distribution={ind.distribution} />
-                        <div className="ovind-facts xs faint">
-                          <span>{ind.scored} scored</span>
-                          <span>mean {ind.mean_score != null ? Math.round(ind.mean_score) : "—"}</span>
-                          <span>{ind.cleared} passed every filter</span>
-                          {ind.new > 0 && <span>{ind.new} new</span>}
-                        </div>
-                        <ul className="namelist">
-                          {ind.top.map((r) => (
-                            <NameLine
-                              key={r.symbol}
-                              r={r}
-                              right={
-                                <>
-                                  <span className="mono xs faint">{delta(r.delta_1d)}</span>
-                                  <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} />
-                                </>
-                              }
-                            />
-                          ))}
-                        </ul>
-                        <div className="ovind-links small">
-                          <Link to={`/board?industry=${ind.key}`}>Board</Link>
-                          <Link to={`/screen?industries=${ind.key}`}>Find</Link>
-                          <Link to={`/industries/${ind.key}`}>Industry</Link>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </section>
-            </div>
-          </details>
-
-          <p className="footnote">
-            Scores from the run at {dateTime(run.as_of, tz)}; price moves from daily closes.{" "}
-            {d.digest && (
-              <>
-                {d.digest.enabled
-                  ? `Weekly digest: ${DAYS[d.digest.day]} at ${String(d.digest.hour).padStart(2, "0")}:00 ${d.digest.timezone}.`
-                  : "Weekly digest is off."}{" "}
-                <Link to="/digests">Preview</Link> · <Link to="/settings#digest">Change</Link>.{" "}
-              </>
-            )}
-            Research and information only; nothing on this page is a recommendation.
+      {/* 4. What changed, three rows -------------------------------------- */}
+      <Section
+        id="changed"
+        title="What changed"
+        note={c && c.prev_as_of ? `since the scoring on ${dayMonth(c.prev_as_of)}` : null}
+        more={
+          changeTotal > changeRows.length ? (
+            <Link to="/changes" className="more-all">
+              Show all {changeTotal}
+            </Link>
+          ) : null
+        }
+      >
+        {!c && <p className="brief-line">Only one morning's scoring is on record. Changes appear after the next one.</p>}
+        {c && changeRows.length === 0 && (
+          <p className="brief-line">
+            No name changed rating since the last scoring.
+            {c.summary ? ` ${c.summary.up} scores went up and ${c.summary.down} went down without changing rating.` : ""}
           </p>
-        </>
+        )}
+        {changeRows.length > 0 && (
+          <ul className="brows">
+            {changeRows.map((r) => (
+              <ChangeRow r={r} key={r.symbol} />
+            ))}
+          </ul>
+        )}
+        {c && changeTotal > K && (
+          <p className="brief-line">
+            Your plan lists the top {K} of them.{" "}
+            <button type="button" className="btn-quiet hint-up" onClick={() => openUpgrade("names")}>
+              See what the next plan lists
+            </button>
+          </p>
+        )}
+      </Section>
+
+      {/* 5. My plan, quiet ------------------------------------------------- */}
+      {showPlan && (
+        <div className="home-plan">
+          <p>
+            {planFirst}
+            {planSecond ? ` ${planSecond}` : ""}
+          </p>
+          <button type="button" className="linkbtn" onClick={() => openUpgrade("beyond")}>
+            See what the next plan watches
+          </button>
+        </div>
       )}
+
+      {/* 6. How this works, until dismissed (the first visit had it on top) */}
+      {showHow && !welcome && <HowCard onDone={dismissHow} />}
+
+      {/* 7. Everything else, behind one details ---------------------------- */}
+      <details className="acc more" open={moreOpen} onToggle={(e) => setMoreOpen(e.currentTarget.open)}>
+        <summary>
+          <h2>More on my names</h2>
+          <span className="sum-note">alerts, record, calendar, watchlist and markets</span>
+        </summary>
+        {moreSeen && (
+          <MoreOnMyNames
+            d={d}
+            record={record}
+            recErr={recErr}
+            onRecRetry={() => setRecReload((n) => n + 1)}
+            locked={locked}
+            tz={tz}
+            full={full}
+            K={K}
+            reload={reload}
+          />
+        )}
+      </details>
+
+      <div className="footnote">
+        <p>
+          Rated at {dateTime(run.as_of, tz)}; price moves from daily closes.{" "}
+          {d.digest && (
+            <>
+              {d.digest.enabled
+                ? `Weekly brief: ${DAYS[d.digest.day]} at ${String(d.digest.hour).padStart(2, "0")}:00 ${zoneName(d.digest.timezone)}.`
+                : "Weekly brief is off."}{" "}
+              <Link to="/digests">Preview</Link> · <Link to="/settings#digest">Change</Link>.
+            </>
+          )}
+        </p>
+        <FinePrint short />
+      </div>
     </div>
   );
 }

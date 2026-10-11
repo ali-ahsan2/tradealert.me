@@ -1,4 +1,8 @@
-"""Tradealert scaffold API: signup, login, me, verify. Mounted under /api."""
+"""App entrypoint: auth (sign-up with the consent tick, log-in, me, verify,
+unsubscribe), the public strategy, industry and run endpoints, board,
+dossier and search, the 403 consent_required gate shared with context.py,
+and the mounted product, account, billing, alerts and Lab routers. Mounted
+under /api; the SPA and /lab are served from static/."""
 import logging
 import os
 import re
@@ -8,18 +12,18 @@ from pathlib import Path
 
 import jwt
 import psycopg2
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exceptions import HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from app import email as emailer
+from app import email as emailer, legal, plain_copy, record
 from app import security
-from app import (account, admin, alerts, billing, discover, dossier, lab, lab_regression,
-                 lab_release, oauth, product, reporting, scope)
+from app import (account, admin, alerts, billing, context, discover, dossier, lab,
+                 lab_regression, lab_release, oauth, product, reporting, scope)
 from app.db import _load_env, get_conn
 
 _load_env()
@@ -29,6 +33,18 @@ log = logging.getLogger("tradealert")
 
 app = FastAPI(title="tradealert.me", docs_url="/api/docs",
               openapi_url="/api/openapi.json")
+
+
+@app.middleware("http")
+async def _no_store_for_authenticated(request: Request, call_next):
+    """Anything answered to a bearer token is per-account and plan-scoped:
+    never cacheable by a browser or an intermediate."""
+    response = await call_next(request)
+    if request.headers.get("authorization") and "cache-control" not in response.headers:
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 app.include_router(account.router)
 app.include_router(alerts.router)
 app.include_router(admin.router)
@@ -39,6 +55,7 @@ app.include_router(lab_regression.router)
 app.include_router(lab_release.router)
 app.include_router(oauth.router)
 app.include_router(product.router)
+app.include_router(record.router)
 app.include_router(reporting.router)
 bearer = HTTPBearer(auto_error=False)
 
@@ -50,7 +67,8 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # per-IP fixed-window rate limits; in-memory is fine for a single uvicorn
 # worker and resets on restart. Behind nginx the client IP comes from
 # X-Forwarded-For, which only nginx can set (the app port binds to localhost).
-_RATE_LIMITS = {"signup": (5, 3600), "login": (10, 60)}
+# "resend" is keyed by user id rather than client IP (see account.py).
+_RATE_LIMITS = {"signup": (5, 3600), "login": (10, 60), "resend": (3, 3600)}
 _hits = defaultdict(deque)
 
 
@@ -84,6 +102,9 @@ def _client_ip(request):
 class SignupIn(BaseModel):
     email: str = Field(min_length=3)
     password: str = Field(min_length=8)
+    # DESIGN_V6 §6: the consent tick. The API refuses a sign-up without it
+    # and records which version of the terms was accepted, and when.
+    accept_terms: bool = False
 
 
 class LoginIn(BaseModel):
@@ -92,15 +113,26 @@ class LoginIn(BaseModel):
 
 
 def _user_payload(row):
-    uid, email, _h, verified, is_admin, created_at, name, provider, provider_id = row
+    (uid, email, _h, verified, is_admin, created_at, name, provider, provider_id,
+     terms_version, terms_at) = row
     return {"email": email, "verified": bool(verified),
             "is_admin": bool(is_admin), "name": name,
             "provider": provider, "provider_id": provider_id,
             "username": provider_id if provider else None,
-            "created_at": created_at.isoformat()}
+            "created_at": created_at.isoformat(),
+            # consent (DESIGN_V6 §10): what this account accepted, and what
+            # the server currently asks for, so the client never compares
+            # against a drifted constant
+            "accepted_terms_version": terms_version,
+            "accepted_terms_at": terms_at.isoformat() if terms_at else None,
+            "terms_version_current": legal.TERMS_VERSION}
 
 
-def _user_from_token(creds):
+def _user_from_token(creds, require_consent=True):
+    """The bearer's users row (11 columns, see _get_by). Like
+    context.user_from_creds, an account that has not ticked the current
+    terms gets 403 consent_required unless require_consent=False: only
+    /api/me passes that here, so the client can learn what to tick."""
     if creds is None:
         raise HTTPException(401, "missing bearer token")
     try:
@@ -118,6 +150,8 @@ def _user_from_token(creds):
         conn.close()
     if not row:
         raise HTTPException(401, "user no longer exists")
+    if require_consent:
+        context.require_current_terms(row)
     return row
 
 
@@ -153,7 +187,7 @@ def _tier_for_user(conn, user_id):
 
 
 def _account_payload(row, conn):
-    uid, email, _h, verified, is_admin, created_at, name, provider, provider_id = row
+    uid = row[0]
     payload = _user_payload(row)
     _provision_free(conn, uid)
     tier = _tier_for_user(conn, uid)
@@ -179,7 +213,8 @@ def _get_by(conn, column, value):
         raise ValueError(f"unexpected column {column!r}")
     cur = conn.cursor()
     cur.execute(f"SELECT id, email, password_hash, verified, is_admin, "
-                f"created_at, name, provider, provider_id "
+                f"created_at, name, provider, provider_id, "
+                f"accepted_terms_version, accepted_terms_at "
                 f"FROM users WHERE {column} = %s", (value,))
     return cur.fetchone()
 
@@ -188,14 +223,31 @@ def _send_verification(email, user_id):
     token = security.make_token(user_id, purpose="verify", expires_days=1)
     base = os.environ.get("APP_BASE_URL", "http://localhost:8000")
     link = f"{base}/api/verify?token={token}"
+    pulse_line = ""
+    try:
+        conn = get_conn()
+        try:
+            pz = record.compute_pulse(conn, 30)
+        finally:
+            conn.close()
+        a = pz["alerts"]
+        if a["fired"]:
+            pulse_line = (f"This month across every industry we watch: {a['fired']} alerts fired on {a['names']} names; "
+                          f"{a['moved_10']} of the {a['measured']} measured moved 10%+ within five sessions. "
+                          "Measured, not predicted.\n\n")
+    except Exception as e:  # noqa: BLE001 - the pulse never blocks a signup
+        log.warning("pulse line for verification email failed: %s", e)
     try:
         status = emailer.send_email(
             email,
             "Verify your tradealert.me account",
             "Confirm your email address to finish signing up.\n\n"
             f"Open this link: {link}\n\n"
+            f"{pulse_line}"
             "This link expires in 24 hours. If you did not create an account, "
-            "ignore this email.",
+            "ignore this email."
+            # an account email: no unsubscribe, the settings link only
+            + legal.email_footer(settings_url=f"{base}/settings"),
         )
         if status == "skipped":
             # dev mode: the console is the only delivery mechanism
@@ -208,6 +260,8 @@ def _send_verification(email, user_id):
 
 @app.post("/api/signup")
 def signup(body: SignupIn, request: Request):
+    if not body.accept_terms:
+        raise HTTPException(422, "tick the box to confirm this is information and alerts, not advice")
     if _rate_limited("signup", _client_ip(request)):
         raise HTTPException(429, "too many signups from this address, try later")
     email = body.email.strip().lower()
@@ -221,11 +275,13 @@ def signup(body: SignupIn, request: Request):
         with conn.cursor() as cur:
             try:
                 cur.execute(
-                    "INSERT INTO users (email, password_hash) VALUES (%s, %s) "
-                    "RETURNING id, created_at",
-                    (email, hashed),
+                    "INSERT INTO users (email, password_hash, "
+                    "accepted_terms_version, accepted_terms_at) "
+                    "VALUES (%s, %s, %s, now()) "
+                    "RETURNING id, created_at, accepted_terms_at",
+                    (email, hashed, legal.TERMS_VERSION),
                 )
-                uid, created_at = cur.fetchone()
+                uid, created_at, terms_at = cur.fetchone()
                 _provision_free(conn, uid)
                 conn.commit()
             except psycopg2.errors.UniqueViolation:
@@ -236,7 +292,10 @@ def signup(body: SignupIn, request: Request):
     _send_verification(email, uid)
     return {"token": security.make_token(uid),
             "user": {"email": email, "verified": False,
-                     "created_at": created_at.isoformat()}}
+                     "created_at": created_at.isoformat(),
+                     "accepted_terms_version": legal.TERMS_VERSION,
+                     "accepted_terms_at": terms_at.isoformat(),
+                     "terms_version_current": legal.TERMS_VERSION}}
 
 
 @app.post("/api/login")
@@ -256,7 +315,7 @@ def login(body: LoginIn, request: Request):
 
 @app.get("/api/me")
 def me(creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
-    row = _user_from_token(creds)
+    row = _user_from_token(creds, require_consent=False)
     conn = get_conn()
     try:
         return _account_payload(row, conn)
@@ -264,22 +323,26 @@ def me(creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
         conn.close()
 
 
+def _verified(ok):
+    """The client page says what happened (DESIGN_V6 §10): ok=1 after a
+    good link, ok=0 for one that is invalid, expired or already used."""
+    return RedirectResponse(f"/verified?ok={1 if ok else 0}", status_code=303)
+
+
 @app.get("/api/verify")
-def verify(token: str):
+def verify(token: str = ""):
     try:
         payload = security.decode_token(token, purpose="verify")
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-        raise HTTPException(400, "invalid or expired verification link")
-    try:
         user_id = int(payload["sub"])
-    except (KeyError, TypeError, ValueError):
-        raise HTTPException(400, "invalid verification link")
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, KeyError, TypeError, ValueError):
+        return _verified(False)
     conn = get_conn()
     try:
         with conn.cursor() as cur:
+            # a second click on the same link finds nothing to flip: used
             cur.execute(
-                "UPDATE users SET verified = TRUE WHERE id = %s "
-                "RETURNING email, verified",
+                "UPDATE users SET verified = TRUE WHERE id = %s AND NOT verified "
+                "RETURNING email",
                 (user_id,),
             )
             row = cur.fetchone()
@@ -287,60 +350,63 @@ def verify(token: str):
     finally:
         conn.close()
     if not row:
-        raise HTTPException(404, "user not found")
+        return _verified(False)
     log.info("verified email %s", row[0])
-    return HTMLResponse(
-        '<!doctype html><html><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        '<title>Email verified</title></head>'
-        '<body style="font-family:sans-serif;line-height:1.6;max-width:30em;'
-        'margin:4em auto;padding:0 1em;text-align:center">'
-        '<h1>Email verified</h1>'
-        '<p>Your tradealert.me account is active.</p>'
-        '<p><a href="/login">Log in now</a></p>'
-        '</body></html>')
+    return _verified(True)
+
 
 @app.get("/api/unsubscribe")
-def unsubscribe(token: str, channel: str = "email"):
+def unsubscribe(request: Request, token: str = "", channel: str = "email"):
+    """Emails link the client page /unsubscribe?token=…&channel=…, which
+    calls this and reads JSON. A browser that lands here directly (an old
+    link) still gets a readable page."""
     from app.jobs import unsubscribe as run_unsubscribe
-    ok = run_unsubscribe(token, channel)
-    return HTMLResponse(
-        '<!doctype html><html><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        '<title>Unsubscribed</title></head>'
-        '<body style="font-family:sans-serif;line-height:1.6;max-width:30em;'
-        'margin:4em auto;padding:0 1em;text-align:center">'
-        '<h1>' + ("Unsubscribed" if ok else "Link invalid or already used") + '</h1>'
-        '<p>' + ("You will stop receiving these emails." if ok else
-                 "Contact support if you think this is a mistake.") + '</p>'
-        '<p><a href="/">Back to the board</a></p>'
-        '</body></html>')
+    ok = run_unsubscribe(token, channel) if token else False
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept and "application/json" not in accept:
+        return HTMLResponse(
+            '<!doctype html><html><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<title>Unsubscribed</title></head>'
+            '<body style="font-family:sans-serif;line-height:1.6;max-width:30em;'
+            'margin:4em auto;padding:0 1em;text-align:center">'
+            '<h1>' + ("Unsubscribed" if ok else "Link invalid or already used") + '</h1>'
+            '<p>' + ("You will stop receiving these emails. Turn them back on any time "
+                     "from your settings." if ok else
+                     "Change what reaches you from your settings.") + '</p>'
+            '<p style="font-size:.9em;opacity:.8">' + legal.FINE_PRINT_SHORT + '</p>'
+            '<p><a href="/settings">My settings</a> · <a href="/">Back to the start</a></p>'
+            '</body></html>')
+    return {"ok": ok, "channel": channel}
+
 
 @app.get("/api/strategies")
-def strategies():
-    """Public list: what the screen is called and whether it is calibrated.
-    Only the name and track record leave the server; the inputs and cutoffs
-    stay internal."""
+def strategies(response: Response):
+    response.headers["Cache-Control"] = "public, max-age=300"
+    """Public list: what each strategy is called, its plain card and its
+    measured record. The inputs, weights and cutoffs stay internal; the
+    status says whether it scored anything on the latest run."""
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT key, label, monogram, calibrated, calibrated_at, "
-                "resolved_outcomes_count "
-                "FROM strategies ORDER BY sort_order",
-            )
-            rows = cur.fetchall()
+            facts = dossier.strategy_facts(cur)
     finally:
         conn.close()
-    return {"strategies": [
-        {"key": r[0], "label": r[1], "monogram": r[2], "calibrated": bool(r[3]),
-         "calibrated_at": r[4].isoformat() if r[4] else None,
-         "resolved_outcomes_count": r[5]} for r in rows
-    ]}
+    out = []
+    for f in sorted(facts.values(), key=lambda f: f["sort_order"]):
+        out.append({
+            "key": f["key"], "label": f["label"], "monogram": f["monogram"],
+            "calibrated": f["calibrated"], "calibrated_at": f["calibrated_at"],
+            "resolved_outcomes_count": f["resolved"],
+            "scored_on_latest_run": f["scored"],
+            "plain": dossier.plain_for(f),
+        })
+    return {"strategies": out}
 
 
 @app.get("/api/industries")
-def industries():
+def industries(response: Response):
+    response.headers["Cache-Control"] = "public, max-age=300"
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -353,9 +419,13 @@ def industries():
             rows = cur.fetchall()
     finally:
         conn.close()
+    # what tends to fire in each industry is measured from the alert record
+    month = product.industry_month_map()
     return {"industries": [
         {"key": r[0], "label": r[1], "benchmark_etf": r[2],
-         "description": r[3], "universe_count": r[5]} for r in rows
+         "description": r[3], "universe_count": r[5],
+         "plain": plain_copy.industry_plain(r[0]),
+         "month": month.get(r[0]) or product.empty_month()} for r in rows
     ]}
 
 
@@ -369,7 +439,8 @@ def _latest_run(conn):
 
 
 @app.get("/api/runs/latest")
-def runs_latest():
+def runs_latest(response: Response):
+    response.headers["Cache-Control"] = "public, max-age=60"
     conn = get_conn()
     try:
         run = _latest_run(conn)
@@ -406,7 +477,8 @@ def _strategy_by_key(conn, key):
 
 def _strategy_payload(strat):
     return {"key": strat[1], "label": strat[2], "monogram": strat[3],
-            "calibrated": bool(strat[4]), "resolved_outcomes_count": strat[5]}
+            "calibrated": bool(strat[4]), "resolved_outcomes_count": strat[5],
+            "plain": dossier.plain_brief_cached(strat[1], bool(strat[4]), strat[5])}
 
 
 @app.get("/api/board")
@@ -442,8 +514,7 @@ def board(band: str = "", strategy: str = "fast_mover",
                 f"i.lane, ind.id, {discover._hf_pass()} AS hf_pass, "
                 "px.last_close, px.c30, px.closes, "
                 "(CASE WHEN e.value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' "
-                " THEN substr(e.value, 1, 10)::date - CURRENT_DATE END) AS earnings_in, "
-                "i.hook "
+                " THEN substr(e.value, 1, 10)::date - CURRENT_DATE END) AS earnings_in "
                 "FROM scores sc "
                 "JOIN instruments i ON i.id = sc.instrument_id "
                 "JOIN tickers s ON s.id = i.ticker_id "
@@ -491,7 +562,7 @@ def board(band: str = "", strategy: str = "fast_mover",
              "components_present": r[8], "components_total": r[9],
              "delta_1d": float(r[10]) if r[10] is not None else None,
              "lane": r[11] or "", "hf_pass": r[13], "price": _price(r),
-             "earnings_in": r[17], "hook": r[18] or ""}
+             "earnings_in": r[17]}
             for i, r in enumerate(rows)
         ],
         "meta": {"shown": len(rows), "truncated": truncated,
@@ -509,6 +580,11 @@ _SNAPSHOT_FIELDS = {
     "float_m": "float_m", "fee_pct": "fee_pct", "borrow_avail": "borrow_avail",
     "growth_pct": "growth_pct", "avgvol20": "avgvol20", "hi52": "hi52", "lo52": "lo52",
 }
+
+
+# Plain names for the must-pass rules; the seed labels carry the thresholds.
+_HARD_FILTER_PLAIN = {"cap": "Company size", "float": "Shares that trade",
+                      "si": "Short interest", "growth": "Revenue growth"}
 
 
 @app.get("/api/stock/{symbol}")
@@ -587,10 +663,15 @@ def stock(symbol: str, strategy: str = "fast_mover",
             pick = cur.fetchone()
     finally:
         conn.close()
+    # the operator's hook and thesis are Lab material (DESIGN_V6 §8, §10):
+    # an admin reads them here, every other viewer gets empty strings
+    is_admin = bool(user_row[4])
     out = {
         "symbol": sym, "theme": row[2], "group": row[3],
         "industry": {"key": row[4], "label": row[5], "benchmark_etf": row[6]},
-        "lane": row[7], "hook": row[8] or "", "thesis": row[9] or "",
+        "lane": row[7],
+        "hook": (row[8] or "") if is_admin else "",
+        "thesis": (row[9] or "") if is_admin else "",
         "strategy": _strategy_payload(strat),
         "strategies": lenses,
         "run": {"id": run_id, "as_of": run[1].isoformat()},
@@ -607,15 +688,18 @@ def stock(symbol: str, strategy: str = "fast_mover",
             "shrinkage_applied": shrink,
             "shrinkage_from": float(score[5]) if score[5] is not None else None,
             "components": components,
+            # the recipe stays private (DESIGN_V6 §10): a penalty is named,
+            # never priced; a must-pass rule is named in plain words and
+            # marked pass or fail, never with the line it tests or the value
             "haircuts": [
-                {"label": h.get("label"), "points": h.get("points"),
-                 "evidence_url": h.get("evidence_url")}
+                {"label": h.get("label"), "evidence_url": h.get("evidence_url")}
                 for h in (score[7] or [])
             ],
             "delta_1d": float(score[8]) if score[8] is not None else None,
             "hard_filters": [
-                {"key": f.get("key"), "label": f.get("label"),
-                 "value": f.get("value"), "pass": bool(f.get("pass"))}
+                {"key": f.get("key"),
+                 "label": _HARD_FILTER_PLAIN.get(f.get("key"), f.get("key")),
+                 "pass": bool(f.get("pass"))}
                 for f in (score[9] or [])
             ],
         }
@@ -645,6 +729,13 @@ def search(q: str = "", creds: HTTPAuthorizationCredentials | None = Depends(bea
         tier = _tier_for_user(conn, user_id)
         keys, _scope_label, picks = scope.user_scope(conn, user_id, tier[3] if tier else 1)
         vis, vis_params = scope.visible_sql_and_params(keys, picks, "i")
+        # the operator's hook and thesis are Lab-only (DESIGN_V6 §12): a
+        # subscriber's search must not be an oracle over them
+        match = "s.symbol ILIKE %s OR i.theme ILIKE %s OR ind.label ILIKE %s"
+        match_params = [q + "%", "%" + q + "%", "%" + q + "%"]
+        if bool(user_row[4]):
+            match += " OR i.hook ILIKE %s OR i.thesis ILIKE %s"
+            match_params += ["%" + q + "%", "%" + q + "%"]
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT s.symbol, i.theme, ind.key, sc.value, sc.band, "
@@ -654,13 +745,10 @@ def search(q: str = "", creds: HTTPAuthorizationCredentials | None = Depends(bea
                 "JOIN industries ind ON ind.id = i.industry_id "
                 "LEFT JOIN scores sc ON sc.instrument_id = i.id "
                 "  AND sc.run_id = %s "
-                f"WHERE (s.symbol ILIKE %s OR i.theme ILIKE %s "
-                f"OR ind.label ILIKE %s OR i.hook ILIKE %s OR i.thesis ILIKE %s) AND {vis} "
+                f"WHERE ({match}) AND {vis} "
                 "ORDER BY (s.symbol = %s) DESC, sc.value DESC NULLS LAST "
                 "LIMIT 12",
-                tuple([run[0], q + "%", "%" + q + "%", "%" + q + "%",
-                       "%" + q + "%", "%" + q + "%"] +
-                      vis_params + [q.upper()]),
+                tuple([run[0]] + match_params + vis_params + [q.upper()]),
             )
             rows = cur.fetchall()
     finally:
@@ -690,7 +778,10 @@ class SPAStaticFiles(StaticFiles):
         try:
             return await super().get_response(path, scope)
         except StarletteHTTPException as e:
-            if e.status_code == 404 and not path.split("/")[0] == "api":
+            # a missing hashed chunk, font or image is a real 404: the browser
+            # must see it (a stale tab then reloads, see main.jsx) rather than
+            # receive index.html as a module script
+            if e.status_code == 404 and path.split("/")[0] not in ("api", "assets", "fonts", "shots"):
                 index = Path(self.directory) / "index.html"
                 if index.is_file():
                     return FileResponse(index)

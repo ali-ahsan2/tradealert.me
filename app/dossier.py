@@ -3,7 +3,16 @@ beyond the headline score. Each function takes an open cursor and ids that
 main.py has already resolved inside the subscriber's visibility scope, so
 nothing here can widen what a subscriber sees; the one query that lists
 other names (peers) carries the same visibility fragment and the same
-top-K clamp as the board."""
+top-K clamp as the board.
+
+Also home to the strategy facts every payload that names a strategy needs
+(the measured record, whether it scored anything on the latest run), so the
+plain card's status and record sentence are resolved in one place."""
+import threading
+import time
+
+from app import plain_copy
+from app.db import get_conn
 
 
 def _f(v):
@@ -12,18 +21,123 @@ def _f(v):
 
 def components_of(raw):
     """component_json as stored by the scorer: [{k, label, weight, score, val,
-    backed}] -> the shape the API has always returned."""
-    return [
-        {"key": c.get("k"), "label": c.get("label"), "weight": c.get("weight"),
-         "score": c.get("score"), "value": c.get("val"),
-         "backed": bool(c.get("backed", True))}
-        for c in (raw or []) if isinstance(c, dict)
-    ]
+    backed}] -> what a subscriber may see: {key, label, value, score, backed,
+    rank}. The weight orders the list server-side (rank 1 did most to lift
+    the score) and never leaves the server (DESIGN_V6 §10)."""
+    rows = []
+    for c in (raw or []):
+        if not isinstance(c, dict):
+            continue
+        try:
+            w = float(c.get("weight")) if c.get("weight") is not None else None
+            sc = float(c.get("score")) if c.get("score") is not None else None
+        except (TypeError, ValueError):
+            w, sc = None, None
+        lift = sc * w if sc is not None and w is not None else None
+        rows.append((lift, {"key": c.get("k"), "label": c.get("label"),
+                            "value": c.get("val"), "score": c.get("score"),
+                            "backed": bool(c.get("backed", True))}))
+    rows.sort(key=lambda r: (r[0] is None, -(r[0] or 0.0)))
+    out = []
+    for i, (_lift, row) in enumerate(rows):
+        row["rank"] = i + 1
+        out.append(row)
+    return out
+
+
+# --------------------------------------------------------------------------
+# Strategy facts: the record and whether it runs, resolved once
+# --------------------------------------------------------------------------
+
+def strategy_facts(cur):
+    """key -> {id, key, label, monogram, calibrated, calibrated_at, resolved,
+    record (hits/n or None), record_source, scored, sort_order} for every
+    strategy. Three aggregate queries, no per-name rows."""
+    cur.execute(
+        "SELECT id, key, label, monogram, calibrated, calibrated_at, "
+        "resolved_outcomes_count, record_hits, record_n, record_source, sort_order "
+        "FROM strategies ORDER BY sort_order",
+    )
+    rows = cur.fetchall()
+    cur.execute(
+        "SELECT strategy_id, COUNT(*), COALESCE(SUM(CASE WHEN hit THEN 1 ELSE 0 END), 0) "
+        "FROM calibration_outcomes GROUP BY strategy_id",
+    )
+    outcomes = {r[0]: (int(r[2]), int(r[1])) for r in cur.fetchall()}
+    cur.execute(
+        "SELECT id FROM runs WHERE status = 'completed' ORDER BY as_of DESC LIMIT 1")
+    run = cur.fetchone()
+    scored = {}
+    if run:
+        cur.execute(
+            "SELECT strategy_id, COUNT(*) FROM scores "
+            "WHERE run_id = %s AND value IS NOT NULL GROUP BY strategy_id",
+            (run[0],),
+        )
+        scored = {r[0]: int(r[1]) for r in cur.fetchall()}
+    out = {}
+    for r in rows:
+        o_hits, o_n = outcomes.get(r[0], (None, None))
+        out[r[1]] = {
+            "id": r[0], "key": r[1], "label": r[2], "monogram": r[3],
+            "calibrated": bool(r[4]),
+            "calibrated_at": r[5].isoformat() if r[5] else None,
+            "resolved": int(r[6] or 0),
+            "record": plain_copy.record_numbers(o_hits, o_n, r[7], r[8]),
+            "record_source": r[9] or "",
+            "scored": scored.get(r[0], 0) if run else None,
+            "sort_order": r[10],
+        }
+    return out
+
+
+def plain_for(fact, brief=False):
+    """The plain card for a strategy_facts row."""
+    fn = plain_copy.strategy_brief if brief else plain_copy.strategy_plain
+    return fn(fact["key"], fact["calibrated"], scored=fact["scored"],
+              resolved=fact["resolved"], record=fact["record"])
+
+
+_FACTS_TTL = 60.0
+_facts_cache = {"t": 0.0, "facts": None}
+_facts_lock = threading.Lock()
+
+
+def facts_cached():
+    """strategy_facts on a short in-process cache, for payload builders that
+    hold no cursor of their own (the board's and screens' strategy stub)."""
+    now = time.time()
+    with _facts_lock:
+        if _facts_cache["facts"] is not None and now - _facts_cache["t"] < _FACTS_TTL:
+            return _facts_cache["facts"]
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            facts = strategy_facts(cur)
+    finally:
+        conn.close()
+    with _facts_lock:
+        _facts_cache.update({"t": now, "facts": facts})
+    return facts
+
+
+def plain_brief_cached(key, calibrated=False, resolved=None):
+    """{one_line, status, record} for a strategy key, from the cached facts;
+    falls back to the row's own flags when the cache cannot be filled."""
+    try:
+        fact = facts_cached().get(key)
+    except Exception:  # noqa: BLE001 - a stub must never fail the request
+        fact = None
+    if fact:
+        return plain_for(fact, brief=True)
+    return plain_copy.strategy_brief(key, calibrated, resolved=resolved)
 
 
 def lenses(cur, run_id, instrument_id):
     """Every strategy with this run's score and breakdown where one exists,
-    so the dossier can show all five lenses without five requests."""
+    so the dossier can show all five lenses without five requests. Each
+    carries its plain {one_line, status, record}."""
+    facts = strategy_facts(cur)
     cur.execute(
         "SELECT st.key, st.label, st.monogram, st.calibrated, "
         "sc.value, sc.band, sc.components_present, sc.components_total, "
@@ -36,14 +150,15 @@ def lenses(cur, run_id, instrument_id):
     )
     out = []
     for r in cur.fetchall():
+        fact = facts.get(r[0])
         out.append({
             "key": r[0], "label": r[1], "monogram": r[2], "calibrated": bool(r[3]),
             "value": _f(r[4]), "band": r[5],
             "components_present": r[6], "components_total": r[7],
             "components": components_of(r[8]),
             "shrinkage_applied": _f(r[9]), "delta_1d": _f(r[10]),
-            "haircut_points": sum(float(h.get("points") or 0) for h in (r[11] or [])
-                                  if isinstance(h, dict)),
+            "plain": plain_for(fact, brief=True) if fact
+            else plain_copy.strategy_brief(r[0], bool(r[3])),
         })
     return out
 

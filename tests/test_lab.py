@@ -1,20 +1,31 @@
 from __future__ import annotations
 
 import json
+import os
+import zlib
 import subprocess
 import sys
 import time
 from urllib import error, request
 
-BASE = "http://127.0.0.1:8000/api"
-POSTGRES = "docker compose exec -T postgres psql -U tradealert -d tradealert"
+BASE = os.environ.get("API_BASE", "http://127.0.0.1:8000/api")
+POSTGRES = os.environ.get(
+    "POSTGRES_CMD", "docker compose exec -T postgres psql -U tradealert -d tradealert")
 
-ADMIN_EMAIL = "tester@example.com"
-ADMIN_PASS = "password123"
+# The Lab needs an admin login: LAB_ADMIN_EMAIL / LAB_ADMIN_PASSWORD, else the
+# long-lived test admin, else the login db/bootstrap.py --fixture creates.
+ADMIN_EMAIL = os.environ.get("LAB_ADMIN_EMAIL", "tester@example.com")
+ADMIN_PASS = os.environ.get("LAB_ADMIN_PASSWORD", "password123")
+ADMIN_FALLBACK = ("dev@example.com", "devpass123")
 
 
 def _raw(method, path, body=None, token=None):
     headers = {"Accept": "application/json"}
+    if path == "/signup" and isinstance(body, dict) and body.get("email"):
+        # the signup limiter is five per hour per client IP; each test user
+        # presents its own address so the suite runs in one go
+        h = zlib.crc32(body["email"].encode())
+        headers["X-Forwarded-For"] = f"10.8.{(h >> 8) & 255}.{h & 255}"
     data = None
     if body is not None:
         data = json.dumps(body).encode()
@@ -60,6 +71,9 @@ def admin_token():
     if "admin" not in _SHARED:
         status, body, _ = post("/login", {"email": ADMIN_EMAIL,
                                           "password": ADMIN_PASS})
+        if status == 401 and "LAB_ADMIN_EMAIL" not in os.environ:
+            status, body, _ = post("/login", {"email": ADMIN_FALLBACK[0],
+                                              "password": ADMIN_FALLBACK[1]})
         assert status == 200, body
         _SHARED["admin"] = body["token"]
     return _SHARED["admin"]
@@ -69,7 +83,7 @@ def non_admin_token():
     if "nonadmin" not in _SHARED:
         tag = str(int(time.time()))
         email = f"labuser{tag}@example.com"
-        status, _, _ = post("/signup", {"email": email, "password": "testpass123"})
+        status, _, _ = post("/signup", {"email": email, "password": "testpass123", "accept_terms": True})
         assert status == 200
         status, body, _ = post("/login", {"email": email, "password": "testpass123"})
         assert status == 200, body

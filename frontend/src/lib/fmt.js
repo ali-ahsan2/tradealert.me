@@ -93,6 +93,12 @@ export function alertsLabel(limit) {
   return plural(limit, "alert");
 }
 
+// "America/New_York" → "New York time": the zone as a place, never the raw IANA id.
+export function zoneName(tz) {
+  if (!tz) return "";
+  return `${String(tz).split("/").pop().replace(/_/g, " ")} time`;
+}
+
 export function tzGuess() {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York";

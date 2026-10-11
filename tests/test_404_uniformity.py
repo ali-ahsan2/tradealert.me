@@ -1,17 +1,27 @@
 from __future__ import annotations
 
 import json
+import os
+import zlib
 import subprocess
 import sys
 import time
+
+import pytest
 from urllib import error, request
 
-BASE = "http://127.0.0.1:8000/api"
-POSTGRES = "docker compose exec -T postgres psql -U tradealert -d tradealert"
+BASE = os.environ.get("API_BASE", "http://127.0.0.1:8000/api")
+POSTGRES = os.environ.get(
+    "POSTGRES_CMD", "docker compose exec -T postgres psql -U tradealert -d tradealert")
 
 
 def _call(method, path, body=None, token=None):
     headers = {"Accept": "application/json"}
+    if path == "/signup" and isinstance(body, dict) and body.get("email"):
+        # the signup limiter is five per hour per client IP; each test user
+        # presents its own address so the suite runs in one go
+        h = zlib.crc32(body["email"].encode())
+        headers["X-Forwarded-For"] = f"10.8.{(h >> 8) & 255}.{h & 255}"
     data = None
     if body is not None:
         data = json.dumps(body).encode()
@@ -26,10 +36,10 @@ def _call(method, path, body=None, token=None):
         return e.code, e.read()
 
 
-def tester():
+def _tester():
     tag = str(int(time.time()))
     email = f"unif{tag}@example.com"
-    status, _ = _call("POST", "/signup", {"email": email, "password": "testpass123"})
+    status, _ = _call("POST", "/signup", {"email": email, "password": "testpass123", "accept_terms": True})
     assert status == 200
     subprocess.run(
         f"{POSTGRES} -c \"UPDATE users SET verified=TRUE WHERE email='{email}';\"",
@@ -38,6 +48,11 @@ def tester():
     status, body = _call("POST", "/login", {"email": email, "password": "testpass123"})
     assert status == 200
     return json.loads(body)["token"]
+
+
+@pytest.fixture(scope="module")
+def token():
+    return _tester()
 
 
 def test_board_and_stock_require_auth():
@@ -80,7 +95,7 @@ if __name__ == "__main__":
         print(f"FAIL test_board_and_stock_require_auth: {type(e).__name__}: {e}")
 
     try:
-        token = tester()
+        token = _tester()
         for name in ("test_404_identical_between_missing_and_invalid",
                      "test_out_of_universe_symbol_404s", "test_board_ok"):
             try:
@@ -94,6 +109,6 @@ if __name__ == "__main__":
                 print(f"ERROR {name}: {type(e).__name__}: {e}")
     except Exception as e:  # noqa: BLE001
         failures += 1
-        print(f"ERROR tester(): {type(e).__name__}: {e}")
+        print(f"ERROR _tester(): {type(e).__name__}: {e}")
 
     sys.exit(1 if failures else 0)

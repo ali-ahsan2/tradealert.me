@@ -1,8 +1,8 @@
 """Cron jobs (BUILD_SPEC stages 8 and 10): the alert sweep and the daily
 digest. Run via the cron table in deploy/crontab:
 
-  cd /opt/tradealert && .venv/bin/python -m app.jobs digest
-  cd /opt/tradealert && .venv/bin/python -m app.jobs sweep
+  cd /opt/tradealert.me && docker compose exec -T app python -m app.jobs digest
+  cd /opt/tradealert.me && docker compose exec -T app python -m app.jobs sweep
 
 Both are idempotent and safe to run back-to-back:
   sweep  - matches impersonal alert_events (last 24h) against armed rules,
@@ -11,14 +11,14 @@ Both are idempotent and safe to run back-to-back:
            day/hour, freezes the render into digests.content_json, emails
            it with a per-user unsubscribe token.
 """
-import base64
 import json
 import logging
 import os
+import secrets
 import sys
 from datetime import datetime, timedelta, timezone
 
-from app import channels, context, email as emailer, scope
+from app import channels, context, email as emailer, legal, scope
 from app.db import get_conn
 
 log = logging.getLogger("tradealert.jobs")
@@ -77,11 +77,49 @@ def sweep_alerts():
     log.info("alert sweep complete")
 
 
+def _base_url():
+    return os.environ.get("APP_BASE_URL", "http://localhost:8000")
+
+
+def _unsubscribe_link(conn, uid, channel="email"):
+    """The link every alert and digest email carries (DESIGN_V6 §6). One
+    unused token per user and channel is reused until it is spent; the
+    client page /unsubscribe calls GET /api/unsubscribe with it."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT token FROM unsubscribe_tokens WHERE user_id = %s AND channel = %s "
+            "AND used_at IS NULL ORDER BY created_at DESC LIMIT 1",
+            (uid, channel),
+        )
+        row = cur.fetchone()
+        if row:
+            token = row[0]
+        else:
+            token = secrets.token_urlsafe(24)
+            cur.execute(
+                "INSERT INTO unsubscribe_tokens (token, user_id, channel) VALUES (%s, %s, %s)",
+                (token, uid, channel),
+            )
+    conn.commit()
+    return f"{_base_url()}/unsubscribe?token={token}&channel={channel}"
+
+
+def alert_message(symbol, trigger_key, detail, base):
+    """Subject line and plain body of one alert, shared by every channel.
+    The subject carries the plain trigger word (DESIGN_V6 §7); the body says
+    what changed and where to read more."""
+    plain = legal.trigger_plain(trigger_key)
+    title = f"{symbol}: {plain}"
+    what = detail or f"A recorded fact changed on {symbol}: {plain.lower()}."
+    body = f"{what}\n\nShow me the report: {base}/stock/{symbol}"
+    return title, body
+
+
 def _dispatch(conn, uid, event_id, symbol, trigger_key, detail, fired_at,
               rule_channels, email_addr, ch_email, ch_push, push_sub,
               ch_sms, phone):
-    title = f"{symbol}: {trigger_key}"
-    body = detail or f"{symbol} hit the {trigger_key} trigger."
+    base = _base_url()
+    title, body = alert_message(symbol, trigger_key, detail, base)
     sent = []
     with conn.cursor() as cur:
         for channel in rule_channels:
@@ -97,13 +135,18 @@ def _dispatch(conn, uid, event_id, symbol, trigger_key, detail, fired_at,
                 ok = channels.send_email(
                     email_addr,
                     f"[tradealert] {title}",
-                    f"{body}\n\nSigned: tradealert.me — not a recommendation. "
-                    "Unsubscribe: your account settings.",
+                    body + legal.email_footer(_unsubscribe_link(conn, uid, "email"),
+                                              f"{base}/settings"),
                 )
             elif channel == "push" and ch_push:
-                ok = channels.send_push(push_sub, title, body)
+                # a notification has no room for the paragraph: one line and
+                # the disclaimer link, as the SMS carries
+                ok = channels.send_push(push_sub, title,
+                                        f"{body}\nNot advice: {base}/legal/disclaimer")
             elif channel == "sms" and ch_sms:
-                ok = channels.send_sms(phone, f"[tradealert] {title} — {body}")
+                # no room for the paragraph: one line and the disclaimer link
+                ok = channels.send_sms(
+                    phone, f"[tradealert] {title} — {body}\nNot advice: {base}/legal/disclaimer")
             elif channel == "webhook":
                 ok = channels.post_webhook(
                     conn, uid, {"event": "alert", "symbol": symbol,
@@ -150,6 +193,12 @@ def run_daily_digest():
                     continue
                 if _now().hour < hour or hour is None:
                     continue
+                # the cron and the worker both call this pass: one digest
+                # per account per run, however often the pass runs
+                with conn.cursor() as c2:
+                    c2.execute("SELECT 1 FROM digests WHERE user_id = %s AND run_id = %s", (uid, run_id))
+                    if c2.fetchone():
+                        continue
                 _send_digest(conn, uid, run_id, email_addr)
     finally:
         conn.close()
@@ -168,6 +217,8 @@ def _board_rows_for(conn, user_id, tier_row, limit=None):
         q = (
             "SELECT t.symbol, i.theme, ind.label, sc.value, sc.band "
             "FROM scores sc JOIN instruments i ON i.id = sc.instrument_id "
+            # the brief is labelled Fast Mover, so only its scores rank here
+            "JOIN strategies st ON st.id = sc.strategy_id AND st.key = 'fast_mover' "
             "JOIN tickers t ON t.id = i.ticker_id "
             "JOIN industries ind ON ind.id = i.industry_id "
             f"WHERE sc.run_id = %s AND {vis} "
@@ -202,29 +253,37 @@ def _send_digest(conn, uid, run_id, email_addr):
             (uid, run_id, json.dumps(frozen)),
         )
         digest_id = cur.fetchone()[0]
-        token = base64.urlsafe_b64encode((f"{uid}:{digest_id}").encode()).decode()
-        cur.execute(
-            "INSERT INTO unsubscribe_tokens (token, user_id, channel) "
-            "VALUES (%s, %s, 'email') ON CONFLICT (token) DO NOTHING",
-            (token, uid),
-        )
     conn.commit()
-    base = os.environ.get("APP_BASE_URL", "http://localhost:8000")
-    lines = [f"Fast Mover board — run {frozen['run_id']}\n"]
+    try:
+        from app.record import digest_lines
+        rec = digest_lines(conn, uid, days=7)
+    except Exception as e:  # noqa: BLE001 - the record never blocks a digest
+        log.warning("digest record lines failed for user %s: %s", uid, e)
+        rec = []
+    unsubscribe_url = _unsubscribe_link(conn, uid, "email")
+    subject, text = digest_message(frozen, rec, _base_url(), unsubscribe_url)
+    channels.send_email(email_addr, subject, text)
+    log.info("digest %s sent to user %s (%s rows)", digest_id, uid, len(rows))
+
+
+def digest_message(frozen, rec, base, unsubscribe_url):
+    """Subject and plain body of the weekly brief: the ranked names the plan
+    watches, the week measured, the links, then the fine print."""
+    date = frozen["generated_at"][:10]
+    lines = [f"My week, measured — {date}", "",
+             "Ranked this morning (Fast Mover):"]
     for r in frozen["rows"]:
         lines.append(f"{r['rank']:>3}. {r['symbol']:<6} {r['band']:<8} "
                      f"{r['value']:5.1f}  {r['theme']}")
     if frozen["truncated"]:
-        lines.append(f"\n… and more. Full board: {base}/board")
-    lines.append(f"\nManage alerts and settings: {base}/settings")
-    lines.append(
-        f"Unsubscribe from these digests: {base}/unsubscribe?token={token}&channel=email")
-    channels.send_email(
-        email_addr,
-        f"tradealert Fast Mover board — {frozen['generated_at'][:10]}",
-        "\n".join(lines),
-    )
-    log.info("digest %s sent to user %s (%s rows)", digest_id, uid, len(rows))
+        lines.append(f"\n… and more. Show me the whole list: {base}/board")
+    if rec:
+        lines.append("\nMy week, measured:")
+        lines.extend(f"- {ln}" for ln in rec)
+    lines.append(f"\nShow me my Home: {base}/home")
+    lines.append("Measured, not predicted.")
+    text = "\n".join(lines) + legal.email_footer(unsubscribe_url, f"{base}/settings")
+    return f"[tradealert] My week, measured — {date}", text
 
 
 def unsubscribe(token, channel="email"):

@@ -5,11 +5,16 @@ import { hasChannel, useMe } from "../lib/me.jsx";
 import { age, dateTime, dollars, pct, plural, rate, shortDate, signed, tone } from "../lib/fmt.js";
 import { DILUTION_TRIGGERS, TRIGGERS } from "../lib/evidence.js";
 import { DEFAULT_TRIGGERS, GLOSSARY } from "../lib/glossary.js";
-import { triggerLabel, triggerSentence } from "../lib/plain.js";
+import { CTA, firedSentence, triggerLabel, triggerSentence } from "../lib/plain.js";
+import { HOME_ROWS } from "../lib/caps.js";
 import { useMode } from "../lib/mode.js";
+import { beyondSentence, fetchRecord, leadPhrase, movePhrase, tallySentence } from "../lib/record.js";
+import { openUpgrade } from "../lib/upgrade.js";
 import SearchBar from "../components/SearchBar.jsx";
 import NotifyButton, { invalidateRules } from "../components/NotifyButton.jsx";
 import Explain from "../components/Explain.jsx";
+import ScreenHead from "../components/ScreenHead.jsx";
+import FinePrint from "../components/FinePrint.jsx";
 import { Empty, ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
 import "./tools.css";
 
@@ -35,7 +40,7 @@ const SAMPLE_EVENTS = [
     theme: "Example only",
     trigger_key: "borrow_fee_2x",
     trigger: "Borrow fee 2x+",
-    detail: "Borrow fee 2.4x its 5-session average (was 12.1%, now 29.4%)",
+    detail: "Cost to borrow 2.4x its recent average (was 12.1%, now 29.4%)",
     fired_at: new Date(Date.now() - 36e5 * 5).toISOString(),
     channels: ["email"],
     read: true,
@@ -46,7 +51,7 @@ const SAMPLE_EVENTS = [
     theme: "Example only",
     trigger_key: "volume_3x",
     trigger: "Volume at 3x+",
-    detail: "Volume 3.6x the 20-day average by midday",
+    detail: "Volume 3.6x its normal day by midday",
     fired_at: new Date(Date.now() - 36e5 * 30).toISOString(),
     channels: ["email"],
     read: true,
@@ -87,6 +92,13 @@ function windowWord(days) {
   return `${days} days`;
 }
 
+// "this year" / "in 90 days": the window as a screen-head clause.
+function windowClause(days) {
+  if (days === 365) return "this year";
+  if (days === 730) return "in two years";
+  return `in ${days} days`;
+}
+
 function channelWord(k) {
   const c = CHANNELS.find((x) => x[0] === k);
   return c ? c[1].toLowerCase() : k;
@@ -98,7 +110,7 @@ function channelWord(k) {
 // and green stay reserved for price moves and PASS/FAIL. Full mode adds the
 // raw trigger label, the theme and the delivery record.
 const DILUTION_NOTE =
-  "The company filed to sell more shares (an S-3 or 424B). More shares means each existing share is a smaller slice, and the score takes a haircut for it.";
+  "The company filed to sell more shares (an S-3 or 424B). More shares means each existing share is a smaller slice; the filing fires an alert.";
 
 function PlainEvent({ ev, tz, onRead, full = false }) {
   const unread = ev.read === false;
@@ -128,18 +140,19 @@ function PlainEvent({ ev, tz, onRead, full = false }) {
           {a ? `${a.label} ago` : shortDate(ev.fired_at, tz)}
         </span>
       </div>
-      <div className={`r2 ${unread ? "bold" : ""}`}>{ev.detail || ev.trigger}</div>
+      <div className={`r2 ${unread ? "bold" : ""}`}>{firedSentence(ev.trigger_key, ev.symbol)}</div>
+      {full && ev.detail && <div className="r3">{ev.detail}</div>}
       {full && (
         <div className="r3">
           {ev.theme ? `${ev.theme} · ` : ""}
           {sent
             ? `delivered by ${ev.channels.join(", ")}${ev.delivered_at ? ` · ${shortDate(ev.delivered_at, tz)}` : ""}`
-            : "not armed on your account; shown because the name is in your universe"}
+            : "no rule armed on your account; shown because the name is in your industries"}
         </div>
       )}
       <div className="r4">
         <Link to={`/stock/${ev.symbol}`} onClick={markRead}>
-          Open report →
+          {CTA.REPORT} →
         </Link>
         {unread && (
           <button className="btn-quiet" onClick={markRead}>
@@ -148,16 +161,137 @@ function PlainEvent({ ev, tz, onRead, full = false }) {
         )}
         {!sent && (
           <Link to={`/alerts?tab=armed&symbol=${encodeURIComponent(ev.symbol)}`} className="faint">
-            Watch {ev.symbol}
+            {CTA.ALERT_ME_ON(ev.symbol)}
           </Link>
         )}
         {!full && (
           <span className="xs faint">
-            {sent ? `sent to you by ${ev.channels.map(channelWord).join(", ")}` : `you were not watching ${ev.symbol}; shown because it is in your universe`}
+            {sent ? `sent to you by ${ev.channels.map(channelWord).join(", ")}` : `you were not watching ${ev.symbol}; shown because it is in your industries`}
           </span>
         )}
       </div>
     </article>
+  );
+}
+
+// A link that opens the upgrade sheet in place instead of leaving for the
+// plans page (DESIGN_V5 §4.6).
+function PlanLink({ reason, ctx, children }) {
+  return (
+    <button type="button" className="tl-linkbtn" onClick={() => openUpgrade(reason, ctx)}>
+      {children}
+    </button>
+  );
+}
+
+// The move after an alert; red and green on the price numbers only.
+function MoveWords({ e }) {
+  if (!e || e.max_5d == null) return <>{movePhrase(e)}</>;
+  return (
+    <>
+      <span className={`num ${tone(e.max_5d)}`}>{pct(e.max_5d)}</span> at the high within five sessions
+      {e.chg_5d != null && (
+        <>
+          , closed <span className={`num ${tone(e.chg_5d)}`}>{pct(e.chg_5d)}</span>
+        </>
+      )}
+    </>
+  );
+}
+
+// "You were told 1 session before LEU peaked +13.5%." The biggest measured
+// move among the alerts delivered to this account; pct() carries the sign.
+function toldLine(told) {
+  if (!told || !told.summary || !told.summary.fired) return null;
+  const best = (told.events || []).filter((e) => e.max_5d != null).sort((a, b) => b.max_5d - a.max_5d)[0];
+  if (!best) return `You were told about ${plural(told.summary.fired, "alert")}; the five-session windows are still open.`;
+  const lead = best.peak_after_sessions ? ` ${plural(best.peak_after_sessions, "session")} before` : "";
+  return `You were told${lead} ${best.symbol} peaked ${pct(best.max_5d)}.`;
+}
+
+// The trigger in plain words where the glossary has them, else as recorded.
+function plainTrigger(e, simple) {
+  const l = triggerLabel(e.trigger_key);
+  return simple && l !== e.trigger_key ? l : e.trigger;
+}
+
+// The subscriber's own record (DESIGN_V5 §3): what they were told and what
+// followed, what fired on names in their universe while they were not
+// watching (tickers clamped to the plan, the rest counted), and what fired
+// beyond the industries they follow, as counts only. Every line is a
+// recorded fact; the one button opens the upgrade sheet in place.
+function RecordBlock({ rec, allIndTier, simple }) {
+  if (rec === undefined) return <Skeleton rows={2} height={44} />;
+  if (!rec) return null;
+  const told = rec.told || { summary: null, events: [] };
+  const missed = rec.missed || { summary: null, events: [] };
+  const headline = toldLine(told) || `Nothing was sent to you in the last ${rec.days} days.`;
+  const rows = [];
+  const seen = new Set();
+  const cap = simple ? HOME_ROWS : 5;
+  for (const e of missed.events || []) {
+    if (seen.has(e.symbol)) continue;
+    seen.add(e.symbol);
+    rows.push(e);
+    if (rows.length === cap) break;
+  }
+  const hiddenNames = Math.max(0, (missed.names_total || 0) - (missed.names_shown || 0));
+  const beyondLine = beyondSentence(rec.beyond);
+  return (
+    <section className="card tl-rec" aria-labelledby="rec-h">
+      <div className="card-title">
+        <h2 id="rec-h">My record</h2>
+        <span className="muted small">last {rec.days} days</span>
+      </div>
+      <p className="tl-rec-h">{headline}</p>
+      {told.summary && told.summary.fired > 0 && <p className="tl-rec-sub">{tallySentence(told.summary, { subject: "alerts you were told about" })}</p>}
+
+      <h3 className="tl-rec-sec">Fired while you were not watching</h3>
+      <p className="tl-rec-sub">{tallySentence(missed.summary)}</p>
+      {rows.length > 0 && (
+        <div className="tl-rec-rows">
+          {rows.map((e) => {
+            const lead = leadPhrase(e);
+            return (
+              <div className="rec-row" key={`${e.symbol}-${e.trigger_key}-${e.date}`}>
+                <div className="rec-main">
+                  <div className="rec-top">
+                    <Link className="sym" to={`/stock/${e.symbol}`}>
+                      {e.symbol}
+                    </Link>
+                    <span className="when">
+                      {plainTrigger(e, simple)} · {shortDate(e.date)}
+                    </span>
+                    {lead && <span className={`lead-chip ${e.pending ? "open" : ""}`}>{lead}</span>}
+                  </div>
+                  <p className="rec-say">
+                    <MoveWords e={e} />
+                  </p>
+                </div>
+                <div className="rec-act">
+                  <NotifyButton symbol={e.symbol} compact />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {hiddenNames > 0 && (
+        <p className="tl-rec-sub tl-rec-more">
+          Alerts fired on {plural(hiddenNames, "more name")} than your plan lists. <PlanLink reason="names">Show me the rest</PlanLink>
+        </p>
+      )}
+      {beyondLine && (
+        <>
+          <h3 className="tl-rec-sec">Beyond the industries you follow</h3>
+          <p className="tl-rec-sub">{beyondLine}</p>
+          <button type="button" className="btn-quiet tl-rec-btn" onClick={() => openUpgrade("beyond")}>
+            See what {allIndTier ? allIndTier.label : "Investor"} watches
+          </button>
+        </>
+      )}
+      {rec.method && <p className="hint">{rec.method}</p>}
+    </section>
   );
 }
 
@@ -194,10 +328,28 @@ export default function Alerts() {
   const [formErr, setFormErr] = useState(null); // {kind, text}
   const [outcomes, setOutcomes] = useState(null);
   const [outErr, setOutErr] = useState(null);
+  // undefined while loading, null when it could not be loaded
+  const [record, setRecord] = useState(undefined);
+  // Simple shows three recent outcomes before "Show all" (DESIGN_V6 §7)
+  const [allRecent, setAllRecent] = useState(false);
   const formRef = useRef(null);
   const oDays = [90, 365, 730].includes(Number(q.get("odays"))) ? Number(q.get("odays")) : 365;
 
   const locked = Boolean(me && me.tier && me.tier.alerts_limit === 0);
+  const signedIn = Boolean(me);
+
+  // The subscriber's own record: the top of "Your record" / Outcomes, and
+  // the lead of the Free-plan lock screen.
+  useEffect(() => {
+    if (!signedIn || (tab !== "outcomes" && !locked)) return undefined;
+    let alive = true;
+    fetchRecord(90)
+      .then((d) => alive && setRecord(d))
+      .catch(() => alive && setRecord(null));
+    return () => {
+      alive = false;
+    };
+  }, [signedIn, tab, locked, reload]);
 
   useEffect(() => {
     if (tab !== "outcomes" || locked) return undefined;
@@ -262,7 +414,7 @@ export default function Alerts() {
     formRef.current.scrollIntoView({ block: narrow ? "start" : "nearest", behavior: "smooth" });
   }, [tab, fSymbol]);
 
-  // "Watch a name" in the header: switch to the arm tab, then put the cursor
+  // "Watch a name for me" in the header: switch to the arm tab, then put the cursor
   // in the ticker field once the form is on screen.
   const wantFocus = useRef(false);
   useEffect(() => {
@@ -299,6 +451,7 @@ export default function Alerts() {
   const [othersShown, setOthersShown] = useState(OTHERS_PAGE);
   useEffect(() => setOthersShown(OTHERS_PAGE), [events]);
   const firstAlertTier = tiers && [...tiers].sort((a, b) => a.price_monthly_cents - b.price_monthly_cents).find((t) => t.alerts_limit !== 0);
+  const allIndTier = tiers && [...tiers].sort((a, b) => a.price_monthly_cents - b.price_monthly_cents).find((t) => t.industries_limit >= 999);
   const extraChannels = CHANNELS.filter(([k]) => k !== "email" && hasChannel(me, k));
   const restTriggers = TRIGGERS.filter(([k]) => !DEFAULT_TRIGGERS.includes(k));
   const groups = useMemo(() => {
@@ -341,15 +494,15 @@ export default function Alerts() {
     const d = detail || "";
     if (/verify/i.test(d)) return { kind: "verify", text: "Alerts only go to a verified address. Open the link we sent when you signed up, or request a new one from account settings." };
     if (/channel/i.test(d)) return { kind: "channel", text: `${d.charAt(0).toUpperCase()}${d.slice(1)}. Email always works; the other channels come with a plan that includes them.` };
-    if (/plan arms|upgrade/i.test(d)) return { kind: "quota", text: `${armed ? `Armed ${armed}, then: ` : ""}${d}. Disarm an alert you no longer need, or move to a plan that can watch this name as well.` };
-    return { kind: "other", text: `${armed ? `Armed ${armed}, then: ` : ""}${d || "couldn't arm that alert."}` };
+    if (/plan arms|upgrade/i.test(d)) return { kind: "quota", text: `${armed ? `Turned on ${armed}, then: ` : ""}${d}. Turn off an alert you no longer need, or move to a plan that can watch this name as well.` };
+    return { kind: "other", text: `${armed ? `Turned on ${armed}, then: ` : ""}${d || "couldn't turn that alert on."}` };
   };
 
   const arm = async (e) => {
     e.preventDefault();
     setFormErr(null);
     const keys = TRIGGERS.map(([k]) => k).filter((k) => picked.has(k));
-    if (keys.length === 0) return setFormErr({ kind: "other", text: "Choose at least one trigger." });
+    if (keys.length === 0) return setFormErr({ kind: "other", text: "Choose at least one fact to be told about." });
     if (remaining !== Infinity && keys.length > remaining) {
       return setFormErr({ kind: "quota", text: `That is ${plural(keys.length, "alert")}; your plan has ${remaining} left. Untick one, turn off one you no longer need, or move to a plan that can watch this name as well.` });
     }
@@ -363,13 +516,13 @@ export default function Alerts() {
         await api("/me/alerts/rules", { method: "POST", json: { symbol: sym, trigger_key: k, channels } });
         armed += 1;
       }
-      toast(`Watching ${sym}. We'll tell you on ${plural(armed, "trigger")}.`);
+      toast(`Alerts on for ${sym}: we'll tell you on ${plural(armed, "fact")}.`);
       setSymbol("");
       setReload((n) => n + 1);
     } catch (e2) {
       if (e2.status === 403) setFormErr(explainRefusal(e2.detail, armed));
-      else if (e2.status === 404) setFormErr({ kind: "other", text: `${sym || "That name"} is not in your universe, so we cannot watch it. Pick a name from the search above.` });
-      else setFormErr({ kind: "other", text: `${armed ? `Armed ${armed}, then: ` : ""}${e2.detail || "couldn't arm that alert."}` });
+      else if (e2.status === 404) setFormErr({ kind: "other", text: `${sym || "That name"} is not in your industries or watchlist, so we cannot watch it. Choose a name from the search above.` });
+      else setFormErr({ kind: "other", text: `${armed ? `Turned on ${armed}, then: ` : ""}${e2.detail || "couldn't turn that alert on."}` });
       if (armed) setReload((n) => n + 1);
     } finally {
       setBusy(false);
@@ -422,23 +575,27 @@ export default function Alerts() {
   );
 
   if (locked) {
+    // Lead with the viewer's own missed count when the record is in.
+    const lm = record && record.missed ? record.missed.summary : null;
+    const missedLead = lm && lm.fired ? `${plural(lm.fired, "alert")} fired on ${plural(lm.names, "name")} in your industries in the last ${record.days} days.` : null;
+    const missedMoved = lm && lm.measured ? ` ${lm.moved_10} of the ${lm.measured} measured moved 10%+ within five sessions.` : "";
+    const fromLabel = firstAlertTier ? firstAlertTier.label : "Basic";
+    const lockedLine =
+      lm && lm.fired
+        ? `${plural(lm.fired, "alert")} fired on ${plural(lm.names, "name")} in your industries; you were told about none.`
+        : `On ${me.tier.label} we cannot tell you when something happens on a name.`;
     return (
       <div className="wrap">
-        <div className="pagehead">
-          <div>
-            <h1>Alerts</h1>
-            <p className="utility">
-              On <b>{me.tier.label}</b> we cannot tell you when something happens on a name.
-              {firstAlertTier ? (
-                <>
-                  {" "}
-                  From <b>{firstAlertTier.label}</b> we watch up to {firstAlertTier.alerts_limit == null ? "any number of" : firstAlertTier.alerts_limit} triggers for you and send the fact that fired by{" "}
-                  {firstAlertTier.channels.map(channelWord).join(", ")}.
-                </>
-              ) : null}
-            </p>
-          </div>
-        </div>
+        <ScreenHead
+          title="My alerts"
+          line={lockedLine}
+          action={
+            <button type="button" className="btn btn-primary" onClick={() => openUpgrade("alerts")}>
+              Tell me about them
+            </button>
+          }
+        />
+        <FinePrint short />
         <div className="gate">
           <div className="sample alert-list" aria-hidden="true">
             {SAMPLE_EVENTS.map((ev) => (
@@ -448,17 +605,22 @@ export default function Alerts() {
           <div className="panel">
             <div className="card">
               <p className="eyebrow">Example shown behind</p>
-              <h2>Alerts are included from {firstAlertTier ? firstAlertTier.label : "Basic"}.</h2>
-              <p className="muted">{GLOSSARY.alert.short} The facts we watch for: a borrow fee doubling, a short-interest print crossing a line, a day at three times normal volume, a dated event coming up, a filing to sell more shares.</p>
+              <h2>{missedLead || `Alerts are included from ${fromLabel}.`}</h2>
+              {missedLead && (
+                <p className="muted">
+                  You were told about none of them.{missedMoved} Alerts are included from {fromLabel}.
+                </p>
+              )}
+              <p className="muted">{GLOSSARY.alert.short} The facts we watch for: the cost to borrow doubling, short interest crossing a line, a day at three times normal volume, a dated event coming up, a filing to sell more shares.</p>
               {firstAlertTier && (
                 <p className="muted">
                   {firstAlertTier.label} includes {firstAlertTier.alerts_limit == null ? "unlimited alerts" : plural(firstAlertTier.alerts_limit, "alert")} by{" "}
                   {firstAlertTier.channels.map(channelWord).join(", ")}, {dollars(firstAlertTier.price_monthly_cents)}/mo.
                 </p>
               )}
-              <Link to="/pricing" className="btn btn-primary">
-                See plans
-              </Link>
+              <button type="button" className="btn btn-primary" onClick={() => openUpgrade("alerts")}>
+                {CTA.PLANS_WITH_ALERTS}
+              </button>
               <p className="xs faint" style={{ marginTop: "var(--s-3)", marginBottom: 0 }}>
                 Currently on {me.tier.label}.
               </p>
@@ -471,91 +633,55 @@ export default function Alerts() {
 
   const firedCount = events ? events.length : null;
 
+  // The one line (DESIGN_V6 §7): the screen's own counts, fourteen words or
+  // fewer. Unread sits on the secondary control; the rules count on its tab.
+  const when = windowClause(fDays);
+  const filterNote = fTrigger || fUnread ? " matching this filter" : "";
+  let line;
+  if (!events) line = "Checking what fired on your names…";
+  else if (firedCount === 0) line = `No alert fired on ${fSymbol || "your names"} ${when}${filterNote}.`;
+  else if (sent.length === 0) line = `Nothing was sent to you ${when}; ${plural(others.length, "alert")} fired on names not watched.`;
+  else if (others.length === 0) line = `${plural(sent.length, "alert")} sent to you${fSymbol ? ` on ${fSymbol}` : ""} ${when}${filterNote}.`;
+  else line = `${plural(sent.length, "alert")} sent to you ${when}; ${others.length} more on names not watched.`;
+
   return (
     <div className="wrap">
-      <div className="pagehead">
-        <div>
-          <h1>Alerts</h1>
-          <p className="utility">
-            {!events && !rules ? (
-              "Checking what fired on your names…"
-            ) : (
-              <>
-                {events &&
-                  (firedCount === 0 ? (
-                    <>
-                      No alert fired on {fSymbol ? <b>{fSymbol}</b> : "your names"} in the last <b>{windowWord(fDays)}</b>
-                      {fTrigger || fUnread ? " matching this filter" : ""}.
-                    </>
-                  ) : (
-                    <>
-                      {sent.length === 0 ? (
-                        <>
-                          No alert was sent to you{fSymbol ? <> on <b>{fSymbol}</b></> : ""} in the last <b>{windowWord(fDays)}</b>
-                        </>
-                      ) : (
-                        <>
-                          <b>{sent.length}</b> {sent.length === 1 ? "alert was" : "alerts were"} sent to you{fSymbol ? <> on <b>{fSymbol}</b></> : ""} in the last{" "}
-                          <b>{windowWord(fDays)}</b>
-                          {unreadCount > 0 ? (
-                            <>
-                              {" "}
-                              (<b>{unreadCount}</b> unread)
-                            </>
-                          ) : null}
-                        </>
-                      )}
-                      {fTrigger || fUnread ? " matching this filter" : ""}
-                      {others.length > 0 ? (
-                        <>
-                          ; <b>{others.length}</b> more fired across your industries on names you were not watching
-                        </>
-                      ) : null}
-                      .{firedCount >= EVENT_LIMIT ? ` Only the latest ${EVENT_LIMIT} are counted.` : ""}
-                    </>
-                  ))}
-                {rules &&
-                  (rules.length === 0 ? (
-                    <> You have no alerts on yet.</>
-                  ) : (
-                    <>
-                      {" "}
-                      You have <b>{rules.length}</b> {rules.length === 1 ? "alert" : "alerts"} on across <b>{names}</b> {names === 1 ? "name" : "names"}.
-                    </>
-                  ))}
-              </>
-            )}
-          </p>
-        </div>
-        <div className="actions">
-          {tab === "history" && unreadCount > 0 && (
+      <ScreenHead
+        title="My alerts"
+        line={line}
+        action={
+          <button type="button" className="btn btn-primary" onClick={watchAName}>
+            {fSymbol ? CTA.ALERT_ME_ON(fSymbol) : "Alert me on a name"}
+          </button>
+        }
+        secondary={
+          tab === "history" && unreadCount > 0 ? (
             <button className="btn btn-secondary btn-sm" onClick={markAll}>
               Mark all read ({unreadCount})
             </button>
-          )}
-          <button type="button" className="btn btn-primary btn-sm" onClick={watchAName}>
-            Watch a name
-          </button>
-        </div>
-      </div>
+          ) : null
+        }
+      />
+      <FinePrint short />
 
       <div className="tabs tl-tabs" role="tablist" aria-label="Alerts">
         <button role="tab" className="tab" aria-selected={tab === "history"} onClick={() => setTab("history")}>
-          {simple ? "Fired" : "History"}
-          {events ? ` · ${sent.length}` : ""}
+          {simple ? "Told me" : "History"}
+          {events && unreadCount === 0 ? ` · ${sent.length}` : ""}
           {unreadCount > 0 && <span className="navbadge">{unreadCount}</span>}
         </button>
         <button role="tab" className="tab" aria-selected={tab === "armed"} onClick={() => setTab("armed")}>
-          {simple ? "Watching" : "Armed"}
+          {simple ? "Alerting me" : "Armed"}
           {rules ? ` · ${simple ? names : rules.length}` : ""}
         </button>
         <button role="tab" className="tab" aria-selected={tab === "outcomes"} onClick={() => setTab("outcomes")}>
-          {simple ? "What followed" : "Outcomes"}
+          {simple ? "My record" : "Outcomes"}
         </button>
       </div>
 
       {tab === "outcomes" && (
         <>
+          <RecordBlock rec={record} allIndTier={allIndTier} simple={simple} />
           <div className="filters-row">
             <span className="muted small">What price did after each kind of alert fired on the names you can see, measured on end-of-day price bars.</span>
             <span className="spacer" />
@@ -592,13 +718,7 @@ export default function Alerts() {
                           <p className="tl-sent">
                             {enough ? (
                               <>
-                                Five trading days later the average move was <b className={`num ${tone(t.mean_chg_5d)}`}>{signed(t.mean_chg_5d, 1, "%")}</b>
-                                {t.mean_max_5d != null ? (
-                                  <>
-                                    , with an average high of <b className={`num ${tone(t.mean_max_5d)}`}>{signed(t.mean_max_5d, 1, "%")}</b> on the way
-                                  </>
-                                ) : null}
-                                . <b className="num">{rate(t.share_up_5d)}</b> closed higher after five days; <b className="num">{rate(t.share_max_10)}</b> touched +10% on the way.
+                                <b className="num">{rate(t.share_max_10)}</b> of them touched +10% within five sessions; <b className="num">{rate(t.share_up_5d)}</b> closed higher after five days.
                               </>
                             ) : t.measured > 0 ? (
                               <span className="faint">Fewer than ten measured, so no figure yet.</span>
@@ -674,7 +794,7 @@ export default function Alerts() {
                   </table>
                 </div>
               )}
-              <p className="footnote">{outcomes.method} These are measured moves on your universe, not a backtest and not a forecast; averages on small counts swing with one name.</p>
+              <p className="footnote">{outcomes.method} These are measured moves on your names, not a backtest and not a forecast; averages on small counts swing with one name.</p>
               {outcomes.events.length > 0 && (
                 <section className="card" aria-labelledby="oe-h">
                   <div className="card-title">
@@ -700,7 +820,7 @@ export default function Alerts() {
                         </tr>
                       </thead>
                       <tbody>
-                        {outcomes.events.map((ev) => (
+                        {(simple && !allRecent ? outcomes.events.slice(0, HOME_ROWS) : outcomes.events).map((ev) => (
                           <tr key={ev.id}>
                             <td className="mono">{shortDate(ev.date)}</td>
                             <td>
@@ -718,6 +838,11 @@ export default function Alerts() {
                       </tbody>
                     </table>
                   </div>
+                  {simple && outcomes.events.length > HOME_ROWS && (
+                    <button type="button" className="btn-quiet" style={{ marginTop: "var(--s-2)", minHeight: 44 }} onClick={() => setAllRecent((a) => !a)} aria-expanded={allRecent}>
+                      {allRecent ? CTA.SHOW_FEWER : CTA.SHOW_ALL(outcomes.events.length)}
+                    </button>
+                  )}
                 </section>
               )}
             </>
@@ -787,10 +912,10 @@ export default function Alerts() {
                   </button>
                 ) : rules && rules.length === 0 ? (
                   picks && picks.length > 0 ? (
-                    <NotifyButton symbol={picks[0].symbol} label={`Notify me about ${picks[0].symbol}`} />
+                    <NotifyButton symbol={picks[0].symbol} label={CTA.ALERT_ME_ON(picks[0].symbol)} />
                   ) : (
                     <button className="btn btn-primary" onClick={() => setTab("armed")}>
-                      Set up your first alert
+                      Alert me on a name
                     </button>
                   )
                 ) : null
@@ -798,14 +923,14 @@ export default function Alerts() {
             >
               {!hasFilters && (
                 <>
-                  <p style={{ margin: "0 0 var(--s-2)" }}>{GLOSSARY.alert.short}</p>
+                  <p style={{ margin: "0 0 var(--s-2)" }}>It tells you before the move is over. {GLOSSARY.alert.short}</p>
                   {rules && rules.length > 0 ? (
                     <p style={{ margin: 0 }}>
                       You have {plural(rules.length, "alert")} on across {plural(names, "name")}; we will tell you the moment one of those facts prints.
                     </p>
                   ) : picks && picks.length > 0 ? (
                     <p style={{ margin: 0 }}>
-                      {picks[0].symbol} is the first name you pinned. One tap below watches it for a dated event coming up, a borrow fee doubling and a day at three times normal volume.
+                      {picks[0].symbol} is the first name you watched. One tap below tells you about a dated event coming up, the cost to borrow doubling and a day at three times normal volume.
                     </p>
                   ) : null}
                 </>
@@ -858,20 +983,20 @@ export default function Alerts() {
               <span>
                 Alerts: <b>{limit == null ? `${used} on · unlimited` : `${used} of ${limit} used`}</b> · {me && me.tier ? me.tier.label : ""}
               </span>
-              {atQuota && <Link to="/pricing">See plans</Link>}
+              {atQuota && <PlanLink reason="alerts">{CTA.NEXT_PLAN}</PlanLink>}
             </div>
             {!rules && <Skeleton rows={4} height={44} />}
             {rules && rules.length === 0 && (
               <Empty title="No alerts on yet.">
-                {GLOSSARY.alert.short} Choose a name in the form, keep the three triggers we suggest or pick your own, and we will email you when one prints.
+                It tells you before the move is over. Choose a name in the form, keep the three facts we suggest or choose your own, and we will email you when one prints.
               </Empty>
             )}
             {rules && rules.length > 0 && (
               <div className="card">
                 <div className="card-title">
-                  <h2>{simple ? "Names you are watching" : "Armed alerts"}</h2>
+                  <h2>{simple ? "Names watched for me" : "Armed alerts"}</h2>
                   <span className="muted small">
-                    {plural(names, "name")} · {plural(rules.length, "trigger")}
+                    {plural(names, "name")} · {plural(rules.length, simple ? "fact" : "trigger")}
                   </span>
                 </div>
                 {groups.map(([sym, rs]) => {
@@ -883,11 +1008,11 @@ export default function Alerts() {
                           {sym}
                         </Link>
                         <span className="xs faint">
-                          {plural(rs.length, "trigger")} · by {chans.map(channelWord).join(", ") || "email"}
+                          {plural(rs.length, simple ? "fact" : "trigger")} · by {chans.map(channelWord).join(", ") || "email"}
                         </span>
                         <span className="spacer" />
                         <button className="btn-quiet" onClick={() => addFor(sym)}>
-                          Add a trigger
+                          {simple ? "Add a fact" : "Add a trigger"}
                         </button>
                       </div>
                       <div className="tl-chips simple-only">
@@ -907,7 +1032,7 @@ export default function Alerts() {
                         {rs.map((r) => (
                           <div className="tl-rule" key={r.id}>
                             <b>{r.trigger}</b>
-                            <span className="muted xs mono">armed {shortDate(r.armed_at, tz)}</span>
+                            <span className="muted xs mono">on since {shortDate(r.armed_at, tz)}</span>
                             <span className="chan-chips" role="group" aria-label={`Channels for ${r.symbol} ${r.trigger}`}>
                               {CHANNELS.map(([k, label]) => {
                                 const allowed = k === "email" || hasChannel(me, k);
@@ -928,7 +1053,7 @@ export default function Alerts() {
                             </span>
                             <span className="spacer" />
                             <button className="btn btn-secondary btn-sm" onClick={() => disarm(r.id)}>
-                              Disarm
+                              Turn off
                             </button>
                           </div>
                         ))}
@@ -942,15 +1067,15 @@ export default function Alerts() {
 
           <aside className="card tl-form" aria-labelledby="arm-h" ref={formRef} id="arm">
             <h2 id="arm-h" style={{ marginBottom: "var(--s-3)" }}>
-              {simple ? "Tell me when…" : "Arm alerts"}
+              {simple ? "Tell me when…" : "Turn on alerts"}
             </h2>
-            {me && !me.verified ? <Notice tone="warn">Alerts only go to a verified address. Open the link we sent when you signed up, or request a new one from account settings.</Notice> : null}
+            {me && !me.verified ? <Notice tone="warn">Alerts only go to a verified address. Open the link we sent when you signed up, or request a new one from My account.</Notice> : null}
             <form onSubmit={arm}>
               <div className="field">
                 <span className="field-label">{simple ? "Which name?" : "Name"}</span>
                 <SearchBar placeholder="Find a name" onPick={(r) => setSymbol(r.symbol)} />
                 <p className="hint" style={{ margin: "var(--s-1) 0 0" }}>
-                  Search looks only inside your <Explain term="universe">universe</Explain>.
+                  Search covers the names in your industries and <Explain term="universe">your watchlist</Explain>.
                 </p>
                 <label htmlFor="al-symbol" className="tl-or">
                   or type the ticker
@@ -978,7 +1103,7 @@ export default function Alerts() {
                     {DEFAULT_TRIGGERS.map(trigCheck)}
                     <details className="acc">
                       <summary>
-                        More triggers <span className="sum-note">{restTriggers.filter(([k]) => picked.has(k)).length || ""}</span>
+                        More facts <span className="sum-note">{restTriggers.filter(([k]) => picked.has(k)).length || ""}</span>
                       </summary>
                       <div className="acc-body">{restTriggers.map(([k]) => trigCheck(k))}</div>
                     </details>
@@ -998,7 +1123,11 @@ export default function Alerts() {
                 )}
                 {remaining !== Infinity && picked.size > remaining && (
                   <p className="hint">
-                    That is {plural(picked.size, "alert")} and your plan has {remaining} left. Untick {picked.size - remaining}, turn one off, or <Link to="/pricing">move to a plan that can watch this name as well</Link>.
+                    That is {plural(picked.size, "alert")} and your plan has {remaining} left. Untick {picked.size - remaining}, turn one off, or{" "}
+                    <PlanLink reason="alerts" ctx={symbol ? { symbol } : {}}>
+                      move to a plan that can watch this name as well
+                    </PlanLink>
+                    .
                   </p>
                 )}
               </div>
@@ -1033,7 +1162,10 @@ export default function Alerts() {
                           {k === "email" && <span className="lock-note">Required</span>}
                           {!allowed && (
                             <span className="lock-note">
-                              Not in your plan · <Link to="/pricing">See plans</Link>
+                              Not in your plan ·{" "}
+                              <PlanLink reason="channels" ctx={{ channel: k }}>
+                                {CTA.NEXT_PLAN}
+                              </PlanLink>
                             </span>
                           )}
                         </span>
@@ -1047,22 +1179,36 @@ export default function Alerts() {
                   <p style={{ margin: 0 }}>{formErr.text}</p>
                   {formErr.kind === "verify" && (
                     <p style={{ margin: "var(--s-2) 0 0" }}>
-                      <Link to="/settings">Open account settings</Link>
+                      <Link to="/settings">Open my account</Link>
                     </p>
                   )}
-                  {(formErr.kind === "quota" || formErr.kind === "channel") && (
+                  {formErr.kind === "quota" && (
                     <p style={{ margin: "var(--s-2) 0 0" }}>
-                      <Link to="/pricing">See plans</Link>
+                      <PlanLink reason="alerts" ctx={symbol ? { symbol } : {}}>
+                        {CTA.NEXT_PLAN}
+                      </PlanLink>
+                    </p>
+                  )}
+                  {formErr.kind === "channel" && (
+                    <p style={{ margin: "var(--s-2) 0 0" }}>
+                      <PlanLink reason="channels" ctx={{ channel: channels.find((c) => c !== "email" && !hasChannel(me, c)) || channels.find((c) => c !== "email") }}>
+                        {CTA.NEXT_PLAN}
+                      </PlanLink>
                     </p>
                   )}
                 </Notice>
               )}
               <button className="btn btn-primary btn-block" disabled={busy || atQuota || (me && !me.verified) || !symbol.trim() || picked.size === 0}>
-                {busy ? "Setting up…" : simple ? `Notify me${symbol ? ` about ${symbol}` : ""}` : `Arm ${picked.size || ""} alert${picked.size === 1 ? "" : "s"}`}
+                {busy ? "Setting up…" : simple ? (symbol ? CTA.ALERT_ME_ON(symbol) : CTA.ALERT_ME) : `Turn on ${picked.size || ""} alert${picked.size === 1 ? "" : "s"}`}
               </button>
+              <FinePrint short links={false} />
               {atQuota && (
                 <p className="help" style={{ marginTop: "var(--s-2)" }}>
-                  You're using all {limit} alerts on {me.tier.label}. Turn one off, or <Link to="/pricing">move to a plan that can watch this name as well</Link>.
+                  You're using all {limit} alerts on {me.tier.label}. Turn one off, or{" "}
+                  <PlanLink reason="alerts" ctx={symbol ? { symbol } : {}}>
+                    move to a plan that can watch this name as well
+                  </PlanLink>
+                  .
                 </p>
               )}
             </form>

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Link } from "../lib/router.jsx";
+import { openUpgrade } from "../lib/upgrade.js";
 import { age, shortDate } from "../lib/fmt.js";
+import { CTA } from "../lib/plain.js";
 import Icon from "./Icons.jsx";
 
 // Small shared primitives. Each one exists because a screen spec names a
@@ -25,7 +26,7 @@ export function ErrorCard({ error, onRetry, title = "Couldn't load this." }) {
       {msg && <p className="muted">{msg}</p>}
       {onRetry && (
         <button className="btn btn-secondary" onClick={onRetry}>
-          Retry
+          Try again
         </button>
       )}
     </div>
@@ -112,16 +113,6 @@ export function Monogram({ children, size = 24 }) {
   );
 }
 
-// Evidence status is the primary differentiator between strategies.
-export function StatusChip({ calibrated, short = false }) {
-  return calibrated ? (
-    <span className="chip chip-cal">Calibrated</span>
-  ) : (
-    <span className="chip chip-prov" title="Weights not yet backed by resolved outcomes">
-      {short ? "Provisional · uncalibrated" : "Provisional — uncalibrated"}
-    </span>
-  );
-}
 
 // `words` spells the age out ("61 days old") where a bare "61d" would read
 // like a code; `suffix` lets a caller write "checked 3d ago".
@@ -152,9 +143,7 @@ export function Meter({ used, limit, label }) {
     <div className="meter">
       <div className="meter-row">
         <span>{label}</span>
-        <span className="mono">
-          {unlimited ? `${used ?? 0} · unlimited` : `${used ?? 0} of ${limit}`}
-        </span>
+        <span className="num">{unlimited ? `${used ?? 0} · unlimited` : `${used ?? 0} of ${limit}`}</span>
       </div>
       {!unlimited && (
         <div className="meter-track" aria-hidden="true">
@@ -165,17 +154,18 @@ export function Meter({ used, limit, label }) {
   );
 }
 
+// The plan's name as written ("Pro"), never shouted.
 export function TierChip({ tier, link = true }) {
   if (!tier) return null;
   const label = tier.label || tier.key || "Free";
   const upgradeable = tier.key === "free" || tier.key === "basic";
-  const cls = "tierchip mono";
+  const cls = "tierchip";
   return link && upgradeable ? (
-    <Link to="/pricing" className={cls} title="See plans">
-      {label.toUpperCase()}
-    </Link>
+    <button type="button" className={`${cls} tierchip-btn`} title={CTA.SHOW_PLANS} onClick={() => openUpgrade("general")}>
+      {label}
+    </button>
   ) : (
-    <span className={cls}>{label.toUpperCase()}</span>
+    <span className={cls}>{label}</span>
   );
 }
 
@@ -219,8 +209,8 @@ export function Modal({ title, onClose, children, actions }) {
     };
   }, [onClose]);
   return (
-    // Clicks must not bubble past the modal: a Pin inside a clickable board
-    // row would otherwise navigate when the subscriber taps "See plans".
+    // Clicks must not bubble past the modal: a watch star inside a clickable
+    // board row would otherwise navigate when the subscriber taps a plan.
     <div
       className="modal-backdrop"
       onMouseDown={onClose}

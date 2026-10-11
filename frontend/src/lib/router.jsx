@@ -9,6 +9,9 @@ export function usePath() {
   useEffect(() => {
     const onChange = () => setPath(window.location.pathname + window.location.search);
     window.addEventListener("popstate", onChange);
+    // a <Redirect> in the first render navigates before this listener
+    // exists (child effects run first); read the address once more now
+    onChange();
     return () => window.removeEventListener("popstate", onChange);
   }, []);
   return path;
@@ -26,6 +29,12 @@ export function useQuery() {
   return new URLSearchParams(path.split("?")[1] || "");
 }
 
+// Only a same-origin path may be a "next" target; never an absolute URL
+// from the query string.
+export function safeNext(raw) {
+  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : null;
+}
+
 export function Link({ to, children, className, replace, ...rest }) {
   return (
     <a
@@ -41,6 +50,16 @@ export function Link({ to, children, className, replace, ...rest }) {
       {children}
     </a>
   );
+}
+
+// Renders nothing and moves the browser on; `replace` by default so the old
+// address never sits in the back stack (/overview -> /home, signed-in / ->
+// /home, signed-in /login -> next).
+export function Redirect({ to, replace = true }) {
+  useEffect(() => {
+    navigate(to, { replace });
+  }, [to, replace]);
+  return null;
 }
 
 // Authenticated screens send a signed-out visitor to login and bring them

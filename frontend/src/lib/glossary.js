@@ -1,85 +1,90 @@
 // Plain-language definitions for every term the product uses on a subscriber
 // screen. One source so the dossier, the board, the screener and the help
-// page all explain a word the same way. Nothing here softens the honesty
-// rules in PRODUCT_DESIGN §2: the definitions say what the engine does and
-// does not know.
+// page all explain a word the same way. Plain word first, technical word in
+// brackets (DESIGN_V6 §7); nothing here softens the honesty rules in
+// PRODUCT_DESIGN §2 or DESIGN_V5 §2: the definitions say what the engine
+// does and does not know, and never quote a weight, a threshold or a cutoff.
 //
 // Each entry: { term, short, long?, see? }
+//   term  — the heading: the plain phrase, then the engine's word in brackets
 //   short — one sentence, what it means in the product
 //   long  — two or three sentences for the help page and popovers
 
 export const GLOSSARY = {
   score: {
     term: "Score",
-    short: "A 0 to 100 number saying how well a stock fits a strategy's setup on this run. It is not a prediction or a price target.",
-    long: "Each strategy turns a handful of inputs (short interest, borrow fee, float, catalyst timing and so on) into one number from 0 to 100. Higher means the setup the strategy looks for is more fully in place today. It says nothing about where the price goes next.",
+    short: "A number from 0 to 100 saying how well a stock fits a strategy's setup this morning. Not a prediction, not a price target.",
+    long: "Each strategy turns a handful of inputs (short interest, the cost to borrow, shares that trade, a dated event and so on) into one number. Higher means more of the setup is in place today. It says nothing about where the price goes next.",
     see: ["band", "coverage", "shrinkage"],
   },
   band: {
-    term: "Band",
-    short: "The word next to a score (strong, elevated, neutral, weak, excluded). The word is the claim; the number is detail.",
-    long: "Bands group scores into plain words so you do not have to remember thresholds. Strong is the top of the strategy's range on this run, elevated is above its typical range, neutral is inside it, weak is below it, and excluded means a hard filter failed.",
+    term: "The rating word (band)",
+    short: "The word next to a score: strong, elevated, neutral or weak. The word is the claim; the number is detail.",
+    long: "Strong is the top of the strategy's range this morning, elevated is above its usual range, neutral is inside it, weak is below it. The words are never comparable across strategies.",
     see: ["score", "hard_filter"],
   },
-  strong: { term: "Strong", short: "Near the top of the strategy's range on this run." },
-  elevated: { term: "Elevated", short: "Above the strategy's typical range." },
-  neutral: { term: "Neutral", short: "Inside the typical range. Nothing stands out." },
-  weak: { term: "Weak", short: "Below the typical range." },
-  excluded: { term: "Excluded", short: "Failed a hard filter or carries a disqualifying haircut, so it is left out whatever its inputs say." },
+  strong: { term: "Strong", short: "Near the top of the strategy's range this morning." },
+  elevated: { term: "Elevated", short: "Above the strategy's usual range." },
+  neutral: { term: "Neutral", short: "Inside the usual range. Nothing stands out." },
+  weak: { term: "Weak", short: "Below the usual range." },
+  excluded: {
+    term: "Excluded",
+    short: "A word reserved for a name the engine sets aside. A name that fails a must-pass rule is flagged FAIL and still rated, so you will rarely see it.",
+  },
   coverage: {
-    term: "Coverage",
-    short: "How many of a strategy's inputs actually had data on this run. Full, partial or thin.",
-    long: "A score built from all ten inputs and a score built from three are different things wearing the same number. Coverage tells you which one you are looking at. Thin coverage adds a ~ to the number.",
+    term: "How much data the score had (coverage)",
+    short: "How many of a strategy's inputs actually had data this morning. Full, partial or thin.",
+    long: "A score built from every input and a score built from three are different things wearing the same number. Coverage tells you which one you are looking at. Thin coverage adds a ~ to the number.",
     see: ["tilde", "shrinkage"],
   },
   tilde: {
     term: "The ~ mark",
-    short: "A ~ before a score means thin coverage: fewer than half the inputs had data, so read it as approximate.",
+    short: "A ~ before a score means thin data: fewer than half the inputs had data, so read it as approximate.",
   },
   shrinkage: {
-    term: "Shrinkage",
-    short: "When coverage is thin the engine pulls the score toward a neutral 40, so missing data cannot inflate a number.",
-    long: "If only a few inputs had data, the raw score is moved part of the way toward 40. The dossier always states this when it happened: from what, to what, and how many inputs were missing.",
+    term: "Pulled toward neutral for missing data (shrinkage)",
+    short: "When data is thin the score is moved part of the way toward neutral, so missing data cannot inflate a number.",
+    long: "If only a few inputs had data, the raw score is moved toward the middle of the scale. The dossier always says when this happened: from what, to what, and how many inputs were missing.",
     see: ["coverage"],
   },
   hard_filter: {
-    term: "Hard filter",
-    short: "A pass or fail rule a stock must clear before it is scored at all, such as a market-cap ceiling or a minimum short interest.",
-    long: "Hard filters are the strategy's non-negotiables. A name that fails one is marked excluded no matter how its other inputs look. PASS and FAIL are the only two outcomes, and they are the only place the product uses red and green outside price moves.",
+    term: "Must-pass rule (hard filter)",
+    short: "A yes/no check on a name, such as company size or short interest. A name that fails is flagged FAIL and still rated.",
+    long: "Must-pass rules are the strategy's non-negotiables, and PASS or FAIL are the only two outcomes. A FAIL does not drop a name from the board; it is shown beside the score so you can discount it. The exact lines stay in the Lab.",
   },
   calibrated: {
-    term: "Calibrated",
-    short: "A strategy whose weights are backed by at least 30 resolved outcomes. Its output is called a signal.",
+    term: "Has a measured record (calibrated)",
+    short: "Its setups were checked against what happened next, at least thirty times. Its names are called signals.",
     see: ["provisional", "signal"],
   },
   provisional: {
-    term: "Provisional",
-    short: "A strategy whose weights are not yet backed by enough resolved outcomes. Its output is called a candidate, not a signal.",
-    long: "Provisional strategies run the same way as calibrated ones, but we do not yet have enough resolved cases to say how often their setups played out. Until then the product calls what they produce a candidate.",
+    term: "No measured record yet (provisional)",
+    short: "Its setups have not yet been checked against what happened next often enough. Its names are candidates, not signals.",
+    long: "A strategy with no measured record is scored the same way as one with a record, but we cannot yet say how often its setups played out. Until then the product calls what it produces a candidate.",
     see: ["calibrated", "candidate"],
   },
-  signal: { term: "Signal", short: "What a calibrated strategy produces: a name whose setup is in place, with a measured track record behind the word." },
-  candidate: { term: "Candidate", short: "What a provisional strategy produces: a name whose setup is in place, before the strategy has a measured record." },
+  signal: { term: "Signal", short: "What a strategy with a measured record produces: a name whose setup is in place, with a record behind the word." },
+  candidate: { term: "Candidate", short: "What a strategy with no measured record produces: a name whose setup is in place, before the strategy has been checked against outcomes." },
   strategy: {
     term: "Strategy",
-    short: "A named recipe for what to look for, such as Fast Mover. Each one scores every stock in your industries on every run.",
+    short: "A named way of looking for a setup, such as Fast Mover. Each has a plain card: what it looks for, the move it tries to catch, what it ignores, its record.",
     see: ["fast_mover"],
   },
   fast_mover: {
     term: "Fast Mover",
-    short: "The lead strategy and the only one with a measured record: small, tightly held names with heavy short interest and a dated catalyst. In the backtest, 26 of the 32 events that cleared its filters moved 20% or traded 3x volume.",
+    short: "The lead strategy and the only one with a measured record: small, tightly held names a crowd is betting against, with a date coming. In the backtest, 26 of the 32 events that passed its must-pass rules moved 20% or traded 3x volume.",
   },
   lane: {
-    term: "Stage",
-    short: "Where a name is in the setup. Early: no confirmed dated event inside the strategy's window yet, so the engine assumes one further out. Event: a dated event sits inside the window.",
+    term: "A date set, or not yet (stage)",
+    short: "No date set yet, or a date is set. With no date the engine assumes one further out, so the name is scored down, not dropped.",
     see: ["lane_early", "lane_event", "catalyst"],
   },
   lane_early: {
-    term: "Early",
-    short: "The setup is forming but no confirmed dated event sits inside the strategy's window yet; the catalyst input is an assumption until a date is filed.",
+    term: "No date set yet (early)",
+    short: "The setup is forming but no dated event is on the calendar yet; the event input is an assumption until a date is filed.",
   },
   lane_event: {
-    term: "Event",
+    term: "A date is set (event)",
     short: "A dated event such as earnings or a decision sits inside the strategy's look-ahead window.",
   },
   assumed: {
@@ -87,8 +92,8 @@ export const GLOSSARY = {
     short: "Estimated by the engine, not taken from a filing or a dated announcement. Shown so you know the input is a placeholder.",
   },
   judgment: {
-    term: "Judgment input",
-    short: "An operator's reading of news or quality, not a measured figure. It carries weight in the score but is marked so you can discount it.",
+    term: "An operator's reading (judgment input)",
+    short: "A reading of the news or of company quality by a person, not a measured figure. It counts in the score and is marked so you can discount it.",
   },
   age: {
     term: "Age chip",
@@ -99,50 +104,50 @@ export const GLOSSARY = {
     short: "A sub-theme inside an industry, used to sort the board so similar names sit together.",
   },
   delta_run: {
-    term: "Since last run (Δ run)",
-    short: "How much a score moved since the previous run. A plus or minus number of points, or 'new' when the name was not scored before.",
+    term: "Change since the last scoring",
+    short: "How much a score moved since the previous morning's scoring. A plus or minus number of points, or 'new' when the name was not rated before.",
   },
   run: {
-    term: "Run",
-    short: "One pass of the engine over every stock in your industries. Runs happen each morning, and every figure on screen is stamped with the run it came from.",
+    term: "This morning's scoring (run)",
+    short: "One pass of the engine over every stock in your industries. It happens each morning, and every figure on screen is stamped with the morning it came from.",
   },
   catalyst: {
-    term: "Catalyst",
-    short: "A dated event that can move a stock: earnings, an FDA decision, a contract decision, a lock-up expiry.",
+    term: "A dated event that can move the price (catalyst)",
+    short: "Earnings, a regulator's decision, a contract decision, a lock-up expiry: something with a date attached.",
   },
   short_interest: {
     term: "Short interest",
-    short: "The share of a company's tradable shares that traders have sold short, from the twice-monthly FINRA print. High short interest can mean a crowded bet against the name.",
+    short: "The share of the float sold short: how much of a company's tradable stock traders have bet against, from the twice-monthly FINRA print.",
   },
   borrow_fee: {
-    term: "Borrow fee",
-    short: "The yearly rate short sellers pay to borrow shares. A rising fee means shares are getting hard to find.",
+    term: "The cost to borrow (borrow fee)",
+    short: "The yearly rate short sellers pay to borrow shares. When the cost doubles, shares are getting hard to find.",
   },
   float: {
-    term: "Float",
-    short: "The number of shares that actually trade, after insiders and locked-up holders are taken out. With fewer shares trading, volume is measured against a smaller base.",
+    term: "Shares that trade (float)",
+    short: "The shares that actually change hands, after insiders and locked-up holders are taken out. Fewer shares trading means a smaller base for any burst of volume.",
   },
   days_to_cover: {
     term: "Days to cover",
-    short: "How many days of average volume it would take short sellers to buy back everything they owe. More days means a slower exit.",
+    short: "How many days of normal volume it would take short sellers to buy back everything they owe. More days means a slower exit.",
   },
   volume_x: {
-    term: "Volume vs 20-day",
-    short: "Today's trading volume divided by the 20-day average. 3x means three times a normal day.",
+    term: "Volume vs normal",
+    short: "Today's trading volume divided by the average of the last twenty days. 3x means three times a normal day.",
   },
   market_cap: {
-    term: "Market cap",
+    term: "Company size (market cap)",
     short: "The company's total value at today's price: shares outstanding times price.",
   },
   run3m: { term: "3-month move", short: "The price change over the last three months." },
-  off_high: { term: "Off 52-week high", short: "How far below its highest price of the past year the stock trades today." },
+  off_high: { term: "Below yearly high", short: "How far under its highest price of the past year the stock trades today." },
   haircut: {
-    term: "Haircut",
-    short: "Points taken off a score for a red flag, such as a dilution filing. Haircuts are listed under the score whenever one applied.",
+    term: "Penalty (haircut)",
+    short: "Points taken off a score for a red flag, such as a share-sale filing. Penalties are listed under the score whenever one applied.",
   },
   pin: {
-    term: "Pin",
-    short: "Add a name to your watchlist. Pinned names appear in your digest and stay visible even if they drop off the board.",
+    term: "Watch",
+    short: "Add a name to your watchlist. Watched names appear in your weekly brief and stay visible even if they drop off the board.",
   },
   alert: {
     term: "Alert",
@@ -151,15 +156,15 @@ export const GLOSSARY = {
   },
   trigger: {
     term: "Trigger",
-    short: "The specific fact an alert waits for: a borrow fee doubling, volume at 3x, a catalyst date landing in range, and so on.",
+    short: "The specific fact an alert waits for: the cost to borrow doubling, volume at three times normal, a dated event landing in range, and so on.",
   },
   digest: {
-    term: "Digest",
+    term: "My week, by email (digest)",
     short: "The emailed summary of what changed in your industries and watchlist since the last one.",
   },
   benchmark: {
     term: "Benchmark",
-    short: "The industry's sector ETF, shown next to a stock so you can tell a name's move from the sector's.",
+    short: "The industry's sector fund, shown next to a stock so you can tell a name's move from the sector's.",
   },
   rebased: {
     term: "Rebased to 100",
@@ -170,8 +175,8 @@ export const GLOSSARY = {
     short: "One of the sectors you follow. Your plan sets how many you can follow at once; the engine scores every stock inside them.",
   },
   universe: {
-    term: "Your universe",
-    short: "Every stock in the industries you follow plus your pinned names. Screens, boards and search only ever look inside it.",
+    term: "The names in your industries (universe)",
+    short: "Every stock in the industries you follow plus your watched names. Find, Explore and search only ever look inside it.",
   },
   names_shown: {
     term: "Names shown",
@@ -189,21 +194,37 @@ export function term(key) {
 
 // Plain phrases for each alert trigger: what we will tell you, and why it
 // matters. The second string finishes the sentence "We will tell you when…".
+// [label, what it will tell you (present), what it told you (past)]
 export const TRIGGER_PLAIN = {
-  borrow_fee_2x: ["Borrow fee doubles", "the cost to borrow shares doubles, a sign shares are getting hard to find"],
-  si_cross: ["Short interest crosses a line", "short interest crosses 10%, 15% or 20% of the float on a FINRA print"],
-  volume_3x: ["Unusual volume", "a day trades at three times its normal volume"],
-  catalyst_dated: ["Catalyst coming up", "a dated event such as earnings or an FDA decision lands inside the next window"],
-  s3_424b: ["Dilution filing", "the company files to sell more shares (an S-3 or 424B)"],
-  band_change: ["Score changes band", "the score moves into a different band between runs"],
-  insider_buying: ["Insiders buying", "insiders report open-market buys after a stretch of selling"],
-  social_surge: ["Social chatter spikes", "the social feed prints 20 or more messages in a day"],
-  contract_award: ["Contract award", "a government or corporate contract with a dollar figure is announced"],
+  borrow_fee_2x: ["The cost to borrow doubles", "the cost to borrow shares doubles, a sign shares are getting hard to find", "the cost to borrow shares doubled, a sign shares are getting hard to find"],
+  si_cross: ["Short interest crosses a line", "short interest crosses 10%, 15% or 20% of the float on a FINRA print", "short interest crossed 10%, 15% or 20% of the float on a FINRA print"],
+  volume_3x: ["Unusual volume", "a day trades at three times its normal volume", "a day traded at three times its normal volume"],
+  catalyst_dated: ["A dated event ahead", "a dated event such as earnings or a regulator's decision lands inside the next window", "a dated event such as earnings or a regulator's decision landed inside the next window"],
+  s3_424b: ["A share-sale filing", "the company files to sell more shares (an S-3 or 424B)", "the company filed to sell more shares (an S-3 or 424B)"],
+  band_change: ["The rating word changes", "the score moves to a different rating word between mornings", "the score moved to a different rating word between mornings"],
+  insider_buying: ["Insiders buying", "insiders report open-market buys after a stretch of selling", "insiders reported open-market buys after a stretch of selling"],
+  social_surge: ["Social chatter spikes", "the social feed prints 20 or more messages in a day", "the social feed printed 20 or more messages in a day"],
+  contract_award: ["A contract award", "a government or corporate contract with a dollar figure is announced", "a government or corporate contract with a dollar figure was announced"],
 };
 
 // The three triggers a newcomer gets with one tap. Chosen because each is a
 // hard fact with a clear date or print behind it.
 export const DEFAULT_TRIGGERS = ["catalyst_dated", "borrow_fee_2x", "volume_3x"];
+
+// The score's inputs in plain words, by component key. Replaces the engine's
+// own labels ("size (scaled)", "momentum / coil") on every subscriber surface.
+export const PLAIN_COMPONENT = {
+  float: "few shares available to trade",
+  si: "heavy short interest",
+  dtc: "slow for short sellers to exit",
+  fee: "costly to borrow",
+  cap: "company size",
+  growth: "revenue growth",
+  cat: "a dated event ahead",
+  mom: "recent price action",
+  news: "the news (an operator's reading)",
+  qual: "company quality (an operator's reading)",
+};
 
 // Plain column and field labels for Simple mode. Keys match snapshot fields.
 export const PLAIN_FIELD = {
@@ -239,4 +260,11 @@ export const FIELD_TERM = {
   run3m_pct: "run3m",
   off_high_pct: "off_high",
   earnings: "catalyst",
+};
+
+// The status words for a strategy's plain.status.
+export const STRATEGY_STATUS = {
+  measured: { chip: "Measured record", title: "Its setups were checked against what happened next (calibrated)" },
+  provisional: { chip: "No record yet", title: "Its setups have not been checked against what happened next (provisional)" },
+  not_running: { chip: "Not running yet", title: "It puts no score on any name this morning" },
 };

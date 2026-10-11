@@ -3,7 +3,19 @@ import { api, cached, getToken } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { alertsLabel, dollars, industriesLabel, plural } from "../lib/fmt.js";
 import { EVIDENCE } from "../lib/evidence.js";
+import { beyondSentence, fetchRecord } from "../lib/record.js";
+import { CTA } from "../lib/plain.js";
+import { openUpgrade } from "../lib/upgrade.js";
 import { ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
+import FinePrint from "../components/FinePrint.jsx";
+import ScreenHead from "../components/ScreenHead.jsx";
+
+// Plans in the public voice (DESIGN_V6 §3, §6): one line and one action,
+// then one card per plan, each leading with its one-sentence promise and
+// the price, six facts as a short list, one button. The same cards at every
+// width; no matrix table. Only the viewer's own plan is marked (§1: never
+// "most popular"). A plan is described by what it watches and delivers; the
+// numbers are the same on every plan and nothing here is advice.
 
 const CHANNEL_LABEL = { email: "email", push: "web push", sms: "SMS", webhook: "signed webhook" };
 
@@ -11,22 +23,24 @@ function deliveryText(t) {
   return t.channels.map((c) => CHANNEL_LABEL[c] || c).join(" · ");
 }
 
+function industriesWord(t) {
+  return t.industries_limit >= 999 ? "every industry" : plural(t.industries_limit, "industry", "industries");
+}
 
-// One sentence per plan saying what you would be told, built from the plan's
-// own limits. Utility first; the price is a number next to it.
-function utilityText(t) {
-  const ind = t.industries_limit >= 999 ? "every industry" : `${t.industries_limit} ${t.industries_limit === 1 ? "industry" : "industries"}`;
-  const names = `the top ${t.names_shown_limit} names each morning`;
-  const pins = t.picks_limit >= 999 ? "unlimited pins" : `${t.picks_limit} ${t.picks_limit === 1 ? "pin" : "pins"}`;
-  const alerts =
-    t.alerts_limit === 0
-      ? "no alerts, so you check in yourself"
-      : t.alerts_limit == null || t.alerts_limit >= 999
-        ? "unlimited alerts"
-        : `${t.alerts_limit} ${t.alerts_limit === 1 ? "alert" : "alerts"}`;
-  const chans = (t.channels || []).map((c) => CHANNEL_LABEL[c] || c);
-  const how = t.alerts_limit === 0 ? "" : ` We tell you the same day a catalyst is dated, a borrow fee doubles or volume prints 3x on a name you watch${chans.length > 1 ? `, by ${chans.join(", ")}` : ""}.`;
-  return `We watch ${ind} for you and explain ${names}, with ${pins} and ${alerts}.${how}`;
+function picksWord(t) {
+  return t.picks_limit == null || t.picks_limit >= 999 ? "unlimited" : plural(t.picks_limit, "name");
+}
+
+// One sentence, 14 words or fewer, built from the plan's own limits.
+function promise(t) {
+  const ind = industriesWord(t);
+  if (t.alerts_limit === 0) return `Watches ${ind} for you each morning; you check in yourself.`;
+  const on = t.picks_limit == null || t.picks_limit >= 999 ? "any name you pick" : `${plural(t.picks_limit, "name")} you pick`;
+  return `Watches ${ind}; tells you the day a fact changes on ${on}.`;
+}
+
+function priceText(t) {
+  return t.price_monthly_cents === 0 ? "$0" : `${dollars(t.price_monthly_cents)}/month`;
 }
 
 export default function Pricing() {
@@ -40,12 +54,37 @@ export default function Pricing() {
       alive = false;
     };
   }, []);
+  // Nothing is said about the list until it has loaded; a failed fetch says
+  // nothing rather than a guess. Keyed on the plain status: a strategy that
+  // puts no score on any name is "not running yet", not "provisional".
   const provisionalLine = (() => {
-    if (!strats || !strats.length) return "Most strategies are provisional.";
-    const prov = strats.filter((x) => !x.calibrated).length;
-    if (prov === 0) return "Every strategy is calibrated.";
-    return `${prov} of the ${strats.length} strategies ${prov === 1 ? "is" : "are"} provisional.`;
+    if (!strats || !strats.length) return "";
+    const status = (x) => (x.plain && x.plain.status) || (x.calibrated ? "measured" : "provisional");
+    const prov = strats.filter((x) => status(x) === "provisional").length;
+    const idle = strats.filter((x) => status(x) === "not_running").length;
+    const parts = [];
+    if (prov > 0) parts.push(`${prov} of the ${strats.length} strategies ${prov === 1 ? "has" : "have"} no measured record yet (provisional).`);
+    const word = (n) => ["No", "One", "Two", "Three", "Four", "Five"][n] || String(n);
+    if (idle > 0) parts.push(`${word(idle)} ${idle === 1 ? "is" : "are"} not running yet and ${idle === 1 ? "puts" : "put"} no score on any name.`);
+    if (!parts.length) return "Every strategy has a measured record.";
+    return parts.join(" ");
   })();
+
+  // The viewer's own record frames the comparison (DESIGN_V5 §4.6): what
+  // fired beyond the industries they follow, as counts, never tickers.
+  // Visitors get nothing here; the plans speak for themselves.
+  const [rec, setRec] = useState(null);
+  useEffect(() => {
+    if (!getToken()) return undefined;
+    let alive = true;
+    fetchRecord(30)
+      .then((x) => alive && setRec(x))
+      .catch(() => alive && setRec(null));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const beyondLine = rec && getToken() ? beyondSentence(rec.beyond) : null;
 
   const q = useQuery();
   const [d, setD] = useState(null);
@@ -68,6 +107,9 @@ export default function Pricing() {
     };
   }, [reload]);
 
+  const signedIn = Boolean(getToken());
+  const title = signedIn ? "My plan" : "Plans";
+
   if (err) {
     return (
       <div className="wrap wrap-narrow">
@@ -77,11 +119,9 @@ export default function Pricing() {
   }
   if (!d) {
     return (
-      <div className="wrap">
-        <div className="pagehead">
-          <h1>Plans</h1>
-        </div>
-        <Skeleton rows={6} height={48} />
+      <div className="wrap plans">
+        <ScreenHead title={title} line="Every plan watches your industries each morning and tells you the day a fact changes." />
+        <Skeleton rows={4} height={240} />
       </div>
     );
   }
@@ -91,7 +131,7 @@ export default function Pricing() {
   const currentPrice = d.current ? d.current.price_monthly_cents : 0;
 
   const choose = async (key) => {
-    if (!getToken()) {
+    if (!signedIn) {
       navigate(`/signup?next=${encodeURIComponent("/pricing")}`);
       return;
     }
@@ -118,133 +158,97 @@ export default function Pricing() {
   };
 
   const action = (t) => {
-    const isCurrent = t.key === currentKey;
-    if (isCurrent) return <span className="chip chip-cal">Your plan</span>;
+    const isCurrent = signedIn && t.key === currentKey;
+    if (isCurrent) return <span className="chip chip-cal plan-current">{CTA.MY_PLAN}</span>;
     const up = t.price_monthly_cents > currentPrice;
-    const label = !getToken()
-      ? t.price_monthly_cents === 0
-        ? "Start free"
-        : `Start on ${t.label}`
-      : up
-        ? `Switch to ${t.label}`
-        : `Move down to ${t.label}`;
+    const label = !signedIn ? (t.price_monthly_cents === 0 ? CTA.START_FREE : CTA.START_ON(t.label)) : up ? CTA.MOVE_TO(t.label) : CTA.MOVE_DOWN_TO(t.label);
     return (
-      <button
-        className={`btn ${up || !getToken() ? "btn-primary" : "btn-secondary"} btn-sm btn-block`}
-        disabled={busy === t.key}
-        onClick={() => choose(t.key)}
-      >
+      <button className={`btn ${up || !signedIn ? "btn-primary" : "btn-secondary"} btn-block`} disabled={busy === t.key} onClick={() => choose(t.key)}>
         {busy === t.key ? "Opening…" : label}
       </button>
     );
   };
 
-  const rows = [
-    ["Price", (t) => (t.price_monthly_cents === 0 ? "$0" : `${dollars(t.price_monthly_cents)}/mo`)],
-    ["Industries followed", (t) => industriesLabel(t.industries_limit)],
-    ["Names shown per industry", (t) => `top ${t.names_shown_limit}`],
-    ["Pinned names", (t) => plural(t.picks_limit, "pin")],
-    ["Alerts", (t) => alertsLabel(t.alerts_limit)],
-    ["Delivery", (t) => deliveryText(t)],
+  const facts = (t) => [
+    ["Price", priceText(t)],
+    ["Industries watched", industriesLabel(t.industries_limit)],
+    ["Names shown per industry", `top ${t.names_shown_limit}`],
+    ["Names watched for you", picksWord(t)],
+    ["Alerts", alertsLabel(t.alerts_limit)],
+    ["Delivery", deliveryText(t)],
   ];
 
+  const onTop = signedIn && d.current && !tiers.some((t) => t.price_monthly_cents > currentPrice);
+  const line = signedIn
+    ? beyondLine
+      ? `In the last ${rec.days} days, ${beyondLine}`
+      : "Pay for coverage and delivery, not for different numbers."
+    : "Every plan watches your industries each morning; pay for coverage and delivery.";
+
   return (
-    <div className="wrap">
-      <div className="pagehead">
-        <div>
-          <h1>Plans</h1>
-          <div className="meta">
-            Every plan sees the same scores and the same reports. Plans differ only in how much of the
-            universe you follow, how many names you pin, and how alerts reach you.
-          </div>
-        </div>
-      </div>
+    <div className="wrap plans">
+      <ScreenHead
+        className="plans-head"
+        title={title}
+        line={line}
+        action={
+          !signedIn ? (
+            <Link to="/signup" className="btn btn-primary">
+              {CTA.START_FREE}
+            </Link>
+          ) : !onTop ? (
+            <button type="button" className="btn btn-primary" onClick={() => openUpgrade("general")}>
+              Watch more for me
+            </button>
+          ) : null
+        }
+      />
 
       {msg && <Notice tone="info">{msg}</Notice>}
 
-      <div className="table-card plans-desktop">
-        <table className="plans-table">
-          <thead>
-            <tr>
-              <th scope="col">
-                <span className="sr-only">Feature</span>
-              </th>
-              {tiers.map((t) => (
-                <th key={t.key} scope="col" className={`tcol ${t.key === "pro" ? "popular" : ""}`}>
-                  <div className="tname">{t.label}</div>
-                  <div className="tprice">
-                    {t.price_monthly_cents === 0 ? "$0" : dollars(t.price_monthly_cents)}
-                    <span className="per"> /month</span>
-                  </div>
-                  <p className="tutil">{utilityText(t)}</p>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(([label, fn]) => (
-              <tr key={label}>
-                <th scope="row">{label}</th>
-                {tiers.map((t) => (
-                  <td key={t.key} className={`tcol ${t.key === "pro" ? "popular" : ""}`}>
-                    {fn(t)}
-                  </td>
+      <div className="plans-cards">
+        {tiers.map((t) => {
+          const isCurrent = signedIn && t.key === currentKey;
+          return (
+            <div key={t.key} className={`card plan ${isCurrent ? "current" : ""}`} aria-current={isCurrent ? "true" : undefined}>
+              <div className="tname">{t.label}</div>
+              <p className="tpromise">{promise(t)}</p>
+              <div className="tprice">
+                {t.price_monthly_cents === 0 ? "$0" : dollars(t.price_monthly_cents)}
+                <span className="per"> {t.price_monthly_cents === 0 ? "forever" : "/ month"}</span>
+              </div>
+              <ul className="tfacts">
+                {facts(t).map(([label, value]) => (
+                  <li key={label}>
+                    <span className="k">{label}</span>
+                    <span className="v">{value}</span>
+                  </li>
                 ))}
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td />
-              {tiers.map((t) => (
-                <td key={t.key} className={`tcol ${t.key === "pro" ? "popular" : ""}`}>
-                  {action(t)}
-                </td>
-              ))}
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      <div className="plans-cards plans-mobile">
-        {tiers.map((t) => (
-          <div key={t.key} className={`card plan ${t.key === "pro" ? "popular" : ""}`}>
-            <div className="tname">{t.label}</div>
-            <div className="tprice">
-              {t.price_monthly_cents === 0 ? "$0" : dollars(t.price_monthly_cents)}
-              <span className="per"> /month</span>
+              </ul>
+              {action(t)}
             </div>
-            <p className="tutil">{utilityText(t)}</p>
-            <dl>
-              {rows.slice(1).map(([label, fn]) => (
-                <React.Fragment key={label}>
-                  <dt>{label}</dt>
-                  <dd>{fn(t)}</dd>
-                </React.Fragment>
-              ))}
-            </dl>
-            {action(t)}
-          </div>
-        ))}
+          );
+        })}
       </div>
+      <p className="plans-fine">A subscription buys coverage and delivery, not advice.</p>
+      <FinePrint className="plans-fineprint" />
 
       <div className="section">
-        <h2>How visibility works</h2>
+        <h2>What a plan changes</h2>
         <p className="section-lead">
-          You see the top-ranked names in each industry you follow, plus any name you pin. Pinning a
-          name widens what you can see; it never changes the report you get. A name outside your
-          universe simply has no report page, the same as a name that doesn't exist.
+          You see the top-rated names in each industry you follow, plus any name you ask it to watch. Watching a name widens what you can see; it
+          never changes the report you get. A name outside your industries and watchlist simply has no report page, the same as a name that doesn't
+          exist.
         </p>
       </div>
 
       <div className="section card card-sunken">
-        <h2>What the evidence does and does not say</h2>
+        <h2>What the record does and does not say</h2>
         <p className="muted" style={{ maxWidth: "68ch", marginBottom: 0 }}>
-          {provisionalLine} Fast Mover is the one that has been
-          backtested: its hard filters hit on {EVIDENCE.hitRate}% of the {EVIDENCE.events} qualifying
-          events tested ({EVIDENCE.hits} of {EVIDENCE.events}), against {EVIDENCE.earningsRate}% for
-          earnings events generally and {EVIDENCE.randomRate}% on a random day. That sample is small
-          and measures movement, not direction or profit.
+          {provisionalLine ? `${provisionalLine} ` : ""}Fast Mover is the one with a measured record: {EVIDENCE.hits} of the {EVIDENCE.events} backtest events that passed the test's{" "}
+          {EVIDENCE.testFilters} filters moved ({EVIDENCE.hitRate}%), against {EVIDENCE.earningsRate}% for earnings events generally and {EVIDENCE.randomRate}% on a
+          random day. {EVIDENCE.liveFilters[0].toUpperCase() + EVIDENCE.liveFilters.slice(1)} of those filters run today. That sample is small and measures movement, not
+          direction or profit.
         </p>
       </div>
 
@@ -253,49 +257,44 @@ export default function Pricing() {
         <details>
           <summary>What happens when I move to a lower plan?</summary>
           <p>
-            The change takes effect at the end of the billing period, never mid-cycle. Pinned names
-            above the new limit stay saved but inactive, and re-activate if you move back up. Nothing
-            you authored is deleted.
+            The change takes effect at the end of the billing period, never mid-cycle. Watched names above the new limit stay saved but inactive, and
+            re-activate if you move back up. Nothing you authored is deleted.
           </p>
         </details>
         <details>
           <summary>Why does a ticker show "No report available"?</summary>
           <p>
-            Either it isn't covered, or it isn't in the industries you follow and you haven't pinned
-            it. The page looks the same in both cases on purpose.
+            Either it isn't covered, or it isn't in the industries you follow and you haven't asked for it to be watched. The page looks the same in
+            both cases on purpose.
           </p>
         </details>
         <details>
           <summary>Do I need to verify my email to browse?</summary>
           <p>
-            No. Verification gates delivery, not browsing: you can read your Board right after signing
-            up, but alerts, digests and paid upgrades wait until the link in your inbox is clicked.
+            No. Verification gates delivery, not browsing: your Home works right after signing up, but alerts, digests and paid upgrades wait until
+            the link in your inbox is clicked.
           </p>
         </details>
         <details>
           <summary>How does cancellation work?</summary>
           <p>
-            Cancel any time from your account. Access continues to the end of the period you've paid
-            for, then the account returns to Free with your pins and settings intact.
+            Cancel any time from My account. Access continues to the end of the period you've paid for, then the account returns to Free with your
+            watched names and settings intact.
           </p>
         </details>
         <details>
-          <summary>Is a strong score a recommendation?</summary>
+          <summary>Is a strong rating a recommendation?</summary>
           <p>
-            No. A score ranks names for a human to review. Bands and numbers describe where a name
-            sits on a fixed scale; they are not a probability of success and never a call on
-            direction.
+            No. A rating ranks names for a human to review. The rating word and the number describe where a name sits on a fixed scale; they are not
+            a probability of success and never a call on direction.
           </p>
         </details>
       </div>
 
       {health && health.dev && (
-        <p className="footnote">
-          Sandbox instance: choosing a plan moves your account directly. Live checkout activates once
-          Stripe keys are configured.
-        </p>
+        <p className="footnote">Sandbox instance: choosing a plan moves your account directly. Live checkout activates once Stripe keys are configured.</p>
       )}
-      {!getToken() && (
+      {!signedIn && (
         <p className="footnote">
           Already have an account? <Link to="/login?next=%2Fpricing">Log in</Link> to change your plan.
         </p>

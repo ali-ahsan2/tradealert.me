@@ -43,7 +43,7 @@ def _admin_404():
 def _require_admin(creds):
     if creds is None:
         _admin_404()
-    row = user_from_creds(creds)
+    row = user_from_creds(creds, require_consent=False)  # non-admins 404 below; admins are exempt
     if not user_is_admin(row):
         _admin_404()
     return row
@@ -214,7 +214,12 @@ def lab_strategies(creds: HTTPAuthorizationCredentials | None = Depends(bearer))
                 })
             return {"strategies": out,
                     "events_total": events_total,
-                    "events_complete": events_complete}
+                    "events_complete": events_complete,
+                    # The floors the verdicts rest on, so the Lab's plain
+                    # copy reads them from here instead of repeating them.
+                    "floors": {"min_group": MIN_GROUP_FLOOR,
+                               "small_sample": SMALL_SAMPLE,
+                               "min_instruments": MIN_INSTRUMENTS}}
     finally:
         conn.close()
 
@@ -482,10 +487,14 @@ def _matched_comparison(a_res, b_res):
 
 
 _DIFF_VERDICT = {
-    "too_few": ("Below the 30-event floor. Difference shown, counted as nothing."),
-    "better": "Later version looks better on the same events, within chance.",
-    "worse": "Later version looks worse on the same events, within chance.",
-    "no_signal": "No signal in the difference on the same events.",
+    "too_few": (f"Below the {SMALL_SAMPLE}-event floor. The difference is shown "
+                "but counts as nothing."),
+    "better": ("Later version looks better on the same events, and the gap is "
+               "larger than chance would explain."),
+    "worse": ("Later version looks worse on the same events, and the gap is "
+              "larger than chance would explain."),
+    "no_signal": ("No signal: the difference on the same events is within what "
+                  "chance would produce."),
 }
 
 

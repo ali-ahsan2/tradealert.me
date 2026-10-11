@@ -1,3 +1,5 @@
+import { navigate } from "./lib/router.jsx";
+
 export const TOKEN_KEY = "ta_token";
 
 // Storage access throws outright in Safari private browsing; every read and
@@ -46,13 +48,32 @@ function toStringDetail(detail) {
   return "request failed";
 }
 
+// Hover/focus prefetch: a GET started early is reused by the next api() call
+// for the same path within a few seconds, so a dossier opens from memory.
+const PREFETCH_TTL = 8000;
+const inflight = new Map();
+
+export function prefetch(path) {
+  if (!path || inflight.has(path)) return;
+  const p = api(path, { _prefetch: true }).catch(() => null);
+  inflight.set(path, { p, t: Date.now() });
+  setTimeout(() => inflight.delete(path), PREFETCH_TTL);
+}
+
 export async function api(path, opts = {}) {
+  const isGet = !opts.method || opts.method === "GET";
+  if (isGet && !opts._prefetch && inflight.has(path)) {
+    const hit = inflight.get(path);
+    inflight.delete(path);
+    const v = await hit.p;
+    if (v !== null) return v;
+  }
   const headers = { ...(opts.headers || {}) };
   const hasBody = opts.json !== undefined;
   if (hasBody) headers["content-type"] = "application/json";
   const token = getToken();
   if (token) headers["authorization"] = `Bearer ${token}`;
-  const { json: _json, ...rest } = opts;
+  const { json: _json, _prefetch: _pf, ...rest } = opts;
   let res;
   try {
     res = await fetch(`/api${path}`, {
@@ -74,6 +95,15 @@ export async function api(path, opts = {}) {
       // stale token: drop it so the next request is anonymous
       setToken(null);
     }
+    if (res.status === 403 && body && body.detail === "consent_required") {
+      // the account has not ticked the current terms (DESIGN_V6 §6): the
+      // API serves nothing but /me, consent, export and delete until it
+      // has, so every screen hands over to the one that asks
+      if (window.location.pathname !== "/welcome") {
+        const back = window.location.pathname + window.location.search;
+        navigate(`/welcome?next=${encodeURIComponent(back)}`, { replace: true });
+      }
+    }
     if (res.status === 429) {
       throw new ApiError(429, "Too many requests. Try again in a minute.", body);
     }
@@ -82,11 +112,23 @@ export async function api(path, opts = {}) {
   return body;
 }
 
-export async function signup(email, password) {
-  const { token } = await api("/signup", { method: "POST", json: { email, password } });
+// Sign-up carries the consent tick (DESIGN_V6 §6); the API answers 422
+// without it, so the form keeps the button disabled until the box is ticked.
+export async function signup(email, password, acceptTerms = false) {
+  const { token } = await api("/signup", {
+    method: "POST",
+    json: { email, password, accept_terms: Boolean(acceptTerms) },
+  });
   setToken(token);
   return token;
 }
+
+// The one-time acknowledgement for an existing account (the /welcome gate):
+// records the version ticked and returns the refreshed /api/me payload.
+export function consent(version) {
+  return api("/me/consent", { method: "POST", json: { version } });
+}
+
 
 export async function login(email, password) {
   const { token } = await api("/login", { method: "POST", json: { email, password } });

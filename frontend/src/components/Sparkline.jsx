@@ -1,8 +1,9 @@
 import React from "react";
 
 // A real series only: every point is a run that happened. Width and height
-// are in CSS pixels; the path scales to the box.
-export default function Sparkline({ points, width = 160, height = 36, min = 0, max = 100, neutral = 40, label }) {
+// are in CSS pixels; the path scales to the box. The optional midline sits
+// at the scale's middle, never at a strategy's cutoff (DESIGN_V6 §10).
+export default function Sparkline({ points, width = 160, height = 36, min = 0, max = 100, neutral = 50, label }) {
   const vals = (points || []).map((p) => (typeof p === "number" ? p : p.value)).filter((v) => v != null);
   if (vals.length < 2) return null;
   const lo = Math.min(min, ...vals);

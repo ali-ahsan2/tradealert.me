@@ -78,7 +78,8 @@ def main():
     for p in ("/strategies", "/industries", "/runs/latest", "/entitlements", "/me", "/me/picks",
               "/me/settings", "/me/industries", "/me/alerts/rules", "/me/alerts/unread", "/me/digests",
               "/me/digests/preview", "/me/watchlist/stats", "/me/watchlist/series?days=30",
-              "/me/watchlist/series?days=90", "/me/watchlist/series?days=365", "/overview"):
+              "/me/watchlist/series?days=90", "/me/watchlist/series?days=365", "/overview",
+              "/pulse?days=30", "/me/record?days=30", "/me/record?days=90"):
         get(p)
     strategies = [s["key"] for s in out["GET /strategies"]["body"]["strategies"]]
     industries = [i["key"] for i in out["GET /industries"]["body"]["industries"]]
@@ -117,6 +118,7 @@ def main():
             syms.update(r["symbol"] for r in chg[k]["rows"])
     syms.update(e["symbol"] for e in out["GET /alert-events?days=365&limit=100"]["body"]["events"])
     for sym in sorted(syms):
+        get(f"/me/record?symbol={sym}&days=365")
         get(f"/stock/{sym}?strategy=fast_mover")
         get(f"/stock/{sym}/fields?strategy=fast_mover")
         series = get(f"/stock/{sym}/series?days=365")

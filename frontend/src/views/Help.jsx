@@ -4,23 +4,31 @@ import { useMe } from "../lib/me.jsx";
 import { DEFAULT_TRIGGERS, GLOSSARY, TRIGGER_PLAIN } from "../lib/glossary.js";
 import { MODES, useMode } from "../lib/mode.js";
 import { EVIDENCE } from "../lib/evidence.js";
-import { alertsLabel, industriesLabel, plural } from "../lib/fmt.js";
+import { alertsLabel, industriesLabel } from "../lib/fmt.js";
+import { CTA, ratePct } from "../lib/plain.js";
 import { KeyValue, Steps } from "../components/ui.jsx";
 import { restartTour } from "../components/Tour.jsx";
+import { PlainStatusChip, StrategyPlainCard } from "../components/Plain.jsx";
+import ScreenHead from "../components/ScreenHead.jsx";
+import FinePrint from "../components/FinePrint.jsx";
+import { cached } from "../api.js";
 import "./help.css";
 
-// /help: how the product works in five steps, whether any of it is advice
-// (no), and the glossary as cards, one per term, each addressable as
-// /help#<key> so an Explain popover anywhere in the app can deep-link here.
-// Every definition comes from lib/glossary.js; the only performance figures
-// are the EVIDENCE values, quoted as stored.
+// /help: the three sentences, how the product works in five steps, whether
+// any of it is advice (no), and the glossary as cards, one per term, each
+// addressable as /help#<key> so an Explain popover anywhere in the app can
+// deep-link here. Every definition comes from lib/glossary.js; the record
+// figures come from /api/strategies, with EVIDENCE as the fallback.
+
+const THREE = "It watches my industries. It tells me before the move is over. Measured, not predicted.";
+const MODE_LABEL = { simple: "Simple", full: "More detail" };
 
 // Every GLOSSARY key belongs to one group; anything unassigned falls into
 // "Other terms", which should stay empty.
 const GROUPS = [
   {
     id: "scores",
-    title: "Scores and bands",
+    title: "Scores and ratings",
     keys: [
       "score", "band", "strong", "elevated", "neutral", "weak", "excluded", "coverage", "tilde",
       "shrinkage", "hard_filter", "haircut", "delta_run", "run", "strategy", "fast_mover",
@@ -42,23 +50,22 @@ const GROUPS = [
 
 const HOW = [
   <>
-    <b>We watch your industries each morning.</b> One run scores every stock in the industries you follow, and every figure on
-    screen is stamped with the run it came from.
+    <b>It watches your industries each morning.</b> Every stock in the industries you picked is rated, and every figure on screen is
+    stamped with the morning it came from.
   </>,
   <>
-    <b>We score every name on each strategy.</b> A score is a 0 to 100 fit to the strategy's setup on that run, grouped into a band word
-    you can read at a glance.
+    <b>Every name is rated on Fast Mover; four more strategies are being built.</b> A score is a 0 to 100 fit to the strategy's setup
+    that morning, with a rating word you can read at a glance.
   </>,
   <>
-    <b>We explain the number in plain words.</b> Each name opens with what its score is, which inputs drove it and which inputs had no
-    data.
+    <b>It explains the number in plain words.</b> Each name opens with what its score is, which inputs lifted it and which had no data.
   </>,
   <>
-    <b>We alert you on facts that printed.</b> A borrow fee that doubled, volume at three times normal, a dated catalyst inside the window:
-    every alert names the fact that fired it.
+    <b>It tells you the day a fact changes.</b> The cost to borrow doubled, volume at three times normal, a date set: every alert names
+    the fact that fired it.
   </>,
   <>
-    <b>You decide.</b> Nothing here is a recommendation; the product ranks names for a human to review.
+    <b>You decide.</b> Nothing here is a recommendation; the product ranks names for you to review.
   </>,
 ];
 
@@ -104,22 +111,19 @@ function TermCard({ k, active }) {
 
 function ModeCard() {
   const { mode, setMode } = useMode();
-  const label = (MODES.find(([k]) => k === mode) || MODES[0])[1];
+  const label = MODE_LABEL[mode] || mode;
   return (
     <article className="help-term" id="mode">
-      <h3>Simple and Full mode</h3>
-      <p>
-        Simple shows plain labels, the columns a newcomer needs and explanations inline. Full shows every column and control. Nothing is
-        removed in either; the choice is saved in this browser.
-      </p>
-      <div className="seg modeseg" role="group" aria-label="Mode">
-        {MODES.map(([k, l]) => (
+      <h3>Detail: Simple or More detail</h3>
+      <p>Simple shows cards, plain words and three items before Show all. More detail shows every column and figure. Nothing is removed either way.</p>
+      <div className="seg modeseg" role="group" aria-label="Detail">
+        {MODES.map(([k]) => (
           <button key={k} type="button" aria-pressed={mode === k} onClick={() => setMode(k)}>
-            {l}
+            {MODE_LABEL[k] || k}
           </button>
         ))}
       </div>
-      <p className="mode-note">You are in {label} mode.</p>
+      <p className="mode-note">You are on {label}; the choice is saved in this browser.</p>
     </article>
   );
 }
@@ -129,7 +133,7 @@ function TriggersCard() {
   return (
     <article className="help-term" id="triggers">
       <h3>The triggers, in plain words</h3>
-      <p>Notify me turns on three with one tap: {defaults.join(", ")}. The rest can be added on a name's alerts page.</p>
+      <p>Alert me turns on three with one tap: {defaults.join(", ")}. The rest can be added under My alerts.</p>
       <ul>
         {Object.entries(TRIGGER_PLAIN).map(([k, [label, when]]) => (
           <li key={k}>
@@ -141,20 +145,78 @@ function TriggersCard() {
   );
 }
 
-function EvidenceCard() {
+// The strategies in plain words: the one with a measured record as its full
+// card, the ones being built as one line each behind a closed drawer, so the
+// section stays within three items (DESIGN_V6 §7).
+function StrategiesSection({ list }) {
+  if (!list || list.length === 0) return null;
+  const status = (s) => (s.plain && s.plain.status) || (s.calibrated ? "measured" : "provisional");
+  const lead = list.filter((s) => status(s) === "measured");
+  const rest = list.filter((s) => status(s) !== "measured");
+  return (
+    <section aria-labelledby="h-strategies">
+      <h2 id="strategies">
+        <span id="h-strategies">The strategies, in plain words</span>
+      </h2>
+      <div className="plain-list">
+        {lead.map((s) => (
+          <article key={s.key} className="plain-row" aria-labelledby={`hs-${s.key}`}>
+            <div className="plain-row-top">
+              <h3 id={`hs-${s.key}`}>
+                <Link to={`/strategies/${s.key}`}>{s.label}</Link>
+              </h3>
+              <PlainStatusChip status={status(s)} />
+            </div>
+            <StrategyPlainCard strategy={s} className="plain-flat" />
+          </article>
+        ))}
+        {rest.length > 0 && (
+          <details className="plain-more">
+            <summary>
+              {rest.length === 1 ? "One more strategy is" : `${rest.length} more strategies are`} being built
+            </summary>
+            <div className="plain-list">
+              {rest.map((s) => (
+                <article key={s.key} className="plain-row" aria-labelledby={`hs-${s.key}`}>
+                  <div className="plain-row-top">
+                    <h3 id={`hs-${s.key}`}>
+                      <Link to={`/strategies/${s.key}`}>{s.label}</Link>
+                    </h3>
+                    <PlainStatusChip status={status(s)} />
+                  </div>
+                  <StrategyPlainCard strategy={{ ...s, label: null }} compact />
+                  {s.plain && <p className="plain-note">{s.plain.record}</p>}
+                </article>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
+      <p className="help-see" style={{ marginTop: "var(--s-3)" }}>
+        <Link to="/strategies">Every strategy and its record</Link>
+      </p>
+    </section>
+  );
+}
+
+// The record as /api/strategies carries it (plain.record_numbers on Fast
+// Mover); EVIDENCE only until it answers.
+function EvidenceCard({ record }) {
+  const hits = record && record.hits != null ? record.hits : EVIDENCE.hits;
+  const events = record && record.n != null ? record.n : EVIDENCE.events;
+  const rate = events ? ratePct(hits, events) : EVIDENCE.hitRate;
   return (
     <article className="help-term" id="evidence">
-      <h3>The evidence</h3>
+      <h3>The record</h3>
       <p>
-        Fast Mover is the one calibrated strategy. On {EVIDENCE.events} events across {EVIDENCE.tickers} names, the names that cleared every
-        hard filter moved {EVIDENCE.hitRate}% of the time ({EVIDENCE.hits} of {EVIDENCE.events}), against {EVIDENCE.earningsRate}% for
-        earnings events generally and {EVIDENCE.randomRate}% on a random day. A move is {EVIDENCE.hitDefinition}, measured from{" "}
-        {EVIDENCE.window}.
+        Fast Mover is the one strategy with a measured record. On {events} events across {EVIDENCE.tickers} names, the names that passed
+        every must-pass rule moved {rate}% of the time ({hits} of {events}), against {EVIDENCE.earningsRate}% for earnings events generally
+        and {EVIDENCE.randomRate}% on a random day. A move is {EVIDENCE.hitDefinition}, measured from {EVIDENCE.window}.
       </p>
       <ul>
         <li>It measures whether a large move happened, not its direction.</li>
         <li>No trades are simulated and no return is claimed.</li>
-        <li>{EVIDENCE.events} events is a small sample across a limited set of regimes.</li>
+        <li>{events} events is a small sample across a limited set of market conditions.</li>
       </ul>
       <p className="help-see">
         <Link to="/strategies">The full record, strategy by strategy</Link>
@@ -168,25 +230,25 @@ function PlanCard({ me }) {
   if (!t) {
     return (
       <article className="help-term" id="your-plan">
-        <h3>Your plan</h3>
-        <p>Sign in to see what your plan watches for you: how many industries, how many names per list, how many pins and alerts.</p>
+        <h3>My plan</h3>
+        <p>Log in to see what your plan watches for you: how many industries, how many names per list, how many names watched and alerts.</p>
       </article>
     );
   }
   return (
     <article className="help-term" id="your-plan">
-      <h3>Your plan: {t.label}</h3>
+      <h3>My plan: {t.label}</h3>
       <p>What this plan watches and tells you. Counts above a limit are totals, not more tickers.</p>
       <KeyValue
         items={[
-          ["Industries followed", industriesLabel(t.industries_limit)],
+          ["Industries watched", industriesLabel(t.industries_limit)],
           ["Names shown per list", limitWord(t.names_shown_limit)],
-          ["Pinned names", limitWord(t.picks_limit, "unlimited")],
+          ["Names watched for me", limitWord(t.picks_limit, "unlimited")],
           ["Alerts", t.alerts_limit == null ? "unlimited" : alertsLabel(t.alerts_limit)],
         ]}
       />
       <p className="help-see">
-        <Link to="/pricing">What each plan tells you</Link>
+        <Link to="/pricing">{CTA.SHOW_PLANS}</Link>
       </p>
     </article>
   );
@@ -195,6 +257,14 @@ function PlanCard({ me }) {
 export default function Help() {
   const { me } = useMe();
   const [active, setActive] = useState(currentHash);
+  const [strategies, setStrategies] = useState(null);
+  useEffect(() => {
+    cached("/strategies")
+      .then((d) => setStrategies(d.strategies))
+      .catch(() => setStrategies([]));
+  }, []);
+  const fm = (strategies || []).find((x) => x.key === "fast_mover");
+  const record = fm && fm.plain ? fm.plain.record_numbers : null;
 
   // The glossary is static, so a deep link can scroll the moment we mount.
   // Our router pushes state without a hash scroll, and :target does not
@@ -224,33 +294,37 @@ export default function Help() {
     return out;
   }, []);
 
-  const following = me && me.industries_following_count != null ? me.industries_following_count : null;
-
   return (
     <div className="wrap help">
-      <div className="pagehead">
-        <div>
-          <h1>How tradealert works</h1>
-        </div>
-      </div>
-      <p className="utility">
-        {me && me.tier && following != null ? (
-          <>
-            You follow <b>{plural(following, "industry", "industries")}</b> on the <b>{me.tier.label}</b> plan.{" "}
-          </>
-        ) : null}
+      <ScreenHead
+        title="Help"
+        line={THREE}
+        action={
+          me ? (
+            <button type="button" className="btn btn-primary" onClick={() => restartTour()}>
+              {CTA.TOUR_AGAIN}
+            </button>
+          ) : (
+            <Link to="/signup" className="btn btn-primary">
+              {CTA.START_FREE}
+            </Link>
+          )
+        }
+      />
+      <p className="plain-note" style={{ marginBottom: "var(--s-4)" }}>
         This page says what every word on your screens means, what we watch for you, and what we never claim.
       </p>
 
       <nav className="help-toc" aria-label="Sections">
         <a href="#how">How it works</a>
+        <a href="#strategies">The strategies</a>
         <a href="#advice">Is this advice?</a>
         {groups.map((g) => (
           <a key={g.id} href={`#${g.id}`}>
             {g.title}
           </a>
         ))}
-        <a href="#mode">Simple and Full</a>
+        <a href="#mode">Detail</a>
       </nav>
 
       <h2 id="how">How it works</h2>
@@ -258,20 +332,19 @@ export default function Help() {
         <Steps items={HOW} />
       </div>
       <div className="help-actions">
-        <button type="button" className="btn btn-secondary btn-sm" onClick={() => restartTour()}>
-          Replay the welcome tour
-        </button>
         <Link to="/strategies" className="btn btn-secondary btn-sm">
-          Strategies and evidence
+          Strategies
         </Link>
       </div>
 
+      <StrategiesSection list={strategies} />
+
       <h2 id="advice">Is this advice?</h2>
       <p className="help-lead">
-        No. Everything on a screen is a recorded fact, stated with its source and date: a score from a named run, a short-interest
-        figure from a FINRA print, a catalyst from a filing or a company calendar. The product ranks and explains; it does not
-        recommend a trade and it makes no prediction about price. When a number is approximate it carries a ~, and when a strategy has
-        not yet been measured against outcomes its output is called a candidate, not a signal.
+        No. Everything on a screen is a recorded fact, stated with its source and date: a score from a named morning's scoring, a
+        short-interest figure from a FINRA print, a dated event from a filing or a company calendar. The product ranks and explains; it
+        does not recommend a trade and it makes no prediction about price. When a number is approximate it carries a ~, and when a
+        strategy has no measured record yet its output is called a candidate, not a signal.
       </p>
 
       {groups.map((g) => (
@@ -283,7 +356,7 @@ export default function Help() {
             {g.keys.map((k) => (
               <TermCard key={k} k={k} active={active === k} />
             ))}
-            {g.id === "scores" && <EvidenceCard />}
+            {g.id === "scores" && <EvidenceCard record={record} />}
             {g.id === "alerts" && <TriggersCard />}
             {g.id === "plans" && <PlanCard me={me} />}
             {g.id === "screens" && <ModeCard />}
@@ -291,9 +364,7 @@ export default function Help() {
         </section>
       ))}
 
-      <p className="footnote">
-        Research and information only. Scores are machine output ranked for a human to review; every figure carries its source date.
-      </p>
+      <FinePrint />
     </div>
   );
 }

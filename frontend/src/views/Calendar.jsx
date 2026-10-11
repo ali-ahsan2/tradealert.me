@@ -4,17 +4,25 @@ import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { dateTime, pct, plural, shortDate, weekStart, weekday } from "../lib/fmt.js";
 import { EVIDENCE } from "../lib/evidence.js";
+import { CTA } from "../lib/plain.js";
+import { HOME_ROWS } from "../lib/caps.js";
+import { dayMonth } from "../lib/record.js";
 import { useMode } from "../lib/mode.js";
-import ScoreBadge from "../components/ScoreBadge.jsx";
+import { openUpgrade } from "../lib/upgrade.js";
+import ScoreBadge, { BandText } from "../components/ScoreBadge.jsx";
 import NotifyButton, { invalidateRules } from "../components/NotifyButton.jsx";
 import Explain from "../components/Explain.jsx";
+import ScreenHead from "../components/ScreenHead.jsx";
+import FinePrint from "../components/FinePrint.jsx";
 import { AgeChip, Empty, ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
 import "./tools.css";
 
 // Dated events ahead for the names the subscriber can see, grouped by week,
-// each in plain words: who, what kind of event, how far away, the current
-// band, and one tap to be told about it. Below: what happened after the
-// real dated events of the last 45 days, measured not predicted.
+// each in plain words: who, what kind of event, how far away, the rating
+// word, and one tap to be told about it. Simple shows the three nearest
+// before "Show all" (DESIGN_V6 §7) and keeps one rating word per row; the
+// age chip and the rule verdict are Full-mode detail. Below: what happened
+// after the real dated events of the last 45 days, measured not predicted.
 
 const WINDOWS = [14, 30, 60, 90];
 
@@ -59,6 +67,7 @@ export default function Calendar() {
   const [err, setErr] = useState(null);
   const [reload, setReload] = useState(0);
   const [arming, setArming] = useState("");
+  const [all, setAll] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -72,16 +81,23 @@ export default function Calendar() {
     };
   }, [days, reload]);
 
-  const weeks = useMemo(() => {
+  // Simple opens on the three nearest events; "Show all N" opens the rest.
+  const visible = useMemo(() => {
     if (!d) return [];
+    const sorted = [...d.upcoming].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    return simple && !all ? sorted.slice(0, HOME_ROWS) : sorted;
+  }, [d, simple, all]);
+  const hidden = d ? d.upcoming.length - visible.length : 0;
+
+  const weeks = useMemo(() => {
     const m = new Map();
-    d.upcoming.forEach((r) => {
+    visible.forEach((r) => {
       const k = weekStart(r.date);
       if (!m.has(k)) m.set(k, []);
       m.get(k).push(r);
     });
     return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [d]);
+  }, [visible]);
 
   const tz = me && me.settings ? me.settings.timezone : undefined;
   const alertsLocked = Boolean(me && me.tier && me.tier.alerts_limit === 0);
@@ -94,7 +110,7 @@ export default function Calendar() {
       setD((x) => ({ ...x, upcoming: x.upcoming.map((u) => (u.symbol === r.symbol ? { ...u, armed: true } : u)) }));
       toast(`We will tell you when ${r.symbol}'s dated event comes into range.`);
     } catch (e) {
-      toast(e.detail || "Couldn't arm that alert.");
+      toast(e.detail || "Couldn't turn that alert on.");
     } finally {
       setArming("");
       invalidateRules();
@@ -105,33 +121,21 @@ export default function Calendar() {
   const nearest = d ? d.upcoming.find((r) => r.days >= 0) || d.upcoming[0] : null;
   const noPast = d ? d.upcoming.some((r) => !r.past || !r.past.n) : false;
 
+  // The one line: the screen's own counts, fourteen words or fewer.
+  let line;
+  if (!d && !err) line = "Checking the dated events on your names…";
+  else if (err) line = "The calendar could not be loaded.";
+  else if (total === 0) line = `No dated event is on file for your names in the next ${days} days.`;
+  else if (nearest) line = `${plural(total, "dated event")} on your names in ${days} days; nearest ${nearest.symbol} earnings ${plainDays(nearest.days)}.`;
+  else line = `${plural(total, "dated event")} on your names in the next ${days} days.`;
+
   return (
     <div className="wrap">
-      <div className="pagehead">
-        <div>
-          <h1>Calendar</h1>
-          <p className="utility">
-            {!d && !err && "Checking the dated events on your names…"}
-            {err && "The calendar could not be loaded."}
-            {d &&
-              (total === 0 ? (
-                <>
-                  No dated event is on file for your names in the next <b>{days} days</b>.
-                </>
-              ) : (
-                <>
-                  <b>{total}</b> dated {total === 1 ? "event" : "events"} on your names in the next <b>{days} days</b>
-                  {nearest ? (
-                    <>
-                      ; the {nearest.days < 0 ? "latest was" : "nearest is"} <b>{nearest.symbol}</b> earnings <b>{plainDays(nearest.days)}</b>
-                    </>
-                  ) : null}
-                  .{d.meta.truncated ? ` Your plan shows ${d.meta.shown} of them.` : ""}
-                </>
-              ))}
-          </p>
-        </div>
-        <div className="actions">
+      <ScreenHead
+        title="Coming up for me"
+        line={line}
+        action={nearest && nearest.days >= 0 ? <NotifyButton symbol={nearest.symbol} triggers={["catalyst_dated"]} label={CTA.ALERT_ME_BEFORE(nearest.symbol)} /> : null}
+        secondary={
           <div className="seg" role="group" aria-label="Window">
             {WINDOWS.map((w) => (
               <button key={w} aria-pressed={days === w} onClick={() => navigate(`/calendar${w === 60 ? "" : `?days=${w}`}`, { replace: true })}>
@@ -139,8 +143,8 @@ export default function Calendar() {
               </button>
             ))}
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {err && <ErrorCard error={err} onRetry={() => setReload((n) => n + 1)} title="Couldn't load the calendar." />}
       {!err && !d && <Skeleton rows={6} height={56} />}
@@ -150,7 +154,11 @@ export default function Calendar() {
           {d.meta.truncated && (
             <Notice tone="info">
               {d.meta.total - d.meta.shown} more dated {d.meta.total - d.meta.shown === 1 ? "event" : "events"} in your industries inside this window. Your plan shows the top{" "}
-              {d.meta.names_shown_limit}; a bigger plan would tell you about all of them. <Link to="/pricing">See plans</Link>.
+              {d.meta.names_shown_limit}; a bigger plan would tell you about all of them.{" "}
+              <button type="button" className="linkbtn" onClick={() => openUpgrade("names")}>
+                {CTA.NEXT_PLAN}
+              </button>
+              .
             </Notice>
           )}
 
@@ -171,7 +179,7 @@ export default function Calendar() {
                       <div className="cal-row" key={`${r.symbol}-${r.date}`}>
                         <div className="cal-when">
                           <span className="cal-day">{weekday(r.date)}</span>
-                          <span className="cal-date mono">{r.date.slice(5)}</span>
+                          <span className="cal-date">{dayMonth(r.date)}</span>
                           <span className={`xs ${r.days >= 0 && r.days <= 3 ? "soon" : "faint"}`}>{plainDays(r.days)}</span>
                         </div>
                         <div className="cal-who">
@@ -190,18 +198,25 @@ export default function Calendar() {
                           <span className="xs faint">
                             <Link to={`/industries/${r.industry.key}`}>{r.industry.label}</Link>
                             <span className="full-only">{r.lane ? ` · ${r.lane}` : ""}</span>
-                            {r.pinned ? " · pinned" : ""} <AgeChip asOf={r.as_of} prefix="checked " suffix=" ago" />
+                            {r.pinned ? " · watching" : ""}{" "}
+                            <span className="full-only">
+                              <AgeChip asOf={r.as_of} prefix="checked " suffix=" ago" />
+                            </span>
                           </span>
                         </div>
                         <div className="cal-score">
                           {r.band ? (
-                            <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} />
+                            simple ? (
+                              <BandText band={r.band} value={r.value} present={r.components_present} total={r.components_total} />
+                            ) : (
+                              <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} />
+                            )
                           ) : (
                             <span className="chip chip-plain">No score</span>
                           )}
                           {r.hf_pass != null && (
-                            <span className="tl-filt xs">
-                              <Explain term="hard_filter">filters</Explain>: <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`}>{r.hf_pass ? "PASS" : "FAIL"}</span>
+                            <span className="tl-filt xs full-only">
+                              <Explain term="hard_filter">rules</Explain>: <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`}>{r.hf_pass ? "PASS" : "FAIL"}</span>
                             </span>
                           )}
                         </div>
@@ -229,7 +244,7 @@ export default function Calendar() {
                                   Dated-event alert on
                                 </Link>
                               ) : (
-                                <button className="btn-quiet full-only" disabled={arming === r.symbol || (me && !me.verified)} onClick={() => armCatalyst(r)} title="Arm only the dated-event trigger">
+                                <button className="btn-quiet full-only" disabled={arming === r.symbol || (me && !me.verified)} onClick={() => armCatalyst(r)} title="Only the dated-event alert, nothing else">
                                   {arming === r.symbol ? "…" : "Just this event"}
                                 </button>
                               ))}
@@ -240,6 +255,16 @@ export default function Calendar() {
                   </div>
                 </section>
               ))}
+              {hidden > 0 && (
+                <button type="button" className="btn-quiet" style={{ minHeight: 44 }} onClick={() => setAll(true)}>
+                  {CTA.SHOW_ALL(d.upcoming.length)}
+                </button>
+              )}
+              {all && simple && d.upcoming.length > HOME_ROWS && (
+                <button type="button" className="btn-quiet" style={{ minHeight: 44 }} onClick={() => setAll(false)}>
+                  {CTA.SHOW_FEWER}
+                </button>
+              )}
               {noPast && <p className="hint">A row with no past-reaction line has no measured past reaction on file.</p>}
             </div>
           )}
@@ -275,7 +300,25 @@ export default function Calendar() {
                 ? "No real dated event on your names resolved in the last 45 days."
                 : `How each name moved after its dated event. A hit means it ${EVIDENCE.hitDefinition}, inside the window ${EVIDENCE.window}.`}
             </p>
-            {d.recent.length > 0 && (
+            {d.recent.length > 0 && simple && (
+              <ul className="namelist">
+                {d.recent.map((r) => (
+                  <li className="nameline" key={`${r.symbol}-${r.date}-${r.kind}`}>
+                    <Link className="sym" to={`/stock/${r.symbol}`}>
+                      {r.symbol}
+                    </Link>
+                    <span className="small">
+                      {kindPlain(r.kind)} on {dayMonth(r.date)}:{" "}
+                      {!r.resolved
+                        ? "the five-session window is still open."
+                        : `${pct(r.max_move_pct)} at the high, closed ${pct(r.close_move_pct)}; ${r.hit ? "moved" : "did not move"}${r.days_to_move != null ? ` in ${r.days_to_move}d` : ""}.`}
+                    </span>
+                    <span className="spacer" />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {d.recent.length > 0 && !simple && (
               <div className="tscroll">
                 <table className="hf reactions">
                   <thead>
@@ -310,7 +353,7 @@ export default function Calendar() {
                             <span className="faint">window open</span>
                           ) : (
                             <span className="outcome">
-                              {r.hit ? "HIT" : "MISS"}
+                              {simple ? (r.hit ? "moved" : "did not move") : r.hit ? "HIT" : "MISS"}
                               {r.days_to_move != null ? ` · ${r.days_to_move}d` : ""}
                             </span>
                           )}
@@ -324,8 +367,9 @@ export default function Calendar() {
           </section>
 
           <p className="footnote">
-            {d.source} {d.run_as_of ? `Scores from the run at ${dateTime(d.run_as_of, tz)}.` : ""} Nothing here is a recommendation.
+            {d.source} {d.run_as_of ? `Rated at ${dateTime(d.run_as_of, tz)}.` : ""}
           </p>
+          <FinePrint short />
         </>
       )}
     </div>

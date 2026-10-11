@@ -1,17 +1,23 @@
 import React, { useEffect, useState } from "react";
 import { api, cached, logout, toast } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
+import { openUpgrade } from "../lib/upgrade.js";
 import { hasChannel, useMe } from "../lib/me.jsx";
 import { DAYS, dollars, downloadText, industriesLabel, plural, shortDate, tzList } from "../lib/fmt.js";
+import { CTA } from "../lib/plain.js";
+import ScreenHead from "../components/ScreenHead.jsx";
+import FinePrint from "../components/FinePrint.jsx";
 import { ErrorCard, Meter, Modal, Notice, Skeleton } from "../components/ui.jsx";
 
+// My account (DESIGN_V6 §2: the labels are mine). One line and, when the
+// address is unverified, one action; then the sections.
 const SECTIONS = [
   ["profile", "Profile"],
-  ["industries", "Industries"],
-  ["channels", "Delivery"],
-  ["digest", "Digest"],
-  ["plan", "Plan"],
-  ["data", "Your data"],
+  ["industries", "My industries"],
+  ["channels", "How to reach me"],
+  ["digest", "My week, by email"],
+  ["plan", "My plan"],
+  ["data", "My data"],
 ];
 
 function Section({ id, title, lead, children }) {
@@ -21,6 +27,28 @@ function Section({ id, title, lead, children }) {
       {lead && <p className="lead">{lead}</p>}
       {children}
     </section>
+  );
+}
+
+// POST /api/me/verify/resend (DESIGN_V6 §10, rate-limited). Until the
+// endpoint ships a 404 is answered in words, never as a crash.
+function ResendVerify({ primary = false }) {
+  const [busy, setBusy] = useState(false);
+  const send = async () => {
+    setBusy(true);
+    try {
+      await api("/me/verify/resend", { method: "POST", json: {} });
+      toast("Sent. Check your inbox for the new link.");
+    } catch (e) {
+      toast(e.status === 404 || e.status === 405 ? "Resending isn't available yet. The first email still works for a day." : e.detail || "Couldn't resend. Try again in a minute.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button type="button" className={`btn ${primary ? "btn-primary" : "btn-secondary btn-sm"} resend-btn`} disabled={busy} onClick={send}>
+      {busy ? "Sending…" : primary ? "Verify my email" : "Resend the email"}
+    </button>
   );
 }
 
@@ -89,7 +117,7 @@ export default function Settings() {
       setFollowed(d.industries);
       refresh();
     } catch (e) {
-      toast(e.detail || "Couldn't follow that industry.");
+      toast(e.detail || "Couldn't add that industry.");
     }
   };
 
@@ -100,9 +128,9 @@ export default function Settings() {
       const d = await api("/me/industries");
       setFollowed(d.industries);
       refresh();
-      if (r.affected_picks > 0) toast(`${plural(r.affected_picks, "pinned name")} in that industry stay saved but may no longer be visible.`);
+      if (r.affected_picks > 0) toast(`${plural(r.affected_picks, "watched name")} in that industry stay saved but may no longer be visible.`);
     } catch (e) {
-      toast(e.detail || "Couldn't drop that industry.");
+      toast(e.detail || "Couldn't stop watching that industry.");
     }
   };
 
@@ -134,9 +162,7 @@ export default function Settings() {
   if (!me || !settings || !followed || !ent) {
     return (
       <div className="wrap wrap-narrow">
-        <div className="pagehead">
-          <h1>Account</h1>
-        </div>
+        <ScreenHead title="My account" line="Where alerts reach you, which industries are watched, your plan." />
         <Skeleton rows={5} height={120} />
       </div>
     );
@@ -152,16 +178,15 @@ export default function Settings() {
 
   return (
     <div className="wrap wrap-narrow">
-      <div className="pagehead">
-        <div>
-          <h1>Account</h1>
-          <div className="meta">Everything about you rather than the market.</div>
-        </div>
-      </div>
+      <ScreenHead
+        title="My account"
+        line="Where alerts reach you, which industries are watched, your plan."
+        action={!me.verified ? <ResendVerify primary /> : null}
+      />
 
       {q.get("billing") === "success" && (
         <Notice tone="pos">
-          Your plan change went through. It can take a moment for the new limits to show here. <Link to="/board">Back to the Board</Link>
+          Your plan change went through. It can take a moment for the new limits to show here. <Link to="/home">Back to my Home</Link>
         </Notice>
       )}
 
@@ -183,7 +208,8 @@ export default function Settings() {
         <div className="kv">
           <span className="k">Status</span>
           <span className="v" style={{ fontFamily: "inherit" }}>
-            {me.verified ? <span className="pos">Verified</span> : <span className="warn">Not verified · alerts, digests and upgrades wait on it</span>}
+            {me.verified ? <span>Verified</span> : <span className="warn">Not verified · alerts, digests and upgrades wait on it</span>}
+            {!me.verified && <ResendVerify />}
           </span>
         </div>
         {me.provider && (
@@ -207,14 +233,14 @@ export default function Settings() {
               </option>
             ))}
           </select>
-          <span className="help">Drives digest send time and every timestamp you see here.</span>
+          <span className="help">Sets when your weekly brief arrives and every timestamp you see here.</span>
           <span className="save-status" aria-live="polite">
             {status("timezone")}
           </span>
         </div>
         {me.provider ? (
           <p className="small muted" style={{ marginBottom: 0 }}>
-            You sign in with {me.provider}. To add a password, <Link to="/reset">send yourself a reset link</Link>.
+            You log in with {me.provider}. To add a password, <Link to="/reset">send yourself a reset link</Link>.
           </p>
         ) : (
           <PasswordForm />
@@ -223,8 +249,8 @@ export default function Settings() {
 
       <Section
         id="industries"
-        title="Industries"
-        lead={`Your Board shows the top names in each industry you follow. ${followed.length} of ${industriesLabel(limit)} selected · ${tier ? tier.label : "Free"}.`}
+        title="My industries"
+        lead={`Every name in each industry you watch is rated each morning. ${followed.length} of ${industriesLabel(limit)} picked · ${tier ? tier.label : "Free"}.`}
       >
         <div className="indlist">
           {allInd.map((i) => {
@@ -243,11 +269,11 @@ export default function Settings() {
                 </div>
                 {isOn ? (
                   <button className="btn btn-secondary btn-sm" onClick={() => setConfirmDrop(i)}>
-                    Drop
+                    {CTA.STOP_WATCHING}
                   </button>
                 ) : (
-                  <button className="btn btn-primary btn-sm" disabled={!canFollow} onClick={() => follow(i.key)}>
-                    Follow
+                  <button className="btn btn-secondary btn-sm" disabled={!canFollow} onClick={() => follow(i.key)}>
+                    Watch for me
                   </button>
                 )}
               </div>
@@ -256,23 +282,26 @@ export default function Settings() {
         </div>
         {!canFollow && (
           <p className="small muted" style={{ marginTop: "var(--s-3)", marginBottom: 0 }}>
-            {tier.label} follows {industriesLabel(limit)}.
+            {tier.label} watches {industriesLabel(limit)}.
             {nextTier && (
               <>
                 {" "}
-                {nextTier.label} follows {industriesLabel(nextTier.industries_limit)}. <Link to="/pricing">See plans</Link>
+                {nextTier.label} watches {industriesLabel(nextTier.industries_limit)}. <button type="button" className="linkbtn" onClick={() => openUpgrade("industries")}>{CTA.NEXT_PLAN}</button>
               </>
             )}
           </p>
         )}
       </Section>
 
-      <Section id="channels" title="Delivery" lead="Where alerts and digests reach you. Email is always on.">
+      <Section id="channels" title="How to reach me" lead="Where alerts and the weekly brief reach you.">
         <label className="check">
-          <input type="checkbox" checked disabled />
+          <input type="checkbox" checked={settings.channel_email !== false} onChange={(e) => patch({ channel_email: e.target.checked }, "email")} />
           <span>
-            Email
-            <span className="lock-note">Required · {me.email}</span>
+            Email · {me.email}
+            <span className="lock-note">
+              Account emails always arrive; alerts and the weekly brief can be turned off.
+              {status("email") ? ` ${status("email")}` : ""}
+            </span>
           </span>
         </label>
         <label className={`check ${hasChannel(me, "push") ? "" : "locked"}`}>
@@ -281,7 +310,7 @@ export default function Settings() {
             Web push
             {!hasChannel(me, "push") && (
               <span className="lock-note">
-                Basic and above · <Link to="/pricing">See plans</Link>
+                Basic and above · <button type="button" className="linkbtn" onClick={() => openUpgrade("channels", { channel: "push" })}>{CTA.NEXT_PLAN}</button>
               </span>
             )}
           </span>
@@ -292,7 +321,7 @@ export default function Settings() {
             SMS
             {!hasChannel(me, "sms") && (
               <span className="lock-note">
-                Pro and above · <Link to="/pricing">See plans</Link>
+                Pro and above · <button type="button" className="linkbtn" onClick={() => openUpgrade("channels", { channel: "sms" })}>{CTA.NEXT_PLAN}</button>
               </span>
             )}
           </span>
@@ -303,7 +332,7 @@ export default function Settings() {
             Webhook URL{" "}
             {!hasChannel(me, "webhook") && (
               <span className="faint">
-                · Investor only · <Link to="/pricing">See plans</Link>
+                · Investor only · <button type="button" className="linkbtn" onClick={() => openUpgrade("channels", { channel: "webhook" })}>{CTA.NEXT_PLAN}</button>
               </span>
             )}
           </label>
@@ -344,10 +373,10 @@ export default function Settings() {
         )}
       </Section>
 
-      <Section id="digest" title="Weekly digest" lead="Your board, frozen into an email once a week. Preview and past issues live under Digests.">
+      <Section id="digest" title="My week, by email" lead="Your names, frozen into an email once a week. The preview and past briefs live under My week.">
         <label className="check">
           <input type="checkbox" checked={Boolean(settings.digest_enabled)} onChange={(e) => patch({ digest_enabled: e.target.checked }, "digest")} />
-          <span>Send me the weekly digest</span>
+          <span>Send me the weekly brief</span>
         </label>
         <div className="grid2" style={{ marginTop: "var(--s-2)" }}>
           <div className="field">
@@ -375,28 +404,28 @@ export default function Settings() {
           {status("digest") || status("digest day") || status("digest hour")}
         </span>
         <p className="small" style={{ marginBottom: 0 }}>
-          <Link to="/digests">Preview the next digest and read past ones →</Link>
+          <Link to="/digests">Preview my next brief and read past ones →</Link>
         </p>
       </Section>
 
-      <Section id="plan" title="Plan">
+      <Section id="plan" title="My plan">
         <div className="plan-card">
           <div className="plan-top">
-            <span className="tierchip mono">{(tier ? tier.label : "Free").toUpperCase()}</span>
+            <span className="tierchip mono">{tier ? tier.label : "Free"}</span>
             <span className="price">
               {tier ? `${dollars(tier.price_monthly_cents)}/mo` : "$0/mo"}
               {ent.subscription && ent.subscription.current_period_end ? ` · renews ${shortDate(ent.subscription.current_period_end)}` : ""}
             </span>
           </div>
-          <Meter label="Industries followed" used={usage.industries_followed ?? followed.length} limit={tier ? tier.industries_limit : 1} />
+          <Meter label="Industries watched" used={usage.industries_followed ?? followed.length} limit={tier ? tier.industries_limit : 1} />
           <div className="meter">
             <div className="meter-row">
               <span>Names shown per industry</span>
               <span className="mono">top {tier ? tier.names_shown_limit : 5}</span>
             </div>
           </div>
-          <Meter label="Pinned names" used={usage.picks_used} limit={tier ? tier.picks_limit : 1} />
-          <Meter label="Alerts armed" used={usage.alerts_used} limit={tier ? tier.alerts_limit : 0} />
+          <Meter label="Names watched for me" used={usage.picks_used} limit={tier ? tier.picks_limit : 1} />
+          <Meter label="Alerts on" used={usage.alerts_used} limit={tier ? tier.alerts_limit : 0} />
           <div className="meter">
             <div className="meter-row">
               <span>Delivery</span>
@@ -404,19 +433,20 @@ export default function Settings() {
             </div>
           </div>
           <div className="row" style={{ marginTop: "var(--s-4)" }}>
-            <Link to="/pricing" className="btn btn-primary btn-sm">
-              {nextTier ? "Change plan" : "See plans"}
-            </Link>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => openUpgrade("general")}>
+              {nextTier ? "Change my plan" : CTA.SHOW_PLANS}
+            </button>
             {health && health.configured && paid && (
               <button className="btn btn-secondary btn-sm" onClick={portal}>
-                Billing history and payment method
+                Open my billing
               </button>
             )}
           </div>
+          <FinePrint short />
         </div>
       </Section>
 
-      <Section id="data" title="Your data" lead="Everything you authored here is yours to take or remove.">
+      <Section id="data" title="My data" lead="Everything you authored here is yours to take or remove.">
         <div className="row">
           <button className="btn btn-secondary btn-sm" onClick={exportData}>
             Export my data (JSON)
@@ -432,25 +462,25 @@ export default function Settings() {
           </button>
         </div>
         <p className="small muted" style={{ margin: "var(--s-4) 0 var(--s-2)" }}>
-          Deleting the account is permanent: your pins, notes, alert rules and digests go with it.
+          Deleting the account is permanent: your watched names, notes, alerts and briefs go with it.
           {paid ? " Cancel your paid plan through billing first so nothing is charged after." : ""}
         </p>
         <button className="btn btn-secondary btn-sm" style={{ color: "var(--neg)", borderColor: "var(--neg)" }} disabled={paid} onClick={() => setConfirmDelete(true)}>
-          Delete account
+          Delete my account
         </button>
       </Section>
 
       {confirmDrop && (
         <Modal
-          title={`Stop following ${confirmDrop.label}?`}
+          title={`Stop watching ${confirmDrop.label}?`}
           onClose={() => setConfirmDrop(null)}
           actions={
             <button className="btn btn-primary" onClick={() => drop(confirmDrop.key)}>
-              Drop {confirmDrop.label}
+              {CTA.STOP_WATCHING_SYM(confirmDrop.label)}
             </button>
           }
         >
-          <p>Its names leave your Board, and any alerts armed on them stop firing. Pinned names stay saved and remain visible through your watchlist.</p>
+          <p>Its names leave Explore, and any alerts on them stop firing. Watched names stay saved and remain visible through My watchlist.</p>
         </Modal>
       )}
 
@@ -529,7 +559,7 @@ function PasswordForm() {
   );
 }
 
-function DeleteModal({ email, onClose }) {
+export function DeleteModal({ email, onClose }) {
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -556,7 +586,7 @@ function DeleteModal({ email, onClose }) {
         </button>
       }
     >
-      <p>This removes your account, pins, notes, alert rules and digests. It cannot be undone.</p>
+      <p>This removes your account, watched names, notes, alerts and briefs. It cannot be undone.</p>
       <div className="field">
         <label htmlFor="del-confirm">Type your email to confirm</label>
         <input id="del-confirm" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={email} autoComplete="off" />
@@ -578,7 +608,7 @@ function PhoneField({ settings, onSave, status }) {
       <div className="row">
         <input id="phone" className="input mono" value={v} placeholder="+1 555 000 0000" onChange={(e) => setV(e.target.value)} style={{ flex: 1 }} />
         <button className="btn btn-secondary btn-sm" onClick={() => onSave(v)} disabled={v === (settings.phone_number || "")}>
-          Save
+          Save my number
         </button>
       </div>
       <span className="help">{settings.phone_verified ? "Verified." : "Unverified numbers receive nothing until confirmed."}</span>
@@ -596,7 +626,7 @@ function WebhookField({ settings, disabled, onSave, status }) {
       <div className="row">
         <input id="webhook-url" className="input mono" value={v} placeholder="https://" disabled={disabled} onChange={(e) => setV(e.target.value)} style={{ flex: 1 }} />
         <button className="btn btn-secondary btn-sm" disabled={disabled || v === (settings.webhook_url || "")} onClick={() => onSave(v)}>
-          Save
+          Save my webhook
         </button>
       </div>
       <span className="save-status" aria-live="polite">

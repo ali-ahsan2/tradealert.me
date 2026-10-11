@@ -5,6 +5,10 @@ Run inside the app container after migrations:
 
     docker compose exec -T app python db/seed_lab.py
 
+The version records need an author: sign up the first admin before running
+this on a fresh database. Only db/bootstrap.py --fixture (DEV_FIXTURE=1, on
+a host checkout where db/seed_dev.py exists) creates the dev login itself.
+
 Idempotent. Version 1 is created once per strategy and never duplicated;
 scores are backfilled only when strategy_version_id is still NULL; fixture
 events are regenerated each run (they are explicitly synthetic and the Lab
@@ -18,6 +22,7 @@ finding (STRATEGY_ANALYSIS_TOOL.md section 6.7). A real ingest path swaps
 the fixtures in without changing anything downstream.
 """
 import json
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
@@ -40,7 +45,18 @@ def _admin_id(cur):
     if row:
         return row[0]
     cur.execute("SELECT id FROM users ORDER BY id LIMIT 1")
-    return cur.fetchone()[0]
+    row = cur.fetchone()
+    if row:
+        return row[0]
+    # A fresh database has no account yet: bootstrap runs this seed before
+    # the dev fixture so the fixture's events survive the synthetic purge
+    # below. The version records need an author, so create the dev admin
+    # login the fixture creates anyway (same helper, so the two agree).
+    if os.environ.get("DEV_FIXTURE") != "1":
+        raise SystemExit("no account exists yet: sign up the first admin before seeding the Lab "
+                         "(or run db/bootstrap.py --fixture on a development database)")
+    from seed_dev import ensure_dev_user  # sibling script in db/, not in the image
+    return ensure_dev_user(cur)
 
 
 def _seed_version_one(cur, admin_id):
