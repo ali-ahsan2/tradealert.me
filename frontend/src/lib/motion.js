@@ -35,7 +35,14 @@ export function useReveal({ once = true, rootMargin = "0px 0px -10% 0px" } = {})
       { rootMargin, threshold: 0.12 }
     );
     io.observe(el);
-    return () => io.disconnect();
+    // never leave content hidden: if the observer has not fired within a
+    // moment (print, a scroll container it cannot see, a stalled frame),
+    // show it anyway
+    const safety = setTimeout(() => setSeen(true), 1500);
+    return () => {
+      io.disconnect();
+      clearTimeout(safety);
+    };
   }, [once, rootMargin, seen]);
   return [ref, seen];
 }
