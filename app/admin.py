@@ -9,7 +9,7 @@ from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from app import security
+from app import legal, security
 from app.context import fetch_by_email, fetch_by_id, user_from_creds, user_is_admin, user_id
 from app.db import get_conn
 from app import email as emailer
@@ -118,7 +118,9 @@ def forgot(body: ResetRequestIn):
             email,
             "Reset your tradealert.me password",
             f"Open this link to choose a new password (expires in 24h):\n\n{link}\n\n"
-            "If you did not request this, ignore the email.",
+            "If you did not request this, ignore the email."
+            # an account email: no unsubscribe, the settings link only
+            + legal.email_footer(settings_url=f"{base}/settings"),
         )
         if status == "skipped":
             import logging

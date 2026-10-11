@@ -51,7 +51,7 @@ def psql(sql):
 
 
 def new_user(email):
-    status, body = post("/signup", {"email": email, "password": "testpass123"})
+    status, body = post("/signup", {"email": email, "password": "testpass123", "accept_terms": True})
     assert status == 200, body
     status, body = post("/login", {"email": email, "password": "testpass123"})
     assert status == 200, body
@@ -117,7 +117,7 @@ def test_upgrade_then_downgrade_truncates():
 def test_reset_link_is_single_use():
     tag = str(int(time.time()))
     email = f"reset{tag}@example.com"
-    post("/signup", {"email": email, "password": "seed-old-pass"})
+    post("/signup", {"email": email, "password": "seed-old-pass", "accept_terms": True})
 
     status, _ = post("/auth/forgot", {"email": email})
     assert status == 200

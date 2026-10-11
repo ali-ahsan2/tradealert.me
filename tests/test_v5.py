@@ -21,7 +21,7 @@ def _user(prefix, industries):
     email = f"{prefix}{stamp}@example.com"
     # the signup limiter is five per hour per client IP (see test_product_v3):
     # each test user presents its own address so the suite runs in one go
-    s, body = post("/signup", {"email": email, "password": PASSWORD},
+    s, body = post("/signup", {"email": email, "password": PASSWORD, "accept_terms": True},
                    ip=f"10.5.{(stamp // 256) % 256}.{stamp % 256}")
     assert s == 200, body
     token = body["token"]

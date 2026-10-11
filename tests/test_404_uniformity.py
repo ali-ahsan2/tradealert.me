@@ -29,7 +29,7 @@ def _call(method, path, body=None, token=None):
 def tester():
     tag = str(int(time.time()))
     email = f"unif{tag}@example.com"
-    status, _ = _call("POST", "/signup", {"email": email, "password": "testpass123"})
+    status, _ = _call("POST", "/signup", {"email": email, "password": "testpass123", "accept_terms": True})
     assert status == 200
     subprocess.run(
         f"{POSTGRES} -c \"UPDATE users SET verified=TRUE WHERE email='{email}';\"",

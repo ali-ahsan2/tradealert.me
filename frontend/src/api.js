@@ -101,10 +101,26 @@ export async function api(path, opts = {}) {
   return body;
 }
 
-export async function signup(email, password) {
-  const { token } = await api("/signup", { method: "POST", json: { email, password } });
+// Sign-up carries the consent tick (DESIGN_V6 §6); the API answers 422
+// without it, so the form keeps the button disabled until the box is ticked.
+export async function signup(email, password, acceptTerms = false) {
+  const { token } = await api("/signup", {
+    method: "POST",
+    json: { email, password, accept_terms: Boolean(acceptTerms) },
+  });
   setToken(token);
   return token;
+}
+
+// The one-time acknowledgement for an existing account (the /welcome gate):
+// records the version ticked and returns the refreshed /api/me payload.
+export function consent(version) {
+  return api("/me/consent", { method: "POST", json: { version } });
+}
+
+// Sends the verification email again; {sent, verified} either way.
+export function resendVerification() {
+  return api("/me/verify/resend", { method: "POST" });
 }
 
 export async function login(email, password) {

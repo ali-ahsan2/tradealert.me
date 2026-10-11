@@ -67,7 +67,7 @@ def _ip_for(email):
 
 def new_user(email, tier=None):
     ip = _ip_for(email)
-    status, _ = _call("POST", "/signup", {"email": email, "password": PASSWORD}, ip=ip)
+    status, _ = _call("POST", "/signup", {"email": email, "password": PASSWORD, "accept_terms": True}, ip=ip)
     assert status == 200, status
     psql(f"UPDATE users SET verified=TRUE WHERE email='{email}';")
     if tier:

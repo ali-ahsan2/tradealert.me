@@ -60,7 +60,7 @@ def post(path, body, token=None, ip=None):
 
 def new_user(email, password=PASSWORD):
     ip = _ip_for(email)
-    status, _, _ = post("/signup", {"email": email, "password": password}, ip=ip)
+    status, _, _ = post("/signup", {"email": email, "password": password, "accept_terms": True}, ip=ip)
     assert status == 200, status
     subprocess.run(
         f"{POSTGRES} -c \"UPDATE users SET verified=TRUE WHERE email='{email}';\"",

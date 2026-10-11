@@ -9,7 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from psycopg2.extras import execute_values
 
-from app import context, scope
+from app import context, legal, scope
 from app.db import get_conn
 
 router = APIRouter()
@@ -102,6 +102,10 @@ class PicksOrderIn(BaseModel):
     symbols: list[str]
 
 
+class ConsentIn(BaseModel):
+    version: str = Field(min_length=1, max_length=32)
+
+
 def _tier_has_channel(tier, channel):
     return tier is not None and channel in tier[7]
 
@@ -177,6 +181,50 @@ def patch_settings(body: SettingsIn,
         return _settings_payload(conn, uid)
     finally:
         conn.close()
+
+
+@router.post("/api/me/consent")
+def consent(body: ConsentIn,
+            creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
+    """The one-time acknowledgement (DESIGN_V6 §6, §10): records the terms
+    version the person ticked, and when. Only the current version is
+    accepted; a stale one tells the client to reload. Idempotent: ticking
+    the same version again keeps the first timestamp."""
+    row = _require_user(creds)
+    uid = context.user_id(row)
+    if body.version != legal.TERMS_VERSION:
+        raise HTTPException(
+            422, "that is not the current version of the terms; reload the page and tick again")
+    from app import main as _main  # lazy: main imports this router
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET accepted_terms_version = %s, accepted_terms_at = now() "
+                "WHERE id = %s AND accepted_terms_version IS DISTINCT FROM %s",
+                (legal.TERMS_VERSION, uid, legal.TERMS_VERSION),
+            )
+        conn.commit()
+        return _main._account_payload(_main._get_by(conn, "id", uid), conn)
+    finally:
+        conn.close()
+
+
+@router.post("/api/me/verify/resend")
+def resend_verification(creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
+    """Sends the verification email again for the bearer's account. Three
+    an hour per account; 200 either way, and the body says when there was
+    nothing to send because the address is already verified."""
+    row = _require_user(creds)
+    uid = context.user_id(row)
+    if context.user_verified(row):
+        return {"sent": False, "verified": True}
+    from app import main as _main  # lazy: main imports this router
+    if _main._rate_limited("resend", f"user:{uid}"):
+        raise HTTPException(
+            429, "a verification email went out recently; check your inbox, or try again in an hour")
+    _main._send_verification(context.user_email(row), uid)
+    return {"sent": True, "verified": False}
 
 
 @router.get("/api/me/industries")

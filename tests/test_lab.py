@@ -69,7 +69,7 @@ def non_admin_token():
     if "nonadmin" not in _SHARED:
         tag = str(int(time.time()))
         email = f"labuser{tag}@example.com"
-        status, _, _ = post("/signup", {"email": email, "password": "testpass123"})
+        status, _, _ = post("/signup", {"email": email, "password": "testpass123", "accept_terms": True})
         assert status == 200
         status, body, _ = post("/login", {"email": email, "password": "testpass123"})
         assert status == 200, body

@@ -10,13 +10,13 @@ import jwt
 import psycopg2
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exceptions import HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from app import email as emailer, plain_copy, record
+from app import email as emailer, legal, plain_copy, record
 from app import security
 from app import (account, admin, alerts, billing, discover, dossier, lab, lab_regression,
                  lab_release, oauth, product, reporting, scope)
@@ -51,7 +51,8 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # per-IP fixed-window rate limits; in-memory is fine for a single uvicorn
 # worker and resets on restart. Behind nginx the client IP comes from
 # X-Forwarded-For, which only nginx can set (the app port binds to localhost).
-_RATE_LIMITS = {"signup": (5, 3600), "login": (10, 60)}
+# "resend" is keyed by user id rather than client IP (see account.py).
+_RATE_LIMITS = {"signup": (5, 3600), "login": (10, 60), "resend": (3, 3600)}
 _hits = defaultdict(deque)
 
 
@@ -85,6 +86,9 @@ def _client_ip(request):
 class SignupIn(BaseModel):
     email: str = Field(min_length=3)
     password: str = Field(min_length=8)
+    # DESIGN_V6 §6: the consent tick. The API refuses a sign-up without it
+    # and records which version of the terms was accepted, and when.
+    accept_terms: bool = False
 
 
 class LoginIn(BaseModel):
@@ -93,12 +97,19 @@ class LoginIn(BaseModel):
 
 
 def _user_payload(row):
-    uid, email, _h, verified, is_admin, created_at, name, provider, provider_id = row
+    (uid, email, _h, verified, is_admin, created_at, name, provider, provider_id,
+     terms_version, terms_at) = row
     return {"email": email, "verified": bool(verified),
             "is_admin": bool(is_admin), "name": name,
             "provider": provider, "provider_id": provider_id,
             "username": provider_id if provider else None,
-            "created_at": created_at.isoformat()}
+            "created_at": created_at.isoformat(),
+            # consent (DESIGN_V6 §10): what this account accepted, and what
+            # the server currently asks for, so the client never compares
+            # against a drifted constant
+            "accepted_terms_version": terms_version,
+            "accepted_terms_at": terms_at.isoformat() if terms_at else None,
+            "terms_version_current": legal.TERMS_VERSION}
 
 
 def _user_from_token(creds):
@@ -154,7 +165,7 @@ def _tier_for_user(conn, user_id):
 
 
 def _account_payload(row, conn):
-    uid, email, _h, verified, is_admin, created_at, name, provider, provider_id = row
+    uid = row[0]
     payload = _user_payload(row)
     _provision_free(conn, uid)
     tier = _tier_for_user(conn, uid)
@@ -180,7 +191,8 @@ def _get_by(conn, column, value):
         raise ValueError(f"unexpected column {column!r}")
     cur = conn.cursor()
     cur.execute(f"SELECT id, email, password_hash, verified, is_admin, "
-                f"created_at, name, provider, provider_id "
+                f"created_at, name, provider, provider_id, "
+                f"accepted_terms_version, accepted_terms_at "
                 f"FROM users WHERE {column} = %s", (value,))
     return cur.fetchone()
 
@@ -211,7 +223,9 @@ def _send_verification(email, user_id):
             f"Open this link: {link}\n\n"
             f"{pulse_line}"
             "This link expires in 24 hours. If you did not create an account, "
-            "ignore this email.",
+            "ignore this email."
+            # an account email: no unsubscribe, the settings link only
+            + legal.email_footer(settings_url=f"{base}/settings"),
         )
         if status == "skipped":
             # dev mode: the console is the only delivery mechanism
@@ -224,6 +238,8 @@ def _send_verification(email, user_id):
 
 @app.post("/api/signup")
 def signup(body: SignupIn, request: Request):
+    if not body.accept_terms:
+        raise HTTPException(422, "tick the box to confirm this is information and alerts, not advice")
     if _rate_limited("signup", _client_ip(request)):
         raise HTTPException(429, "too many signups from this address, try later")
     email = body.email.strip().lower()
@@ -237,11 +253,13 @@ def signup(body: SignupIn, request: Request):
         with conn.cursor() as cur:
             try:
                 cur.execute(
-                    "INSERT INTO users (email, password_hash) VALUES (%s, %s) "
-                    "RETURNING id, created_at",
-                    (email, hashed),
+                    "INSERT INTO users (email, password_hash, "
+                    "accepted_terms_version, accepted_terms_at) "
+                    "VALUES (%s, %s, %s, now()) "
+                    "RETURNING id, created_at, accepted_terms_at",
+                    (email, hashed, legal.TERMS_VERSION),
                 )
-                uid, created_at = cur.fetchone()
+                uid, created_at, terms_at = cur.fetchone()
                 _provision_free(conn, uid)
                 conn.commit()
             except psycopg2.errors.UniqueViolation:
@@ -252,7 +270,10 @@ def signup(body: SignupIn, request: Request):
     _send_verification(email, uid)
     return {"token": security.make_token(uid),
             "user": {"email": email, "verified": False,
-                     "created_at": created_at.isoformat()}}
+                     "created_at": created_at.isoformat(),
+                     "accepted_terms_version": legal.TERMS_VERSION,
+                     "accepted_terms_at": terms_at.isoformat(),
+                     "terms_version_current": legal.TERMS_VERSION}}
 
 
 @app.post("/api/login")
@@ -280,22 +301,26 @@ def me(creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
         conn.close()
 
 
+def _verified(ok):
+    """The client page says what happened (DESIGN_V6 §10): ok=1 after a
+    good link, ok=0 for one that is invalid, expired or already used."""
+    return RedirectResponse(f"/verified?ok={1 if ok else 0}", status_code=303)
+
+
 @app.get("/api/verify")
-def verify(token: str):
+def verify(token: str = ""):
     try:
         payload = security.decode_token(token, purpose="verify")
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-        raise HTTPException(400, "invalid or expired verification link")
-    try:
         user_id = int(payload["sub"])
-    except (KeyError, TypeError, ValueError):
-        raise HTTPException(400, "invalid verification link")
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, KeyError, TypeError, ValueError):
+        return _verified(False)
     conn = get_conn()
     try:
         with conn.cursor() as cur:
+            # a second click on the same link finds nothing to flip: used
             cur.execute(
-                "UPDATE users SET verified = TRUE WHERE id = %s "
-                "RETURNING email, verified",
+                "UPDATE users SET verified = TRUE WHERE id = %s AND NOT verified "
+                "RETURNING email",
                 (user_id,),
             )
             row = cur.fetchone()
@@ -303,34 +328,34 @@ def verify(token: str):
     finally:
         conn.close()
     if not row:
-        raise HTTPException(404, "user not found")
+        return _verified(False)
     log.info("verified email %s", row[0])
-    return HTMLResponse(
-        '<!doctype html><html><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        '<title>Email verified</title></head>'
-        '<body style="font-family:sans-serif;line-height:1.6;max-width:30em;'
-        'margin:4em auto;padding:0 1em;text-align:center">'
-        '<h1>Email verified</h1>'
-        '<p>Your tradealert.me account is active.</p>'
-        '<p><a href="/login">Log in now</a></p>'
-        '</body></html>')
+    return _verified(True)
+
 
 @app.get("/api/unsubscribe")
-def unsubscribe(token: str, channel: str = "email"):
+def unsubscribe(request: Request, token: str = "", channel: str = "email"):
+    """Emails link the client page /unsubscribe?token=…&channel=…, which
+    calls this and reads JSON. A browser that lands here directly (an old
+    link) still gets a readable page."""
     from app.jobs import unsubscribe as run_unsubscribe
-    ok = run_unsubscribe(token, channel)
-    return HTMLResponse(
-        '<!doctype html><html><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        '<title>Unsubscribed</title></head>'
-        '<body style="font-family:sans-serif;line-height:1.6;max-width:30em;'
-        'margin:4em auto;padding:0 1em;text-align:center">'
-        '<h1>' + ("Unsubscribed" if ok else "Link invalid or already used") + '</h1>'
-        '<p>' + ("You will stop receiving these emails." if ok else
-                 "Contact support if you think this is a mistake.") + '</p>'
-        '<p><a href="/">Back to the board</a></p>'
-        '</body></html>')
+    ok = run_unsubscribe(token, channel) if token else False
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept and "application/json" not in accept:
+        return HTMLResponse(
+            '<!doctype html><html><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<title>Unsubscribed</title></head>'
+            '<body style="font-family:sans-serif;line-height:1.6;max-width:30em;'
+            'margin:4em auto;padding:0 1em;text-align:center">'
+            '<h1>' + ("Unsubscribed" if ok else "Link invalid or already used") + '</h1>'
+            '<p>' + ("You will stop receiving these emails. Turn them back on any time "
+                     "from your settings." if ok else
+                     "Change what reaches you from your settings.") + '</p>'
+            '<p><a href="/settings">My settings</a> · <a href="/">Back to the start</a></p>'
+            '</body></html>')
+    return {"ok": ok, "channel": channel}
+
 
 @app.get("/api/strategies")
 def strategies(response: Response):
