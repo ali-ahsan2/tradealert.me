@@ -285,3 +285,87 @@ The readers' full reports are in the session scratchpad
   cards of 5-6 rows fed by nine requests, the dossier's chart is the ninth
   block. Monospace appears in 33 rules and five uppercase microlabel
   styles coexist. The lightness pass replaces structure, not just colour.
+
+## 12. What shipped
+
+Everything in §3–§9 landed on this branch in seven packages and a sweep,
+each built, screenshot-tested and reviewed against this document. The
+differences from the plan are listed last.
+
+**Journey.** Three layouts chosen by route: public (slim bar, footer with
+the fine print and the tagline), bare (onboarding, the consent screen) and
+app (rail or tabs). The landing never wears the rail; a signed-in root goes
+to Home; `/home` replaces `/overview` with a permanent redirect; `/about`
+keeps the landing reachable. Four destinations on every device: Home,
+Alerts, Watchlist, Explore (a tab strip over Ranked, Find, What changed and
+Coming up). One door: email sign-up, Google and log in all reach the same
+first screen; the verify link lands on a page with "Open my Home"; the
+digest's unsubscribe link has a page behind it; verification can be re-sent.
+Onboarding is two steps in the bare layout.
+
+**Home.** A greeting, one sentence of today's counts, one button chosen by
+urgency; three cards (Told me, I'd have known, Coming up) with a number that
+settles once seen; the record in one line; three rows of what changed; the
+plan's coverage as a fact that opens the upgrade sheet; a how-this-works
+card shown until dismissed; everything else behind one "More on my names".
+
+**Lightness.** One sentence-case label style; no monospace in the
+subscriber product; body 16px; tables only in Full ("More detail"); Board,
+Find and the Industry list as name cards in Simple with ready-made screens
+and plain figures; the dossier opens with the verdict sentence and the
+chart, explains itself in three bullets, and keeps the rest behind one
+details; outlined chips for neutral and weak; one shadow level.
+
+**Strategies in human terms.** `app/plain_copy.py` ships a recipe-free card
+per strategy and industry through the existing endpoints; the record has a
+real source (migration 013) and reads 26 of 32 on the product; a strategy
+says whether it is measured, has no record yet, or is not scoring; the
+public strategy page carries no weights, thresholds, cutoffs or filter
+values and the dossier ranks inputs instead of exposing weights; an
+industry's "what tends to fire here" is measured from the alert record and
+stays silent under ten alerts.
+
+**Legal posture.** Sign-up requires the tick and stores the terms version
+and time (migration 012); `/api/me` carries them and the current version;
+old and Google accounts meet the consent screen once; the fine print is one
+component in two sizes, under every primary action area, in every footer,
+on the plans page and at the end of every email, which also carries a
+working unsubscribe link; Terms, Privacy and Disclaimer follow the §6
+outline with bracketed placeholders for the operator and counsel.
+
+**Voice.** Labels are mine (My alerts, My watchlist, My record, My week, My
+account), buttons are requests (Alert me, Watch this for me, Show me the
+report, Take me to checkout), the three sentences recur on the landing, the
+consent screen, Home, Help and the tour, and the jargon table applies
+outside Full mode; the CTA and PLAIN_WORD maps live in `lib/plain.js` and
+thirty-one vocabulary tests keep the words from drifting.
+
+**The Lab.** A "What this lab is" panel with a start-here path, a head on
+every panel (what it shows, why it matters, how to read it), tooltips on
+every abbreviated metric, plain labels beside technical ones, rules and
+diffs in words with raw values behind a toggle, the floors stated where
+decisions are made and served from the API, and the server's own
+one-sentence verdict at the top of Versions. Nothing moved.
+
+**Verification.** 77 backend and vocabulary tests pass; the Playwright pass
+over nineteen screens in four contexts reports no console errors and no
+horizontal overflow; the consent journey was walked end to end; five
+adversarial reviews (journey, lightness, voice, legal, recipe) ran against
+this document and the honesty rules, and their confirmed findings were
+fixed before the pull request was updated.
+
+**Deviations, stated.**
+- The account menu reads My account, My plan, Help rather than §10's
+  "Account, Plans, Help": §2's labels won.
+- The Watchlist in Simple caps at ten names, not three: a curated list of
+  four behind "Show all 4" would be hostile.
+- Find's ready-made screens state their own limits ("more than 15% sold
+  short"): those are the user's screen parameters, not the recipe.
+- The Board card's sentence is the change sentence, because the board
+  payload carries no ranked inputs; the operator's shorthand hook appears
+  only in the dossier's notes.
+- An account-level detail preference did not ship; Simple stays the default
+  per browser.
+- The legal pages carry visible placeholders for the operating entity,
+  jurisdiction, refund policy and contact; a lawyer must review before
+  launch.
