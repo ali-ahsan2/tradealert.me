@@ -6,7 +6,11 @@ dossiers, calendar, alerts, digests) and an operator Lab for strategy
 analysis. FastAPI + Postgres on the back, React + Vite in `frontend/`
 built into `static/`.
 
-The product's rules live in the specs at the repo root: `DESIGN_V5.md`
+The product's rules live in the specs at the repo root: `DESIGN_V6.md`
+(the binding plan: the proposition in the user's words, the voice, the
+journey and its three layouts, the simple Home, the lightness system, the
+legal posture with consent and fine print, strategies in human terms, the
+readable Lab; §12 lists what shipped and the deviations), `DESIGN_V5.md`
 (desire and flow: the record endpoints `/api/pulse` and `/api/me/record`,
 the binding copy rules for FOMO built from recorded facts, the connected
 funnel and the in-place upgrade sheet), `DESIGN_V4.md`

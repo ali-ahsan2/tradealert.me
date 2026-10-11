@@ -40,7 +40,15 @@ def _admin_id(cur):
     if row:
         return row[0]
     cur.execute("SELECT id FROM users ORDER BY id LIMIT 1")
-    return cur.fetchone()[0]
+    row = cur.fetchone()
+    if row:
+        return row[0]
+    # A fresh database has no account yet: bootstrap runs this seed before
+    # the dev fixture so the fixture's events survive the synthetic purge
+    # below. The version records need an author, so create the dev admin
+    # login the fixture creates anyway (same helper, so the two agree).
+    from seed_dev import ensure_dev_user  # sibling script in db/
+    return ensure_dev_user(cur)
 
 
 def _seed_version_one(cur, admin_id):
