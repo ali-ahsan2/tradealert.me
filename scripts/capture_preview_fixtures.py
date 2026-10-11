@@ -78,7 +78,8 @@ def main():
     for p in ("/strategies", "/industries", "/runs/latest", "/entitlements", "/me", "/me/picks",
               "/me/settings", "/me/industries", "/me/alerts/rules", "/me/alerts/unread", "/me/digests",
               "/me/digests/preview", "/me/watchlist/stats", "/me/watchlist/series?days=30",
-              "/me/watchlist/series?days=90", "/me/watchlist/series?days=365", "/overview"):
+              "/me/watchlist/series?days=90", "/me/watchlist/series?days=365", "/overview",
+              "/pulse?days=30", "/me/record?days=30", "/me/record?days=90"):
         get(p)
     strategies = [s["key"] for s in out["GET /strategies"]["body"]["strategies"]]
     industries = [i["key"] for i in out["GET /industries"]["body"]["industries"]]

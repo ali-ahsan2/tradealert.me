@@ -16,7 +16,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from app import email as emailer
+from app import email as emailer, record
 from app import security
 from app import (account, admin, alerts, billing, discover, dossier, lab, lab_regression,
                  lab_release, oauth, product, reporting, scope)
@@ -39,6 +39,7 @@ app.include_router(lab_regression.router)
 app.include_router(lab_release.router)
 app.include_router(oauth.router)
 app.include_router(product.router)
+app.include_router(record.router)
 app.include_router(reporting.router)
 bearer = HTTPBearer(auto_error=False)
 

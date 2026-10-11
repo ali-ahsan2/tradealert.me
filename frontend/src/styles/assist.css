@@ -155,3 +155,61 @@ details.acc > .acc-body .tscroll { max-width: 100%; }
   .app.authed .apphead-right .tierchip,
   .app.authed .apphead-right .acct { display: none; }
 }
+
+/* v5 motion and record layer -------------------------------------------- */
+.reveal { opacity: 0; transform: translateY(8px); transition: opacity .5s ease, transform .5s ease; }
+.reveal.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
+
+/* lead chip: the time advantage, stated */
+.lead-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: var(--r-pill);
+  font-size: var(--fs-xs); font-weight: 600; letter-spacing: .01em;
+  background: var(--accent-soft); color: var(--accent); white-space: nowrap;
+}
+.lead-chip.open { background: var(--surface-sunken); color: var(--ink-muted); }
+
+/* miss / told rows */
+.rec-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-2) var(--s-3); align-items: center; padding: var(--s-3) 0; border-top: 1px solid var(--border); }
+.rec-row:first-child { border-top: 0; }
+.rec-main { min-width: 0; }
+.rec-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--s-2); }
+.rec-top .sym { font-weight: 700; }
+.rec-top .when { font-size: var(--fs-xs); color: var(--ink-faint); }
+.rec-say { margin: 2px 0 0; font-size: var(--fs-sm); color: var(--ink-muted); line-height: 1.45; }
+.rec-say b { color: var(--ink); font-weight: 600; }
+.rec-act { display: flex; gap: var(--s-2); align-items: center; }
+@media (max-width: 640px) { .rec-row { grid-template-columns: minmax(0, 1fr); } .rec-act { justify-content: flex-start; } }
+
+/* the big measured number */
+.rec-num { font-size: var(--fs-2xl); font-weight: 800; letter-spacing: -.02em; line-height: 1; }
+.rec-num small { font-size: var(--fs-sm); font-weight: 600; color: var(--ink-muted); letter-spacing: 0; margin-left: 6px; }
+
+/* bottom sheet / modal shell for the upgrade sheet */
+.sheet-backdrop { position: fixed; inset: 0; z-index: 95; background: rgba(8, 12, 22, .55); backdrop-filter: blur(2px); }
+.sheet {
+  position: fixed; z-index: 96; left: 50%; bottom: 0; transform: translateX(-50%);
+  width: min(560px, 100vw); max-height: 92vh; overflow: auto;
+  background: var(--surface); color: var(--ink); border-radius: var(--r-xl) var(--r-xl) 0 0;
+  box-shadow: var(--shadow-lift); padding: var(--s-5) var(--s-5) calc(var(--s-5) + env(safe-area-inset-bottom));
+  animation: sheet-up .28s ease;
+}
+@media (min-width: 720px) { .sheet { bottom: auto; top: 50%; transform: translate(-50%, -50%); border-radius: var(--r-xl); animation: sheet-in .22s ease; } }
+@keyframes sheet-up { from { transform: translate(-50%, 24px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+@keyframes sheet-in { from { transform: translate(-50%, -48%); opacity: 0; } to { transform: translate(-50%, -50%); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+.sheet h2 { margin: 0 0 var(--s-2); font-size: var(--fs-xl); letter-spacing: -.01em; }
+.sheet .lede { margin: 0 0 var(--s-4); color: var(--ink-muted); line-height: 1.5; }
+.sheet .plans { display: grid; gap: var(--s-2); margin: var(--s-3) 0 var(--s-4); }
+.sheet .plan-row { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); border-radius: var(--r-md); border: 1px solid var(--border); cursor: pointer; }
+.sheet .plan-row[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.sheet .plan-row .pname { font-weight: 700; }
+.sheet .plan-row .pwhat { font-size: var(--fs-sm); color: var(--ink-muted); }
+.sheet .plan-row .pprice { margin-left: auto; font-family: var(--font-mono); font-weight: 600; white-space: nowrap; }
+.sheet .acts { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: center; }
+.sheet .fine { margin: var(--s-3) 0 0; font-size: var(--fs-xs); color: var(--ink-faint); line-height: 1.45; }
+
+/* route transition */
+.page-enter { animation: page-in .22s ease; }
+@keyframes page-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .page-enter { animation: none; } }

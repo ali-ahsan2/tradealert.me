@@ -216,6 +216,16 @@ def _send_digest(conn, uid, run_id, email_addr):
                      f"{r['value']:5.1f}  {r['theme']}")
     if frozen["truncated"]:
         lines.append(f"\n… and more. Full board: {base}/board")
+    try:
+        from app.record import digest_lines
+        rec = digest_lines(conn, uid, days=7)
+    except Exception as e:  # noqa: BLE001 - the record never blocks a digest
+        log.warning("digest record lines failed for user %s: %s", uid, e)
+        rec = []
+    if rec:
+        lines.append("\nYour week, measured:")
+        lines.extend(f"- {ln}" for ln in rec)
+        lines.append(f"Your brief: {base}/overview")
     lines.append(f"\nManage alerts and settings: {base}/settings")
     lines.append(
         f"Unsubscribe from these digests: {base}/unsubscribe?token={token}&channel=email")
