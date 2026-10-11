@@ -1,14 +1,16 @@
 import React from "react";
 import { Link } from "../lib/router.jsx";
 import { plural, tone } from "../lib/fmt.js";
+import { HOME_ROWS } from "../lib/caps.js";
 import { beyondSentence, leadPhrase, missSentence, tallySentence, toldHeadline } from "../lib/record.js";
 import { openUpgrade } from "../lib/upgrade.js";
 import { Move } from "./Spark.jsx";
 import NotifyButton from "./NotifyButton.jsx";
 import "./upgrade.css";
 
-// The record cards (DESIGN_V5 §4.5, §5). Both render the body of a card
-// from GET /api/me/record and nothing else: the caller supplies the heading.
+// The record cards (DESIGN_V5 §4.5, §5; DESIGN_V6 §4). Both render the body
+// of a card from GET /api/me/record and nothing else: the caller supplies the
+// heading. Three rows each (lib/caps.js), then the caller's "Show all" link.
 //
 //   <YoudHaveKnown record={record} />
 //     the alerts that fired on names in your industries with no rule armed,
@@ -23,7 +25,7 @@ import "./upgrade.css";
 // and nowhere else. Tickers come only from the events the API already
 // clamped to the plan; `beyond` never carries one.
 
-const MAX_ROWS = 5;
+const MAX_ROWS = HOME_ROWS;
 
 // biggest measured move first; open windows after, newest first
 function rank(a, b) {
@@ -76,8 +78,9 @@ export function RecordRow({ e, action }) {
 }
 
 // "You were told 2 sessions before CAMT peaked +13.5%." with the move in
-// price colour; the rest of the sentence stays plain.
-function withMoveColour(raw) {
+// price colour; the rest of the sentence stays plain. Exported for Home's
+// one-line record.
+export function withMoveColour(raw) {
   const s = oneSign(raw);
   const m = s.match(/([+\-−]?\d+(?:\.\d+)?%)(\.?)$/);
   if (!m) return s;
@@ -105,13 +108,13 @@ export function YoudHaveKnown({ record }) {
         <p className="rec-empty">
           {summary.fired
             ? tallySentence(summary)
-            : "Nothing fired on a name in your industries that you were not watching in the last 30 days. When an alert fires on a name with no rule armed, it is listed here with what the price did in the five sessions after."}
+            : "Nothing fired on a name you weren't watching in the last 30 days. When one does, it is listed here with what the price did in the five sessions after."}
         </p>
       ) : (
         <>
           <ul className="rec-list">
             {rows.map((e) => (
-              <RecordRow key={e.id ?? `${e.symbol}-${e.date}-${e.trigger_key}`} e={e} action={<NotifyButton symbol={e.symbol} compact />} />
+              <RecordRow key={e.id ?? `${e.symbol}-${e.date}-${e.trigger_key}`} e={e} action={<NotifyButton symbol={e.symbol} compact label="Alert me" onLabel="Alerting you" />} />
             ))}
           </ul>
           <p className="rec-sum">
@@ -121,7 +124,7 @@ export function YoudHaveKnown({ record }) {
                 {" "}
                 {plural(more, "more name")} {more === 1 ? "is" : "are"} beyond the top {k} your plan lists.{" "}
                 <button type="button" className="btn-quiet rec-up" onClick={() => openUpgrade("names")}>
-                  See what the next plan lists
+                  Show me what the next plan lists
                 </button>
               </>
             )}
@@ -132,7 +135,7 @@ export function YoudHaveKnown({ record }) {
         <div className="rec-beyond">
           <p>{beyondLine}</p>
           <button type="button" className="btn-quiet" onClick={() => openUpgrade("beyond")}>
-            See what Investor follows
+            See what the next plan watches
           </button>
         </div>
       )}
@@ -151,15 +154,15 @@ export function YourRecord({ record, topPinned = null, canAlert = true }) {
           You have not been told about an alert yet.{" "}
           {canAlert
             ? topPinned
-              ? `Turn on alerts for ${topPinned.symbol} and this card fills from the first one, with what the price did in the five sessions after.`
-              : "Pin a name and turn on alerts; this card fills from the first one, with what the price did in the five sessions after."
-            : "Alerts start on the Basic plan; this card fills from the first one you are told about."}
+              ? `Ask to be alerted on ${topPinned.symbol} and this fills from the first one, with what the price did after.`
+              : "Pin a name and ask to be alerted; this fills from the first one, with what the price did after."
+            : "Alerts start on the next plan; this fills from the first one you are told about."}
         </p>
         <div className="rec-nudge">
-          {canAlert && topPinned && <NotifyButton symbol={topPinned.symbol} compact />}
+          {canAlert && topPinned && <NotifyButton symbol={topPinned.symbol} compact label="Alert me" onLabel="Alerting you" />}
           {canAlert && !topPinned && (
             <Link to="/board" className="btn btn-secondary btn-sm">
-              Open the Board
+              Show me the Board
             </Link>
           )}
           {!canAlert && (

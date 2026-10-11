@@ -1,29 +1,239 @@
-/* Home as a daily brief (DESIGN_V4 §6, §7). Additions only: cards, buttons,
-   badges, the utility line, the next-step card and the accordion come from
-   styles.css and assist.css; every colour is a token so dark mode follows. */
+/* Home (DESIGN_V6 §4, §5): one line and one action, three equal cards, one
+   record line, three rows of what changed, a quiet plan line, the how-it-
+   works card, and everything else behind one <details>. Cards, buttons,
+   notices and the accordion shell come from styles.css and assist.css;
+   every colour is a token so dark mode follows. Nothing on this page is
+   monospace or uppercase; numbers use tabular figures in the body face. */
 
-/* title block: h1, the utility sentence, then the run stamp */
-.brief .pagehead {
-  align-items: flex-start;
+/* Simple reads as a page, not a dashboard */
+html[data-mode="simple"] .brief {
+  max-width: 760px;
 }
 
-.brief .brief-title {
+/* no monospace on this page, whatever a shared class would bring */
+.brief .mono,
+.brief .agechip,
+.brief .sym,
+.brief .num,
+.brief .badge .num,
+.brief .badge .word,
+.brief .move,
+.brief .outcome,
+.brief .chip {
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.brief .chip,
+.brief .badge .word {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Header: greeting, the line, one action ------------------------------- */
+.home-head {
+  margin-bottom: var(--s-5);
+}
+
+.home-head h1 {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0 0 var(--s-3);
+}
+
+.home-line {
+  margin: 0 0 var(--s-4);
+  font-size: 18px;
+  line-height: 1.45;
+  color: var(--ink);
+  max-width: 56ch;
+  text-wrap: pretty;
+}
+
+.home-line b {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-cta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-3);
+}
+
+.home-cta .btn {
+  min-height: 44px;
+  padding: 0 var(--s-5);
+  font-size: 15px;
+}
+
+.home-cta .btn svg {
+  flex: none;
+}
+
+@media (max-width: 600px) {
+  .home-head h1 {
+    font-size: 26px;
+  }
+
+  .home-line {
+    font-size: 17px;
+  }
+}
+
+/* the one-line verified notice */
+.brief .notice.home-notice {
+  align-items: center;
+  font-size: 15px;
+}
+
+.brief .notice.home-notice p {
+  margin: 0;
+}
+
+/* Three cards ----------------------------------------------------------- */
+.sumgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
+  margin-bottom: var(--s-5);
+}
+
+@media (min-width: 700px) {
+  .sumgrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s-4);
+  }
+}
+
+.sumcard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
   min-width: 0;
-  flex: 1 1 420px;
+  padding: 20px;
 }
 
-.brief .brief-title .utility {
-  margin: var(--s-2) 0 var(--s-2);
+@media (min-width: 900px) {
+  .sumcard {
+    padding: 24px;
+  }
 }
 
-.brief .brief-title .meta {
-  margin-top: 0;
+.brief .sumcard h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  letter-spacing: 0;
 }
 
-/* a brief section: one card per topic */
+.sum-n {
+  margin: 0;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.sum-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.sum-say {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.4;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+.sum-sub {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}
+
+/* the link wraps like text; the arrow stays with the last word */
+.sum-link {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 6px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.sum-link svg,
+.home-record .more-all svg {
+  display: inline;
+  vertical-align: -3px;
+  margin-left: 3px;
+}
+
+.brief .nowrap {
+  white-space: nowrap;
+}
+
+.sum-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.sumcard .sk {
+  margin: var(--s-1) 0;
+}
+
+/* One line of record ---------------------------------------------------- */
+.home-record {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-1) var(--s-3);
+  margin: 0 0 var(--s-5);
+  font-size: 17px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.home-record p {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.home-record b {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-record .more-all {
+  min-height: 32px;
+}
+
+/* Sections: one card per topic ------------------------------------------ */
 .brief-sec {
-  margin-bottom: var(--s-4);
+  margin-bottom: var(--s-5);
   min-width: 0;
+  padding: 20px;
+  scroll-margin-top: 80px;
+}
+
+@media (min-width: 900px) {
+  .brief-sec {
+    padding: 24px;
+  }
 }
 
 .brief-head {
@@ -32,7 +242,7 @@
   justify-content: space-between;
   gap: var(--s-2) var(--s-3);
   flex-wrap: wrap;
-  margin-bottom: var(--s-3);
+  margin-bottom: var(--s-2);
 }
 
 .brief-head-l {
@@ -43,27 +253,85 @@
   min-width: 0;
 }
 
-.brief-head h2 {
+.brief .brief-head h2 {
   margin: 0;
-  font-size: var(--fs-md);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.brief .brief-head h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .brief .sum-note {
   font-weight: 400;
   color: var(--ink-muted);
-  font-size: var(--fs-sm);
+  font-size: 15px;
 }
 
-.brief-head .more {
-  margin-left: auto;
-  font-size: var(--fs-sm);
+.brief .more-all {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 15px;
   font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
   white-space: nowrap;
 }
 
-/* rows: one name per row, the plain sentence as the line that matters.
-   Phone: sentence block, badge at the right, actions on their own line.
-   Wider: three columns. */
+.brief .more-all:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.brief-head .more-all {
+  margin-left: auto;
+  min-height: 0;
+}
+
+.brief .brief-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-4);
+  margin-top: var(--s-2);
+}
+
+/* a plain muted line inside a section: empty states and the plan clamp */
+.brief .brief-line {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  max-width: 60ch;
+}
+
+.brief .brief-line + .brief-line {
+  margin-top: var(--s-2);
+}
+
+/* the way out of a plan clamp sits inline with the hint */
+.brief .brief-line .hint-up,
+.brief .brief-foot .hint-up {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  margin: -12px 0;
+  font-size: 15px;
+  color: var(--accent);
+  vertical-align: middle;
+}
+
+/* Rows: one name per row, the plain sentence as the line that matters.
+   Phone: the sentence block on its own line, then the band word at the
+   left and the action at the right. Wider: three columns. Every row is at
+   least 56px tall. */
 .brows {
   list-style: none;
   margin: 0;
@@ -74,18 +342,24 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--s-2) var(--s-3);
-  align-items: start;
+  align-items: center;
+  min-height: 56px;
   padding: var(--s-3) 0;
   border-top: 1px solid var(--border);
 }
 
+
 .brow:first-child {
   border-top: 0;
-  padding-top: 0;
+}
+
+.brow:last-child {
+  padding-bottom: var(--s-2);
 }
 
 .brow-main {
   min-width: 0;
+  grid-column: 1 / -1;
 }
 
 .brow-top {
@@ -96,33 +370,35 @@
   min-width: 0;
 }
 
+.brow-top .sym {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
 .brow-top .theme {
   color: var(--ink-muted);
-  font-size: var(--fs-sm);
+  font-size: 15px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
 }
 
-.brow-top .ind {
-  font-size: var(--fs-xs);
-  color: var(--ink-faint);
-}
-
 .brow-top .when {
   margin-left: auto;
-  font-size: var(--fs-xs);
+  font-size: 13px;
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .brow-say {
-  margin: 4px 0 0;
-  font-size: var(--fs-base);
+  margin: 2px 0 0;
+  font-size: 16px;
   line-height: 1.45;
   color: var(--ink);
+  text-wrap: pretty;
 }
 
 .brow.unread .brow-say {
@@ -139,13 +415,22 @@
   align-self: center;
 }
 
+/* the band word as text: no pill in Simple */
+.bandword {
+  grid-column: 1;
+  font-size: 15px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  justify-self: start;
+}
+
 .brow-detail {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-1) var(--s-2);
   margin-top: 6px;
-  font-size: var(--fs-xs);
+  font-size: 13px;
   color: var(--ink-muted);
 }
 
@@ -153,21 +438,14 @@
   flex: none;
 }
 
-.brow-side {
+.brow-act {
+  grid-column: 2;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--s-2);
   justify-self: end;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.brow-act {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-2);
 }
 
 @media (min-width: 760px) {
@@ -175,21 +453,20 @@
     grid-template-columns: minmax(0, 1fr) auto auto;
   }
 
+  .brow-main,
+  .bandword,
   .brow-act {
     grid-column: auto;
+  }
+
+  .bandword {
     justify-self: end;
   }
 }
 
 /* touch targets on the row controls */
 .brief .brow-act .btn-sm,
-.brief .nextstep .btn-sm,
 .brief .actrow .btn-sm {
-  min-height: 40px;
-}
-
-.brief .brow-act .pin {
-  min-width: 40px;
   min-height: 40px;
 }
 
@@ -199,17 +476,14 @@
   align-items: center;
 }
 
-.brief-toggle {
-  margin-top: var(--s-2);
-}
-
 /* empty and locked states inside a section: a short paragraph and one row
    of actions, never a second card */
 .brief-empty p,
 .brief-locked p {
   margin: 0 0 var(--s-3);
+  font-size: 16px;
   line-height: 1.5;
-  max-width: 68ch;
+  max-width: 60ch;
 }
 
 .brief-empty .actrow,
@@ -219,15 +493,131 @@
 
 .brief-inline-err {
   margin: 0;
+  font-size: 15px;
 }
 
-.brief .nextstep {
-  margin: var(--s-2) 0 var(--s-5);
+/* My plan: quiet, one line and one link -------------------------------- */
+.home-plan {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-1) var(--s-3);
+  margin: 0 0 var(--s-5);
+  padding: 0 4px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink-muted);
 }
 
-/* the markets accordion: a section header that opens, not a bordered box */
+.home-plan p {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.home-plan .linkbtn {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.home-plan .linkbtn:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* How this works -------------------------------------------------------- */
+.howcard {
+  margin-bottom: var(--s-5);
+  padding: 20px;
+}
+
+@media (min-width: 900px) {
+  .howcard {
+    padding: 24px;
+  }
+}
+
+.howcard .brief-head {
+  margin-bottom: var(--s-3);
+}
+
+.how-list {
+  list-style: none;
+  margin: 0 0 var(--s-4);
+  padding: 0;
+  display: grid;
+  gap: var(--s-3);
+}
+
+.how-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.how-list .how-ic {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  margin-top: -4px;
+}
+
+.howcard .btn-sm {
+  min-height: 40px;
+}
+
+/* More on my names: one accordion for everything below the fold --------- */
+.brief details.acc.more {
+  border-top: 1px solid var(--border);
+  margin-top: var(--s-2);
+}
+
+.brief details.acc.more > summary {
+  padding: var(--s-4) 0;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-3);
+  min-height: 56px;
+}
+
+.brief details.acc.more > summary h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.brief details.acc.more > summary .sum-note {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  /* heading and chevron on the first line, the note in full width below */
+  .brief details.acc.more > summary .sum-note,
+  .brief details.acc.mkt > summary .sum-note {
+    flex: 1 1 100%;
+    order: 3;
+  }
+}
+
+.brief details.acc.more > .acc-body {
+  padding-top: var(--s-3);
+}
+
+/* the markets accordion inside it: a section header that opens */
 .brief details.acc.mkt {
-  border-top: 0;
+  border-top: 1px solid var(--border);
   margin-top: var(--s-2);
 }
 
@@ -236,22 +626,15 @@
   flex-wrap: wrap;
 }
 
-.brief details.acc.mkt > summary h2 {
+.brief details.acc.mkt > summary h3 {
   margin: 0;
-  font-size: var(--fs-lg);
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .brief details.acc.mkt > summary .sum-note {
   flex: 1 1 240px;
   min-width: 0;
-}
-
-@media (max-width: 600px) {
-  /* heading and chevron on the first line, the note in full width below */
-  .brief details.acc.mkt > summary .sum-note {
-    flex: 1 1 100%;
-    order: 3;
-  }
 }
 
 .brief details.acc.mkt > .acc-body {
@@ -262,18 +645,26 @@
   margin-top: 0;
 }
 
-.brief .footnote {
-  margin-top: var(--s-5);
+.brief .hero-label {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 15px;
 }
 
-/* Phones: the badge and chips drop under the sentence so the words keep the
-   full width; the actions follow on their own line. */
-@media (max-width: 759px) {
-  .brow-side {
-    grid-column: 1 / -1;
-    justify-self: start;
-    justify-content: flex-start;
-  }
+.brief .section-head h2,
+.brief .section-head h3 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* the industry cards inside Markets: in the Simple column they are narrow,
+   so each name keeps only its badge; facts stay on one line each */
+.brief .ovind .namelist .theme {
+  font-size: 13px;
+}
+
+.brief .ovind-facts {
+  font-size: 13px;
 }
 
 /* An alert's trigger chip explains itself on tap. The chip is an atomic
@@ -289,34 +680,29 @@
   text-decoration-color: var(--accent);
 }
 
-/* v5 (DESIGN_V5 §4.4, §4.6): the first-brief banner and the way out of a
-   plan clamp. The record cards and the upgrade sheet carry their own
-   styles in components/upgrade.css. */
-
-/* first-brief banner: one dismissible notice above the title */
-.brief .welcome {
-  align-items: center;
-}
-
-.brief .welcome p {
-  margin: 0;
+/* Footer ---------------------------------------------------------------- */
+.brief .footnote {
+  margin-top: var(--s-6);
+  font-size: 13px;
   line-height: 1.5;
 }
 
-.brief .welcome .btn-quiet {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
+.brief .fineprint-short {
+  margin: var(--s-2) 0 0;
+  font-size: 13px;
+  color: var(--ink-faint);
 }
 
-/* a plan clamp's way out sits inline with the hint; the hit area is 44px
-   without inflating the line */
-.brief .hint .hint-up {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 6px;
-  margin: -12px 0;
-  font-size: var(--fs-xs);
-  vertical-align: middle;
+/* the skeleton while the brief loads keeps the page shape */
+.brief .home-sk {
+  display: grid;
+  gap: var(--s-3);
+  margin-bottom: var(--s-5);
+}
+
+@media (min-width: 700px) {
+  .brief .home-sk.three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s-4);
+  }
 }
