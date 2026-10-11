@@ -10,7 +10,9 @@ import { Modal } from "./ui.jsx";
 // with a toast that names the way out, if the request fails. A 403 at
 // quota opens the quota card with two ways out, one of which costs nothing;
 // the paid one opens the upgrade sheet in place.
-export default function Pin({ symbol, pinned, onChange, label = false, className = "" }) {
+// `label` shows words beside the star; `labels` is [off, on], defaulting
+// to "Pin" / "Pinned" so a caller can ask "Watch this for me" / "Watching".
+export default function Pin({ symbol, pinned, onChange, label = false, labels = ["Pin", "Pinned"], className = "" }) {
   const inflight = useRef(false);
   const [quota, setQuota] = useState(null);
 
@@ -24,7 +26,7 @@ export default function Pin({ symbol, pinned, onChange, label = false, className
     try {
       if (next) {
         await api("/me/picks", { method: "POST", json: { symbol } });
-        toast(`Pinned ${symbol}. It will be in your next digest.`);
+        toast(`Watching ${symbol} for you. It will be in your next digest.`);
       } else {
         await api(`/me/picks/${encodeURIComponent(symbol)}`, { method: "DELETE" });
         toast(`Removed ${symbol} from your watchlist.`);
@@ -59,7 +61,7 @@ export default function Pin({ symbol, pinned, onChange, label = false, className
             strokeLinejoin="round"
           />
         </svg>
-        {label && <span>{pinned ? "Pinned" : "Pin"}</span>}
+        {label && <span>{pinned ? labels[1] : labels[0]}</span>}
       </button>
       {quota && (
         <Modal

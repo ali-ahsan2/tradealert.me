@@ -36,7 +36,10 @@ function token(name, fallback) {
   return v || fallback;
 }
 
-export default function PriceChart({ symbol, initialDays = 90 }) {
+// `placeholder` renders while the first series loads (the dossier passes
+// its 90-day sparkline so the page never shows an empty 340px box);
+// `lead` is an optional node for the card title, in place of "Price".
+export default function PriceChart({ symbol, initialDays = 90, placeholder = null, lead = null }) {
   const box = useRef(null);
   const [range, setRange] = useState(() => RANGES.find(([, d]) => d === initialDays) || RANGES[2]);
   const days = range[1];
@@ -188,7 +191,7 @@ export default function PriceChart({ symbol, initialDays = 90 }) {
   return (
     <section className="card chartwrap" aria-labelledby="chart-h">
       <div className="card-title">
-        <h2 id="chart-h">Price</h2>
+        <h2 id="chart-h">{lead || "Price"}</h2>
         <div className="row">
           <div className="seg" role="group" aria-label="Range">
             {RANGES.map((r) => (
@@ -207,7 +210,7 @@ export default function PriceChart({ symbol, initialDays = 90 }) {
       </div>
 
       {err && <ErrorCard error={err} onRetry={() => setReload((n) => n + 1)} title="Couldn't load price history." />}
-      {!err && loading && !data && <Skeleton rows={1} height={340} />}
+      {!err && loading && !data && (placeholder || <Skeleton rows={1} height={340} />)}
 
       {data && data.bars.length === 0 && (
         <p className="muted small" style={{ padding: "var(--s-5) 0", marginBottom: 0 }}>

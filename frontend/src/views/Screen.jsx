@@ -2,14 +2,16 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api, cached, toast } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
-import { alertsLabel, coverage, dateTime, delta, dollars, downloadText, fmtMoney, inDays, pct, plural, shortDate, toCsv, tone } from "../lib/fmt.js";
+import { alertsLabel, coverage, dateTime, delta, dollars, downloadText, fmtMoney, inDays, pct, plural, score as fmtScore, shortDate, toCsv, tone } from "../lib/fmt.js";
 import { nounFor } from "../lib/evidence.js";
 import { PLAIN_FIELD } from "../lib/glossary.js";
-import { changeSentence } from "../lib/plain.js";
+import { bandWord } from "../lib/plain.js";
 import { useRowNav } from "../lib/rownav.js";
 import { useMode } from "../lib/mode.js";
 import { openUpgrade } from "../lib/upgrade.js";
+import { FIND_PRESETS, LIST_CARDS } from "../lib/caps.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
+import NameCard, { ShowAll } from "../components/NameCard.jsx";
 import Pin from "../components/Pin.jsx";
 import Spark, { Move } from "../components/Spark.jsx";
 import Explain from "../components/Explain.jsx";
@@ -29,35 +31,12 @@ const PARAMS = [
 ];
 
 // `plain` finishes the sentence "Find names that…" and says only what the
-// preset's own filters do; `simpleLabel` is the card title in Simple mode.
-// `rich` is the same sentence with its trader words tappable.
+// screen's own limits do (the user's limits, not the strategy's recipe);
+// `simpleLabel` is the button title in Simple mode. `rich` is the same
+// sentence with its trader words tappable. The Simple order puts the
+// screens about a dated event or a measured fact first (DESIGN_V6 §7).
 const SHORTING = " (short sellers borrow shares to bet the price falls)";
 const PRESETS = [
-  {
-    key: "cleared", label: "Cleared the screen", simpleLabel: "Cleared the filters", desc: "Every hard filter passed",
-    plain: "passed every one of the strategy's pass-or-fail rules on this run. The names its setup fully applies to.",
-    params: { hf: "pass", sort: "score" },
-  },
-  {
-    key: "thin", label: "Thin coverage to verify", simpleLabel: "Have thin data", desc: "Fewer than half the inputs had data",
-    plain: "were scored on fewer than half of their inputs, so the number carries a ~. Worth a look before you lean on the score.",
-    params: { coverage: "thin", sort: "coverage", dir: "asc" },
-  },
-  {
-    key: "new", label: "New this run", simpleLabel: "Are new this run", desc: "Not scored on the previous run",
-    plain: "were not scored on the previous run. The newest arrivals in your universe.",
-    params: { new: "1" },
-  },
-  {
-    key: "up", label: "Up 5+ since last run", simpleLabel: "Rose 5 points or more", desc: "Score rose five points or more",
-    plain: "scored five points or more above their previous run. Something in their inputs changed.",
-    params: { min_delta: "5", sort: "delta" },
-  },
-  {
-    key: "down", label: "Down 5+ since last run", simpleLabel: "Fell 5 points or more", desc: "Score fell five points or more",
-    plain: "scored five points or more below their previous run. Something in their inputs weakened.",
-    params: { max_delta: "-5", sort: "delta", dir: "asc" },
-  },
   {
     key: "earnings", label: "Earnings within 14 days", simpleLabel: "Report earnings soon", desc: "A dated earnings print inside two weeks",
     plain: "have an earnings date inside the next 14 days. A dated event the alerts can watch for you.",
@@ -75,7 +54,7 @@ const PRESETS = [
     params: { float_max: "30", si_min: "15", sort: "si" },
   },
   {
-    key: "fee", label: "Expensive to borrow", simpleLabel: "Are expensive to borrow", desc: "Borrow fee at 20% or more",
+    key: "fee", label: "Expensive to borrow", simpleLabel: "Are costly to borrow", desc: "Borrow fee at 20% or more",
     plain: "cost 20% a year or more to borrow. Shares are getting hard to find.",
     rich: (
       <>
@@ -91,11 +70,78 @@ const PRESETS = [
     params: { volx_min: "3", sort: "volx" },
   },
   {
+    key: "up", label: "Up 5+ since last run", simpleLabel: "Rose 5 points or more", desc: "Score rose five points or more",
+    plain: "scored five points or more above their previous run. Something in their inputs changed.",
+    params: { min_delta: "5", sort: "delta" },
+  },
+  {
+    key: "cleared", label: "Cleared the screen", simpleLabel: "Passed every rule", desc: "Every must-pass rule passed",
+    plain: "passed every one of the strategy's must-pass rules on this run. The names its setup fully applies to.",
+    params: { hf: "pass", sort: "score" },
+  },
+  {
+    key: "down", label: "Down 5+ since last run", simpleLabel: "Fell 5 points or more", desc: "Score fell five points or more",
+    plain: "scored five points or more below their previous run. Something in their inputs weakened.",
+    params: { max_delta: "-5", sort: "delta", dir: "asc" },
+  },
+  {
+    key: "new", label: "New this run", simpleLabel: "Are new this run", desc: "Not scored on the previous run",
+    plain: "were not scored on the previous run. The newest arrivals in your universe.",
+    params: { new: "1" },
+  },
+  {
+    key: "thin", label: "Thin coverage to verify", simpleLabel: "Have thin data", desc: "Fewer than half the inputs had data",
+    plain: "were scored on fewer than half of their inputs, so the number carries a ~. Worth a look before you lean on the score.",
+    params: { coverage: "thin", sort: "coverage", dir: "asc" },
+  },
+  {
     key: "pinned", label: "My pinned names", simpleLabel: "Are on my watchlist", desc: "Only your watchlist",
-    plain: "are pinned to your watchlist, with their scores on this run.",
+    plain: "are on your watchlist, with their scores on this run.",
     params: { pinned: "1" },
   },
 ];
+
+// "today", "tomorrow", "in 12 days"; null for a past or missing date.
+function daysWords(n) {
+  if (n == null || n < 0) return null;
+  if (n === 0) return "today";
+  if (n === 1) return "tomorrow";
+  return `in ${n} days`;
+}
+
+// "up 6 since the last run", "new this run".
+function changeWords(d) {
+  if (d == null) return "new this run";
+  const r = Math.round(d);
+  if (r === 0) return "unchanged since the last run";
+  return `${r > 0 ? "up" : "down"} ${Math.abs(r)} since the last run`;
+}
+
+// The one figure a screen is about, in words, from the fields each row
+// already carries. Falls back to the change since the last run.
+const FIGURE = {
+  earnings: (r) => (r.earnings ? `earnings ${daysWords(r.earnings.days) || `on ${shortDate(r.earnings.date, "UTC")}`}` : "no earnings date on file"),
+  squeeze: (r) => {
+    const sn = r.snapshot || {};
+    const parts = [];
+    if (sn.si_pct_float != null) parts.push(`${sn.si_pct_float}% of the float sold short`);
+    if (sn.float_m != null) parts.push(`${sn.float_m}M shares trade`);
+    return parts.join(" · ") || null;
+  },
+  fee: (r) => (r.snapshot && r.snapshot.fee_pct != null ? `costs ${r.snapshot.fee_pct}% a year to borrow` : null),
+  volume: (r) => (r.snapshot && r.snapshot.volx20d != null ? `volume ${r.snapshot.volx20d}x normal` : null),
+  up: (r) => changeWords(r.delta_1d),
+  down: (r) => changeWords(r.delta_1d),
+  new: () => "new this run",
+  thin: (r) => `${r.components_present} of ${r.components_total} inputs had data`,
+  cleared: () => "passed every must-pass rule",
+  pinned: () => "on my watchlist",
+};
+
+function figureFor(presetKey, r) {
+  const f = presetKey && FIGURE[presetKey] ? FIGURE[presetKey](r) : null;
+  return f || changeWords(r.delta_1d);
+}
 
 const SORTS = [
   ["score", "Score"], ["delta", "Change since last run"], ["coverage", "Coverage"], ["symbol", "Symbol"],
@@ -158,14 +204,6 @@ function useSideScroll(deps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   return [ref, state];
-}
-
-// "up 6", "down 3", "new", "unchanged": the Simple table's change column.
-function shortChange(d) {
-  if (d == null) return "new";
-  const r = Math.round(d);
-  if (r === 0) return "unchanged";
-  return `${r > 0 ? "up" : "down"} ${Math.abs(r)}`;
 }
 
 // When the run happened, in words that hold for the viewer's own clock.
@@ -298,6 +336,8 @@ export default function Screen() {
   // screen (today's sidebar), closed in Simple and on phones (today's drawer).
   const [adv, setAdv] = useState(() => full && wide());
   const [universe, setUniverse] = useState({});
+  const [showAll, setShowAll] = useState(false);
+  const [morePresets, setMorePresets] = useState(false);
   const asked = useRef(new Set());
   const [tableRef, tableScroll] = useSideScroll([data, loading, simple]);
 
@@ -307,7 +347,7 @@ export default function Screen() {
   // The tab title matches the nav word and the heading; restored on leave.
   useEffect(() => {
     const prev = document.title;
-    document.title = `${simple ? "Find names" : "Screener"} · tradealert.me`;
+    document.title = `${simple ? "Find" : "Screener"} · tradealert.me`;
     return () => {
       document.title = prev;
     };
@@ -326,6 +366,7 @@ export default function Screen() {
     let alive = true;
     setLoading(true);
     setErr(null);
+    setShowAll(false);
     api(`/screen${qs(filters)}`)
       .then((d) => alive && setData(d))
       .catch((e) => alive && setErr(e))
@@ -381,6 +422,8 @@ export default function Screen() {
   };
 
   const rows = data ? data.rows : [];
+  const cards = simple && !showAll ? rows.slice(0, LIST_CARDS) : rows;
+  const navRows = simple ? cards : rows;
   const strat = (data && data.strategy) || (strategies || []).find((s) => s.key === stratKey) || { key: "fast_mover", label: "Fast Mover", calibrated: true };
   const tz = me && me.settings ? me.settings.timezone : undefined;
   const scopeInds = data ? data.meta.scope : [];
@@ -405,17 +448,18 @@ export default function Screen() {
       else toast(`Compare holds up to ${MAX_COMPARE} names.`);
       return n;
     });
-  const openRow = (r) => navigate(`/stock/${r.symbol}${strat.key !== "fast_mover" ? `?strategy=${strat.key}` : ""}`);
-  const cursor = useRowNav(rows.length, {
-    onOpen: (i) => rows[i] && openRow(rows[i]),
+  const hrefFor = (r) => `/stock/${r.symbol}${strat.key !== "fast_mover" ? `?strategy=${strat.key}` : ""}`;
+  const openRow = (r) => navigate(hrefFor(r));
+  const cursor = useRowNav(navRows.length, {
+    onOpen: (i) => navRows[i] && openRow(navRows[i]),
     onPin: (i) => {
-      const r = rows[i];
+      const r = navRows[i];
       if (!r || !pins) return;
       const on = pins.has(r.symbol);
       api(`/me/picks${on ? `/${encodeURIComponent(r.symbol)}` : ""}`, on ? { method: "DELETE" } : { method: "POST", json: { symbol: r.symbol } })
         .then(() => {
           onPinChange(r.symbol, !on);
-          toast(on ? `Removed ${r.symbol} from your watchlist.` : `Pinned ${r.symbol}.`);
+          toast(on ? `Removed ${r.symbol} from your watchlist.` : `Watching ${r.symbol} for you.`);
         })
         .catch((e) => toast(e.detail || "That didn't work."));
     },
@@ -447,7 +491,7 @@ export default function Screen() {
     ];
     downloadText(
       `tradealert-screen-${data.as_of.slice(0, 10)}.csv`,
-      toCsv(rows, cols) + "\n# Research and information only; not investment advice. Scores rank names for a human to review.\n"
+      toCsv(rows, cols) + "\n# Information and alerts, not advice. Scores rank names for a human to review.\n"
     );
   };
 
@@ -459,22 +503,22 @@ export default function Screen() {
       <div className="facets">
         {BANDS.filter((b) => data.facets.band[b]).map((b) => (
           <button key={b} type="button" className="fchip" aria-pressed={(filters.bands || "").split(",").includes(b)} onClick={() => facetGo("bands", b)}>
-            {b} <span className="mono">{data.facets.band[b]}</span>
+            {bandWord(b)} <span className="count">{data.facets.band[b]}</span>
           </button>
         ))}
         {Object.entries(data.facets.industry).length > 1 &&
           Object.entries(data.facets.industry).map(([k, v]) => (
             <button key={k} type="button" className="fchip" aria-pressed={(filters.industries || "").split(",").includes(k)} onClick={() => facetGo("industries", k)}>
-              {v.label} <span className="mono">{v.n}</span>
+              {v.label} <span className="count">{v.n}</span>
             </button>
           ))}
         {(data.facets.hf.pass > 0 || data.facets.hf.fail > 0) && (
           <>
             <button type="button" className="fchip" aria-pressed={filters.hf === "pass"} onClick={() => go({ ...filters, hf: filters.hf === "pass" ? "" : "pass" })}>
-              {plain ? "cleared the filters" : "cleared"} <span className="mono">{data.facets.hf.pass}</span>
+              {plain ? "passed every rule" : "cleared"} <span className="count">{data.facets.hf.pass}</span>
             </button>
             <button type="button" className="fchip" aria-pressed={filters.hf === "fail"} onClick={() => go({ ...filters, hf: filters.hf === "fail" ? "" : "fail" })}>
-              {plain ? "failed a filter" : "failed"} <span className="mono">{data.facets.hf.fail}</span>
+              {plain ? "failed a rule" : "failed"} <span className="count">{data.facets.hf.fail}</span>
             </button>
           </>
         )}
@@ -482,7 +526,7 @@ export default function Screen() {
           .filter((c) => data.facets.coverage[c])
           .map((c) => (
             <button key={c} type="button" className="fchip" aria-pressed={filters.coverage === c} onClick={() => go({ ...filters, coverage: filters.coverage === c ? "" : c })}>
-              {plain ? COV_PLAIN[c] : `${c} coverage`} <span className="mono">{data.facets.coverage[c]}</span>
+              {plain ? COV_PLAIN[c] : `${c} coverage`} <span className="count">{data.facets.coverage[c]}</span>
             </button>
           ))}
       </div>
@@ -504,12 +548,12 @@ export default function Screen() {
       )}
       <div className="fgroup">
         <span className="fgroup-label">
-          Band <Explain term="band" />
+          {simple ? "Rating word" : "Band"} <Explain term="band" />
         </span>
         <div className="chips">
           {BANDS.map((b) => (
             <button key={b} type="button" className="fchip" aria-pressed={(draft.bands || "").split(",").includes(b)} onClick={() => toggleIn("bands", b)}>
-              {b}
+              {bandWord(b)}
             </button>
           ))}
         </div>
@@ -520,7 +564,7 @@ export default function Screen() {
       </div>
       <div className="fgroup">
         <span className="fgroup-label">
-          {simple ? "Data coverage" : "Coverage"} <Explain term="coverage" />
+          {simple ? "How much data" : "Coverage"} <Explain term="coverage" />
         </span>
         <div className="chips">
           {[["", "Any"], ["full", "Full"], ["partial", "Partial"], ["thin", "Thin"]].map(([v, l]) => (
@@ -532,10 +576,10 @@ export default function Screen() {
       </div>
       <div className="fgroup">
         <span className="fgroup-label">
-          Hard filters{" "}
+          Must-pass rules{" "}
           <Explain
-            title="Hard filters"
-            text="Fast Mover's four filters: cap $300M-$3B, float under 50M, short interest over 10%, growth over 40%. Other strategies store no verdict."
+            title="Must-pass rules (hard filters)"
+            text="Fast Mover's four must-pass rules: company size, shares that trade, short interest, revenue growth. Pass or fail only; the exact lines stay in the Lab. Other strategies store no verdict."
           />
         </span>
         <div className="chips">
@@ -634,29 +678,50 @@ export default function Screen() {
   );
 
   const anyPresetOn = PRESETS.some(presetOn);
+  // The figure on each card follows the screen whose limits are on, whatever
+  // the sort: /screen?hf=pass is the "passed every rule" screen.
+  const activePreset = PRESETS.find((p) => Object.entries(p.params).every(([k, v]) => k === "sort" || k === "dir" || (filters[k] || "") === v));
+  const presetsShown = simple && !morePresets && !PRESETS.slice(FIND_PRESETS).some(presetOn) ? PRESETS.slice(0, FIND_PRESETS) : PRESETS;
+
+  const sortControl = (
+    <label className="ctl">
+      Sort
+      <select className="inline" value={filters.sort || "score"} onChange={(e) => go({ ...filters, sort: e.target.value, dir: "" })}>
+        {SORTS.map(([k, l]) => (
+          <option key={k} value={k}>
+            {simple ? SORT_PLAIN[k] || l : l}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 
   return (
     <div className="wrap screen-v">
       <div className="pagehead">
         <div>
-          <h1>{simple ? "Find names" : "Screener"}</h1>
+          <h1>{simple ? "Find" : "Screener"}</h1>
           {data ? (
             <ScreenUtility data={data} universe={universeFor} activeCount={activeCount} strat={strat} tz={tz} />
           ) : (
-            <div className="meta">Filter your universe on score, coverage, the hard filters and the market data on file. The address is the screen; share it as a link.</div>
+            <div className="meta">
+              {simple
+                ? "Pick a ready-made screen and we show you the names in your industries that match."
+                : "Filter your universe on score, coverage, the must-pass rules and the market data on file. The address is the screen; share it as a link."}
+            </div>
           )}
         </div>
         <div className="actions">
           <select
             className="inline"
             value={stratKey}
-            aria-label="Strategy lens"
+            aria-label="Strategy"
             onChange={(e) => go({ ...filters, strategy: e.target.value === "fast_mover" ? "" : e.target.value })}
           >
             {(strategies || [{ key: "fast_mover", label: "Fast Mover", calibrated: true }]).map((s) => (
               <option key={s.key} value={s.key}>
                 {s.label}
-                {s.calibrated ? "" : " (provisional)"}
+                {s.calibrated ? "" : " (no record yet)"}
               </option>
             ))}
           </select>
@@ -671,7 +736,7 @@ export default function Screen() {
           Find names that…
         </h2>
         <div className="find-grid">
-          {PRESETS.map((p) => {
+          {presetsShown.map((p) => {
             const on = presetOn(p);
             const toggle = () => (on ? clear() : preset(p));
             // The whole card toggles; the title is the focusable control.
@@ -695,7 +760,12 @@ export default function Screen() {
             );
           })}
         </div>
-        <p className="hint">{anyPresetOn ? "Tap the card again to clear it, or open Advanced filters to go further." : "Pick one to start. The results update as you go."}</p>
+        {presetsShown.length < PRESETS.length && (
+          <button type="button" className="btn btn-secondary find-more" onClick={() => setMorePresets(true)}>
+            More ways to find
+          </button>
+        )}
+        <p className="hint">{anyPresetOn ? "Tap the screen again to clear it, or set your own limits below." : "Pick one to start. The results update as you go."}</p>
       </section>
 
       <div className="presets full-only" role="group" aria-label="Preset screens">
@@ -709,34 +779,25 @@ export default function Screen() {
       <div className={`screen ${simple ? "screen-simple" : ""}`}>
         <details className="acc adv" open={adv} onToggle={(e) => setAdv(e.currentTarget.open)}>
           <summary>
-            Advanced filters
+            {simple ? "Set my own limits" : "Advanced filters"}
             <span className="sum-note">{activeCount ? `${activeCount} on` : "none on"}</span>
           </summary>
           <div className="acc-body">{Panel}</div>
         </details>
         <div className="screen-main">
-          {data && (
+          {data && full && (
             <div className="boardhead">
               <Monogram size={20}>{strat.monogram}</Monogram>
               <b>{strat.label}</b>
-              <StatusChip calibrated={strat.calibrated} short />
-              <span className="full-only">
+              <StatusChip calibrated={strat.calibrated} />
+              <span>
                 <b>{data.meta.matched}</b> {data.meta.matched === 1 ? "name matches" : "names match"} · showing {data.meta.shown}
               </span>
               <span>run {dateTime(data.as_of, tz)}</span>
               <span className="spacer" />
-              <label className="ctl">
-                Sort
-                <select className="inline" value={filters.sort || "score"} onChange={(e) => go({ ...filters, sort: e.target.value, dir: "" })}>
-                  {SORTS.map(([k, l]) => (
-                    <option key={k} value={k}>
-                      {simple ? SORT_PLAIN[k] || l : l}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {sortControl}
               <button className="btn-quiet" onClick={() => go({ ...filters, dir: data.meta.dir === "asc" ? "desc" : "asc" })} title="Flip sort direction">
-                {data.meta.dir === "asc" ? (simple ? "↑ lowest first" : "↑ asc") : simple ? "↓ highest first" : "↓ desc"}
+                {data.meta.dir === "asc" ? "↑ asc" : "↓ desc"}
               </button>
               {rows.length > 0 && (
                 <button className="btn-quiet" onClick={exportCsv}>
@@ -758,23 +819,23 @@ export default function Screen() {
             </div>
           )}
 
-          <div className="full-only">{facetChips(false)}</div>
+          {full && facetChips(false)}
 
           {err && <ErrorCard error={err} onRetry={() => setReload((n) => n + 1)} title="Couldn't run the screen." />}
-          {loading && !err && <Skeleton rows={8} height={40} />}
+          {loading && !err && <Skeleton rows={simple ? 5 : 8} height={simple ? 96 : 56} />}
           {!loading && data && rows.length === 0 && (
             <Empty
               title={
                 activeCount
-                  ? "Nothing in your universe matches these filters."
+                  ? "Nothing in your industries matches this screen."
                   : strat.key !== "fast_mover"
-                    ? `No ${strat.label} ${noun}s were scored on the latest run.`
-                    : "No names were scored on the latest run."
+                    ? `No ${strat.label} ${noun}s were rated on the latest run.`
+                    : "No names were rated on the latest run."
               }
               action={
                 activeCount ? (
                   <button className="btn btn-secondary" onClick={clear}>
-                    Clear filters
+                    Clear the screen
                   </button>
                 ) : strat.key !== "fast_mover" ? (
                   <button className="btn btn-secondary" onClick={() => go({})}>
@@ -787,15 +848,42 @@ export default function Screen() {
                 )
               }
             >
-              {activeCount ? "Loosen one filter, or pick a different card above." : "Scores regenerate each morning."}
+              {activeCount ? "Loosen one limit, or pick a different screen above." : "Scores regenerate each morning."}
             </Empty>
           )}
 
-          {!loading && data && rows.length > 0 && (
+          {!loading && data && rows.length > 0 && simple && (
+            <>
+              {rows.length > 1 && <div className="find-sort">{sortControl}</div>}
+              <ol className="bcards" aria-label="Names that match">
+                {cards.map((r, i) => (
+                  <NameCard
+                    key={r.symbol}
+                    index={i}
+                    cursor={cursor === i}
+                    symbol={r.symbol}
+                    sub={r.industry.label}
+                    to={hrefFor(r)}
+                    sentence={r.theme}
+                    meta={
+                      <>
+                        <b>{bandWord(r.band)}</b> <span className="num">{fmtScore(r.value, r.components_present, r.components_total)}</span> ·{" "}
+                        {figureFor(activePreset && activePreset.key, r)}
+                      </>
+                    }
+                    action={<NotifyButton symbol={r.symbol} compact label="Alert me" onLabel="Alerts on" />}
+                  />
+                ))}
+              </ol>
+              <ShowAll total={rows.length} shown={cards.length} open={showAll} onToggle={() => setShowAll((v) => !v)} />
+            </>
+          )}
+
+          {!loading && data && rows.length > 0 && full && (
             <>
               {tableScroll.can && <p className="hint tscroll-hint">Swipe sideways for more columns.</p>}
               <div className={`tscroll-wrap ${tableScroll.can && !tableScroll.end ? "fade" : ""}`}>
-                <div className={`table-card cards ${simple ? "simple-table" : ""}`} ref={tableRef}>
+                <div className="table-card cards" ref={tableRef}>
                   <table className="data compact screen-table">
                     <thead>
                       <tr>
@@ -806,44 +894,38 @@ export default function Screen() {
                           #
                         </th>
                         <th scope="col">Name</th>
-                        <Th simple={simple} plain="Score" term={simple ? "score" : "band"}>
-                          Band
+                        <Th term="band">Rating</Th>
+                        <Th term="coverage" num>
+                          Data
                         </Th>
-                        <Th simple={simple} plain="Inputs with data" term="coverage" num>
-                          Cov
-                        </Th>
-                        <Th simple={simple} plain="Since last run" term="delta_run" num>
+                        <Th term="delta_run" num>
                           Δ run
                         </Th>
-                        <Th simple={simple} plain="Passed filters?" text="Hard-filter verdict stored with the score. — means the strategy stores none.">
-                          Screen
-                        </Th>
-                        <Th simple={simple} plain={PLAIN_FIELD.cap_usd_m} term="market_cap" num>
+                        <Th text="The must-pass rules' verdict stored with the score. A name flagged FAIL is still rated. — means the strategy stores none.">Rules</Th>
+                        <Th term="market_cap" num>
                           Cap
                         </Th>
-                        <Th simple={simple} plain={PLAIN_FIELD.si_pct_float} term="short_interest" num>
+                        <Th term="short_interest" num>
                           SI %
                         </Th>
-                        <Th simple={simple} plain={PLAIN_FIELD.float_m} term="float" num>
+                        <Th term="float" num>
                           Float
                         </Th>
-                        <Th simple={simple} plain={PLAIN_FIELD.fee_pct} term="borrow_fee" num>
+                        <Th term="borrow_fee" num>
                           Fee
                         </Th>
-                        <Th simple={simple} plain={PLAIN_FIELD.volx20d} term="volume_x" num>
+                        <Th term="volume_x" num>
                           Vol×
                         </Th>
-                        <Th simple={simple} plain={PLAIN_FIELD.run3m_pct} term="run3m" num>
+                        <Th term="run3m" num>
                           3m
                         </Th>
-                        <Th simple={simple} plain="30 days" text="Price change over 30 days from daily closes, with the gap to the industry's ETF beneath." num>
+                        <Th text="Price change over 30 days from daily closes, with the gap to the industry's ETF beneath." num>
                           30d
                         </Th>
-                        <Th simple={simple} plain={PLAIN_FIELD.earnings} term="catalyst">
-                          Earnings
-                        </Th>
+                        <Th term="catalyst">Earnings</Th>
                         <th scope="col">
-                          <span className="sr-only">{simple ? "Actions" : "Pin"}</span>
+                          <span className="sr-only">Pin</span>
                         </th>
                       </tr>
                     </thead>
@@ -872,7 +954,7 @@ export default function Screen() {
                             <td className="c-band">
                               <ScoreBadge band={r.band} value={r.value} present={r.components_present} total={r.components_total} strategy={strat} />
                             </td>
-                            <td className="num c-cov cov-cell" data-label={simple ? "Inputs with data" : "Coverage"} title={`${cov.present} of ${cov.total} inputs had data`}>
+                            <td className="num c-cov cov-cell" data-label="Data" title={`${cov.present} of ${cov.total} inputs had data`}>
                               <span className="covbar" aria-hidden="true">
                                 {[0, 1, 2].map((k) => (
                                   <span key={k} className={k < cov.segments ? "filled" : ""} />
@@ -880,20 +962,14 @@ export default function Screen() {
                               </span>
                               {r.components_present}/{r.components_total}
                             </td>
-                            {simple ? (
-                              <td className="num c-delta" data-label="Since last run" title={changeSentence(r.delta_1d)}>
-                                {shortChange(r.delta_1d)}
-                              </td>
-                            ) : (
-                              <td className="num c-delta" data-label="Δ">
-                                {delta(r.delta_1d)}
-                              </td>
-                            )}
+                            <td className="num c-delta" data-label="Δ">
+                              {delta(r.delta_1d)}
+                            </td>
                             <td className="c-hide">
                               {r.hf_pass == null ? (
                                 <span className="faint">—</span>
                               ) : (
-                                <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`}>{r.hf_pass ? "✓ PASS" : `✕ ${r.hf_fails} FAIL`}</span>
+                                <span className={`verdict ${r.hf_pass ? "pass" : "fail"}`}>{r.hf_pass ? "PASS" : `FAIL${r.hf_fails > 1 ? ` ×${r.hf_fails}` : ""}`}</span>
                               )}
                             </td>
                             <td className="num c-hide">{fmtMoney(sn.cap_usd_m)}</td>
@@ -902,7 +978,7 @@ export default function Screen() {
                             <td className="num c-hide">{sn.fee_pct == null ? "—" : `${sn.fee_pct}%`}</td>
                             <td className="num c-hide">{sn.volx20d == null ? "—" : `${sn.volx20d}x`}</td>
                             <td className={`num c-hide ${tone(sn.run3m_pct)}`}>{pct(sn.run3m_pct, 0)}</td>
-                            <td className="c-move" data-label={simple ? "30 days" : "30d"}>
+                            <td className="c-move" data-label="30d">
                               <span className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
                                 <Spark closes={r.price.closes} width={72} height={24} />
                                 <Move value={r.price.chg_30d} />
@@ -923,16 +999,7 @@ export default function Screen() {
                                 <span className="faint">—</span>
                               )}
                             </td>
-                            {simple ? (
-                              <td className="c-act" onClick={(e) => e.stopPropagation()}>
-                                <span className="act">
-                                  {pins && <Pin symbol={r.symbol} pinned={pins.has(r.symbol)} onChange={onPinChange} />}
-                                  <NotifyButton symbol={r.symbol} compact />
-                                </span>
-                              </td>
-                            ) : (
-                              <td className="c-pin">{pins && <Pin symbol={r.symbol} pinned={pins.has(r.symbol)} onChange={onPinChange} />}</td>
-                            )}
+                            <td className="c-pin">{pins && <Pin symbol={r.symbol} pinned={pins.has(r.symbol)} onChange={onPinChange} />}</td>
                           </tr>
                         );
                       })}
@@ -944,7 +1011,7 @@ export default function Screen() {
               {selected.size > 0 && (
                 <div className="selbar" role="status">
                   <span>
-                    {selected.size} of {MAX_COMPARE} selected: <span className="mono">{[...selected].join(", ")}</span>
+                    {selected.size} of {MAX_COMPARE} selected: <span className="num">{[...selected].join(", ")}</span>
                   </span>
                   <span className="spacer" />
                   <button
@@ -959,17 +1026,21 @@ export default function Screen() {
                   </button>
                 </div>
               )}
+            </>
+          )}
 
+          {!loading && data && rows.length > 0 && (
+            <>
               {data.meta.truncated && (
                 <div className="upgrade-card">
                   <div className="copy">
-                    <b>{data.meta.matched - data.meta.shown}</b> more {data.meta.matched - data.meta.shown === 1 ? "name" : "names"} in your universe{" "}
+                    <b>{data.meta.matched - data.meta.shown}</b> more {data.meta.matched - data.meta.shown === 1 ? "name" : "names"} in your industries{" "}
                     {data.meta.matched - data.meta.shown === 1 ? "matches" : "match"} this screen than this list reaches; your plan lists{" "}
                     <b>{data.meta.names_shown_limit}</b>.
                     {nextTier && (
                       <>
                         {" "}
-                        On <b>{nextTier.label}</b> this list would reach {nextTier.names_shown_limit} names and we would tell you which of them changed band
+                        On <b>{nextTier.label}</b> this list would reach {nextTier.names_shown_limit} names and we would tell you which of them changed rating
                         each morning
                         {nextTier.alerts_limit === 0 ? (
                           "."
@@ -985,7 +1056,7 @@ export default function Screen() {
                   {nextTier && (
                     <div className="actions">
                       <button type="button" className="btn btn-primary btn-sm" onClick={() => openUpgrade("names")}>
-                        See plans — {dollars(nextTier.price_monthly_cents)}/mo
+                        Show me the plans — {dollars(nextTier.price_monthly_cents)}/mo
                       </button>
                     </div>
                   )}
@@ -993,8 +1064,15 @@ export default function Screen() {
               )}
 
               <p className="footnote">
-                Market data columns show the latest snapshot on file per name; each figure carries its own date on the report. <kbd className="kbd">j</kbd>/<kbd className="kbd">k</kbd>{" "}
-                move, <kbd className="kbd">↵</kbd> open, <kbd className="kbd">p</kbd> pin. {strat.label} {noun}s rank names for a human to review; nothing here is a recommendation.
+                {full ? (
+                  <>
+                    Market data columns show the latest snapshot on file per name; each figure carries its own date on the report. <kbd className="kbd">j</kbd>/
+                    <kbd className="kbd">k</kbd> move, <kbd className="kbd">↵</kbd> open, <kbd className="kbd">p</kbd> pin.{" "}
+                  </>
+                ) : (
+                  <>Each figure is the latest on file for that name; its date is on the report. </>
+                )}
+                {strat.label} {noun}s rank names for you to look into; nothing here is a recommendation.
               </p>
             </>
           )}

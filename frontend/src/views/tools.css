@@ -34,17 +34,18 @@
 }
 .tl-sent {
   margin: 2px 0 0;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-base);
   line-height: 1.5;
   color: var(--ink);
 }
 .tl-sent b { font-weight: 600; }
 .tl-meta {
   margin: 2px 0 0;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   line-height: 1.5;
   color: var(--ink-muted);
 }
+.tl-meta b { color: var(--ink); font-weight: 600; }
 .tl-meta .badge { vertical-align: middle; }
 .tl-acts {
   display: flex;
@@ -176,7 +177,7 @@
 .wl-card .facts .btn-quiet { min-height: 40px; }
 
 /* Outcome counts in a sentence stay tabular. */
-.tl-sent .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.tl-sent .num { font-variant-numeric: tabular-nums; }
 
 /* Calendar rows below the desktop grid: everything after the date stacks in
    the second column so the badge never runs into the past-reaction line. */
@@ -323,8 +324,6 @@
 .tl-rec .tl-rec-sec {
   margin: var(--s-4) 0 var(--s-1);
   font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   color: var(--ink-muted);
   font-weight: 600;
 }
@@ -333,7 +332,6 @@
 .tl-rec .rec-top .when { font-size: var(--fs-sm); color: var(--ink-muted); }
 .tl-rec .rec-say .num,
 .tl-lead .num {
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
@@ -357,9 +355,43 @@
 .tl-rec .tl-rec-btn:hover { color: var(--info); }
 .tl-rec .hint { margin-top: var(--s-3); max-width: 72ch; }
 
-/* Watchlist: the lead fact on a pinned name sits under the plain sentence. */
-.tl-wl .tl-lead,
+/* Watchlist: the lead fact is the card's one sentence in Simple; in Full it
+   sits under the name. */
+.tl-wl .tl-lead {
+  margin: 2px 0 0;
+  font-size: var(--fs-base);
+  color: var(--ink);
+  white-space: normal;
+}
 .wl-card .who .tl-lead {
   margin: 4px 0 0;
   white-space: normal;
 }
+
+/* Watchlist Simple: the digest line under the title, and "More" per card. */
+.tl-digest { margin: calc(-1 * var(--s-2)) 0 var(--s-4); font-size: var(--fs-sm); }
+.tl-more { position: relative; }
+.tl-more > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 var(--s-3);
+  cursor: pointer;
+}
+.tl-more > summary::-webkit-details-marker { display: none; }
+.tl-more > summary::after { content: " ▾"; margin-left: 4px; font-size: var(--fs-xs); }
+.tl-more[open] > summary::after { content: " ▴"; }
+.tl-more-body {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  width: 100%;
+  margin-top: var(--s-2);
+  padding-top: var(--s-2);
+  border-top: 1px dashed var(--border);
+}
+.tl-more[open] { flex-basis: 100%; }
+.tl-wl .tl-side .wl-spark { gap: 10px; }

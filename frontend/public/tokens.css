@@ -39,17 +39,26 @@
   --r-xl: 20px;
   --r-pill: 999px;
 
-  /* type */
+  /* type. --font-code is for literal codes (keyboard keys, the Lab's raw
+     values). --font-mono is what the Lab's numerals use; the subscriber
+     product sets it to the body face at the top of styles.css (DESIGN_V6 §5),
+     so nothing a subscriber reads is set in a typewriter face. */
   --font-sans: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
     Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas,
+  --font-code: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas,
     monospace;
+  --font-mono: var(--font-code);
 
-  /* 1.20 ratio plus two display sizes for hero numbers */
+  /* 1.20 ratio from a 16px body, plus the reading sizes DESIGN_V6 §5 names:
+     card sentences, the dossier lede, section titles, and two display sizes
+     for hero numbers */
   --fs-xs: 0.75rem;     /* 12 */
   --fs-sm: 0.875rem;    /* 14 */
-  --fs-base: 0.9375rem; /* 15 */
+  --fs-base: 1rem;      /* 16 */
+  --fs-card: 1.0625rem; /* 17: the one sentence on a card */
   --fs-md: 1.125rem;    /* 18 */
+  --fs-lede: 1.1875rem; /* 19: the dossier's verdict sentence */
+  --fs-title: 1.25rem;  /* 20: section titles */
   --fs-lg: 1.375rem;    /* 22 */
   --fs-xl: 1.75rem;     /* 28 */
   --fs-2xl: 2.25rem;    /* 36 */
@@ -96,10 +105,10 @@
   --band-elevated-bd: #5e7cff;
   --band-neutral-bg: #e8ebf3;
   --band-neutral-fg: #2b3345;
-  --band-neutral-bd: #e8ebf3;
+  --band-neutral-bd: #c9cfdc;
   --band-weak-bg: #efeae0;
   --band-weak-fg: #5d5340;
-  --band-weak-bd: #efeae0;
+  --band-weak-bd: #d6ccb5;
   --band-excluded-bg: #f5f6fa;
   --band-excluded-fg: #6b7385;
   --band-excluded-bd: #d9dde7;
@@ -156,10 +165,10 @@
     --band-elevated-bd: #2a3f8f;
     --band-neutral-bg: #232c3f;
     --band-neutral-fg: #cfd6e4;
-    --band-neutral-bd: #232c3f;
+    --band-neutral-bd: #3a465e;
     --band-weak-bg: #2e2a22;
     --band-weak-fg: #d9cdb0;
-    --band-weak-bd: #2e2a22;
+    --band-weak-bd: #4d4535;
     --band-excluded-bg: #121826;
     --band-excluded-fg: #8a94a8;
     --band-excluded-bd: #2a3447;
@@ -205,10 +214,10 @@
   --band-elevated-bd: #2a3f8f;
   --band-neutral-bg: #232c3f;
   --band-neutral-fg: #cfd6e4;
-  --band-neutral-bd: #232c3f;
+  --band-neutral-bd: #3a465e;
   --band-weak-bg: #2e2a22;
   --band-weak-fg: #d9cdb0;
-  --band-weak-bd: #2e2a22;
+  --band-weak-bd: #4d4535;
   --band-excluded-bg: #121826;
   --band-excluded-fg: #8a94a8;
   --band-excluded-bd: #2a3447;
@@ -227,6 +236,7 @@
  */
 html:root[data-surface="lab"] {
   color-scheme: dark;
+  --font-mono: var(--font-code);
   --r-sm: 3px;
   --r-md: 4px;
   --r: 4px;

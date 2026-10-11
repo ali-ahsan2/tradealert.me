@@ -8,16 +8,19 @@ import { bandWord } from "../lib/plain.js";
 import { useMode } from "../lib/mode.js";
 import { fetchRecord } from "../lib/record.js";
 import { openUpgrade } from "../lib/upgrade.js";
+import { WATCHLIST_FACTS } from "../lib/caps.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Spark, { Move } from "../components/Spark.jsx";
 import NotifyButton from "../components/NotifyButton.jsx";
 import { Empty, ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
 import "./tools.css";
 
-// The names the subscriber pinned, each in plain words: what the score has
-// done since they pinned it, the next dated event, a 30-day sparkline and
-// one tap to be told about it. Full mode keeps the stat tiles, the facts
-// row, reordering, notes, compare and the CSV export.
+// My watchlist (DESIGN_V6 §5): each name I watch as a card with one
+// sentence (the lead fact from my record when there is one, else what the
+// score has done since I pinned it), one meta line in words, the 30-day
+// sparkline and its move, and two actions. Unpin, reorder and the note
+// live behind "More". Full mode keeps the stat tiles, a capped facts row,
+// compare and the CSV export.
 
 const SORTS = {
   order: ["Your order", null],
@@ -106,10 +109,21 @@ function PickBand({ p }) {
   return (
     <span className="tl-nocov" title="The run did not record how many inputs had data for this score">
       <span>
-        <b>{bandWord(p.band)}</b> <span className="mono">{fmtScore(p.value)}</span>
+        <b>{bandWord(p.band)}</b> <span className="num">{fmtScore(p.value)}</span>
       </span>
       <span className="hint">input count not on file</span>
     </span>
+  );
+}
+
+// The rating as words for the Simple card's meta line: "Elevated ~54".
+function bandWords(p) {
+  if (!p.band) return "no score this run";
+  const { present, total } = coverageOf(p);
+  return (
+    <>
+      <b>{bandWord(p.band)}</b> {fmtScore(p.value, present, total)}
+    </>
   );
 }
 
@@ -234,7 +248,7 @@ export default function Watchlist() {
     try {
       await api(`/me/picks/${encodeURIComponent(sym)}`, { method: "DELETE" });
       setPicks((p) => p.filter((x) => x.symbol !== sym));
-      toast(`Removed ${sym} from your watchlist.`);
+      toast(`Stopped watching ${sym}.`);
     } catch (e) {
       toast(e.detail || "Couldn't unpin. Try again.");
     }
@@ -288,18 +302,18 @@ export default function Watchlist() {
     <div className="wrap">
       <div className="pagehead">
         <div>
-          <h1>Watchlist</h1>
+          <h1>My watchlist</h1>
           <p className="utility">
             {!picks && !err && "Checking the names you follow…"}
             {err && "Your watchlist could not be loaded."}
             {picks &&
               (picks.length === 0 ? (
                 <>
-                  You follow no names yet{tier && limit != null ? <>; {tier.label} lets you pin up to <b>{limit}</b></> : null}.
+                  You are not watching any names yet{tier && limit != null ? <>; {tier.label} watches up to <b>{limit}</b> for you</> : null}.
                 </>
               ) : (
                 <>
-                  You follow <b>{used}</b> {used === 1 ? "name" : "names"}
+                  You are watching <b>{used}</b> {used === 1 ? "name" : "names"}
                   {tier && limit != null ? ` (${used} of ${limit} on ${tier.label})` : ""}.{" "}
                   {comparable === 0 ? (
                     <>No score was on file when you pinned them, so there is nothing to compare yet</>
@@ -342,7 +356,7 @@ export default function Watchlist() {
             Screen my picks
           </Link>
           <Link to="/board" className="btn btn-secondary btn-sm">
-            Pin more from the Board
+            Add from the Board
           </Link>
         </div>
       </div>
@@ -362,9 +376,9 @@ export default function Watchlist() {
             </span>
           </div>
           <div className="tile card">
-            <span className="tile-label">Pass every filter</span>
+            <span className="tile-label">Passed every rule</span>
             <span className="tile-value">{summary.cleared}</span>
-            <span className="tile-sub">every Fast Mover hard filter passed</span>
+            <span className="tile-sub">every Fast Mover must-pass rule passed</span>
           </div>
           <div className="tile card">
             <span className="tile-label">Earnings in 14 days</span>
@@ -377,28 +391,28 @@ export default function Watchlist() {
       )}
 
       {settings && (
-        <Notice tone="info">
+        <p className="hint tl-digest">
           {settings.digest_enabled ? (
             <>
-              Weekly digest: {DAYS[settings.digest_day]} at {String(settings.digest_hour).padStart(2, "0")}:00 {settings.timezone}, to {me ? me.email : "you"}.
+              Your weekly digest goes out {DAYS[settings.digest_day]} at {String(settings.digest_hour).padStart(2, "0")}:00 {settings.timezone}.
             </>
           ) : (
             <>Your weekly digest is off.</>
           )}{" "}
-          <Link to="/digests">Preview and past digests</Link> · <Link to="/settings#digest">Change</Link>
+          <Link to="/digests">See my digests</Link> · <Link to="/settings#digest">Change</Link>
           {me && !me.verified && <> · Verify your email before the first one can send.</>}
-        </Notice>
+        </p>
       )}
 
       {atQuota && picks && picks.length > 0 && (
         <Notice tone="warn">
-          You're using all {limit} picks on {tier.label}.
+          You are watching all {limit} names {tier.label} allows.
           {nextTier ? (
             <>
               {" "}
-              Unpin one, or {nextTier.label} follows {plural(nextTier.picks_limit, "name")} for you for {dollars(nextTier.price_monthly_cents)}/mo.{" "}
+              Unpin one, or {nextTier.label} watches {plural(nextTier.picks_limit, "name")} for you for {dollars(nextTier.price_monthly_cents)}/mo.{" "}
               <button type="button" className="tl-linkbtn" onClick={() => openUpgrade("picks")}>
-                See plans
+                Show me the plans
               </button>
             </>
           ) : (
@@ -412,10 +426,10 @@ export default function Watchlist() {
 
       {picks && picks.length === 0 && (
         <Empty
-          title="Your watchlist is empty."
+          title="You are not watching any names yet."
           action={
             <Link to="/board" className="btn btn-primary">
-              Go to the Board
+              Show me the Board
             </Link>
           }
         >
@@ -435,6 +449,8 @@ export default function Watchlist() {
           {ordered.map((p) => {
             const st = p.st;
             const i = picks.findIndex((x) => x.symbol === p.symbol);
+            const lead = leads[p.symbol];
+            const ev = st && st.earnings ? `earnings ${plainDays(st.earnings.days)}` : null;
             return (
               <article className="card tl-wl" key={p.symbol} aria-label={p.symbol}>
                 <div className="tl-main">
@@ -446,17 +462,11 @@ export default function Watchlist() {
                       {p.theme}
                     </span>
                   </div>
-                  <p className="tl-sent">{sincePinSentence(p)}</p>
-                  <LeadFact e={leads[p.symbol]} />
+                  {lead ? <LeadFact e={lead} /> : <p className="tl-sent">{sincePinSentence(p)}</p>}
                   <p className="tl-meta">
-                    {st && st.earnings ? (
-                      <>
-                        Earnings <b className={st.earnings.days >= 0 && st.earnings.days <= 14 ? "soon" : ""}>{plainDays(st.earnings.days)}</b> ({shortDate(st.earnings.date, "UTC")})
-                      </>
-                    ) : (
-                      "No dated event on file"
-                    )}
-                    {" · pinned "}
+                    {bandWords(p)}
+                    {ev ? <> · {ev}</> : null}
+                    {" · watching since "}
                     {shortDate(p.pinned_at, tz)}
                     {st && st.unread > 0 && (
                       <>
@@ -472,30 +482,41 @@ export default function Watchlist() {
                   {st && st.closes && st.closes.length > 1 && (
                     <span className="wl-spark">
                       <Spark closes={st.closes} width={100} height={32} />
-                      <Move value={st.chg_30d} /> <span className="xs faint">30d</span>
+                      <Move value={st.chg_30d} /> <span className="xs faint">30 days</span>
                     </span>
                   )}
-                  <PickBand p={p} />
                 </div>
                 <div className="tl-acts">
-                  <NotifyButton symbol={p.symbol} compact />
+                  <NotifyButton symbol={p.symbol} compact label="Alert me" onLabel="Alerts on" />
                   <Link to={`/stock/${p.symbol}`} className="btn btn-secondary btn-sm">
                     Open report
                   </Link>
-                  <button className="btn-quiet" onClick={() => unpin(p.symbol)}>
-                    Unpin
-                  </button>
-                  {sort === "order" && picks.length > 1 && (
-                    <span className="tl-move" role="group" aria-label={`Reorder ${p.symbol}`}>
-                      <button type="button" className="btn-quiet" disabled={busy || i === 0} onClick={() => move(i, -1)} aria-label={`Move ${p.symbol} up`} title="Move up">
-                        ↑
+                  <details className="tl-more">
+                    <summary className="btn-quiet">More</summary>
+                    <div className="tl-more-body">
+                      {sort === "order" && picks.length > 1 && (
+                        <span className="tl-move" role="group" aria-label={`Reorder ${p.symbol}`}>
+                          <button type="button" className="btn-quiet" disabled={busy || i === 0} onClick={() => move(i, -1)} aria-label={`Move ${p.symbol} up`} title="Move up">
+                            ↑ Move up
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-quiet"
+                            disabled={busy || i === picks.length - 1}
+                            onClick={() => move(i, 1)}
+                            aria-label={`Move ${p.symbol} down`}
+                            title="Move down"
+                          >
+                            ↓ Move down
+                          </button>
+                        </span>
+                      )}
+                      <button className="btn-quiet" onClick={() => unpin(p.symbol)}>
+                        Stop watching
                       </button>
-                      <button type="button" className="btn-quiet" disabled={busy || i === picks.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${p.symbol} down`} title="Move down">
-                        ↓
-                      </button>
-                    </span>
-                  )}
-                  <NoteEditor pick={p} onSaved={saveNote} />
+                      <NoteEditor pick={p} onSaved={saveNote} />
+                    </div>
+                  </details>
                 </div>
               </article>
             );
@@ -529,7 +550,7 @@ export default function Watchlist() {
                   </span>
                   <span className="xs faint">
                     <Link to={`/industries/${p.industry.key}`}>{p.industry.label}</Link> · {p.industry.benchmark_etf}
-                    {p.lane ? ` · lane ${p.lane}` : ""}
+                    {p.lane ? ` · stage ${p.lane}` : ""}
                   </span>
                   <LeadFact e={leads[p.symbol]} />
                 </div>
@@ -544,58 +565,64 @@ export default function Watchlist() {
                   <NotifyButton symbol={p.symbol} compact />
                 </div>
                 <div className="facts">
-                  <span>
-                    Pinned {shortDate(p.pinned_at, tz)}
-                    {p.score_at_pin != null && (
-                      <>
-                        {" "}
-                        at <b>{fmtScore(p.score_at_pin)}</b>
-                      </>
-                    )}
-                  </span>
-                  <span>
-                    Now <b>{fmtScore(p.value, cov.present, cov.total)}</b>
-                  </span>
-                  <span>
-                    Since pinned <b>{since == null ? "—" : delta(since)}</b>
-                  </span>
-                  <span>
-                    Since last run <b>{delta(p.delta_1d)}</b>
-                  </span>
-                  {st && st.chg_since_pin != null && (
-                    <span title={st.last_date ? `close ${shortDate(st.last_date)}` : ""}>
-                      Price since pinned <b className={tone(st.chg_since_pin)}>{signed(st.chg_since_pin, 1, "%")}</b>
-                      {st.benchmark_chg_since_pin != null && (
-                        <span className="xs faint">
+                  {[
+                    <span key="pinned">
+                      Pinned {shortDate(p.pinned_at, tz)}
+                      {p.score_at_pin != null && (
+                        <>
                           {" "}
-                          vs {st.benchmark} <span className={tone(st.benchmark_chg_since_pin)}>{signed(st.benchmark_chg_since_pin, 1, "%")}</span>
-                        </span>
+                          at <b>{fmtScore(p.score_at_pin)}</b>
+                        </>
                       )}
-                    </span>
-                  )}
-                  {st && st.hf_pass != null && (
-                    <span>
-                      Filters: <b className={`verdict ${st.hf_pass ? "pass" : "fail"}`}>{st.hf_pass ? "PASS" : "FAIL"}</b>
-                    </span>
-                  )}
-                  {st && st.earnings && (
-                    <span>
-                      Earnings{" "}
-                      <b className={st.earnings.days >= 0 && st.earnings.days <= 14 ? "soon" : ""}>
-                        {inDays(st.earnings.days)}
-                      </b>
-                      <span className="xs faint"> {shortDate(st.earnings.date, "UTC")}</span>
-                    </span>
-                  )}
-                  {st && st.unread > 0 && (
-                    <Link to={`/alerts?tab=history&symbol=${p.symbol}&unread=1`} className="chip chip-plain">
-                      {st.unread} unread {st.unread === 1 ? "alert" : "alerts"}
-                    </Link>
-                  )}
+                    </span>,
+                    <span key="now">
+                      Now <b>{fmtScore(p.value, cov.present, cov.total)}</b>
+                    </span>,
+                    since != null && (
+                      <span key="since">
+                        Since pinned <b>{delta(since)}</b>
+                      </span>
+                    ),
+                    st && st.chg_since_pin != null && (
+                      <span key="px" title={st.last_date ? `close ${shortDate(st.last_date)}` : ""}>
+                        Price since pinned <b className={tone(st.chg_since_pin)}>{signed(st.chg_since_pin, 1, "%")}</b>
+                        {st.benchmark_chg_since_pin != null && (
+                          <span className="xs faint">
+                            {" "}
+                            vs {st.benchmark} <span className={tone(st.benchmark_chg_since_pin)}>{signed(st.benchmark_chg_since_pin, 1, "%")}</span>
+                          </span>
+                        )}
+                      </span>
+                    ),
+                    st && st.earnings && (
+                      <span key="earn">
+                        Earnings{" "}
+                        <b className={st.earnings.days >= 0 && st.earnings.days <= 14 ? "soon" : ""}>{inDays(st.earnings.days)}</b>
+                        <span className="xs faint"> {shortDate(st.earnings.date, "UTC")}</span>
+                      </span>
+                    ),
+                    st && st.hf_pass != null && (
+                      <span key="rules">
+                        Rules <b className={`verdict ${st.hf_pass ? "pass" : "fail"}`}>{st.hf_pass ? "PASS" : "FAIL"}</b>
+                      </span>
+                    ),
+                    p.delta_1d != null && (
+                      <span key="run">
+                        Since last run <b>{delta(p.delta_1d)}</b>
+                      </span>
+                    ),
+                    st && st.unread > 0 && (
+                      <Link key="unread" to={`/alerts?tab=history&symbol=${p.symbol}&unread=1`} className="chip chip-plain">
+                        {st.unread} unread {st.unread === 1 ? "alert" : "alerts"}
+                      </Link>
+                    ),
+                  ]
+                    .filter(Boolean)
+                    .slice(0, WATCHLIST_FACTS)}
                   <span className="spacer" />
-                  <Link to={`/stock/${p.symbol}`}>Open full report</Link>
+                  <Link to={`/stock/${p.symbol}`}>Open report</Link>
                   <button className="btn-quiet" onClick={() => unpin(p.symbol)}>
-                    Unpin
+                    Stop watching
                   </button>
                   <NoteEditor pick={p} onSaved={saveNote} />
                 </div>

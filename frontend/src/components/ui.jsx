@@ -26,7 +26,7 @@ export function ErrorCard({ error, onRetry, title = "Couldn't load this." }) {
       {msg && <p className="muted">{msg}</p>}
       {onRetry && (
         <button className="btn btn-secondary" onClick={onRetry}>
-          Retry
+          Try again
         </button>
       )}
     </div>
@@ -113,13 +113,17 @@ export function Monogram({ children, size = 24 }) {
   );
 }
 
-// Evidence status is the primary differentiator between strategies.
-export function StatusChip({ calibrated, short = false }) {
+// Whether a strategy has a measured record (DESIGN_V6 §7: "calibrated" is
+// the technical word, "has a measured record" the plain one). The chip says
+// the plain thing; the title says what was measured.
+export function StatusChip({ calibrated }) {
   return calibrated ? (
-    <span className="chip chip-cal">Calibrated</span>
+    <span className="chip chip-cal" title="Its setups have been checked against what happened next">
+      Measured record
+    </span>
   ) : (
-    <span className="chip chip-prov" title="Weights not yet backed by resolved outcomes">
-      {short ? "Provisional · uncalibrated" : "Provisional — uncalibrated"}
+    <span className="chip chip-prov" title="Its setups have not been checked against what happened next">
+      No record yet
     </span>
   );
 }
@@ -153,9 +157,7 @@ export function Meter({ used, limit, label }) {
     <div className="meter">
       <div className="meter-row">
         <span>{label}</span>
-        <span className="mono">
-          {unlimited ? `${used ?? 0} · unlimited` : `${used ?? 0} of ${limit}`}
-        </span>
+        <span className="num">{unlimited ? `${used ?? 0} · unlimited` : `${used ?? 0} of ${limit}`}</span>
       </div>
       {!unlimited && (
         <div className="meter-track" aria-hidden="true">
@@ -166,17 +168,18 @@ export function Meter({ used, limit, label }) {
   );
 }
 
+// The plan's name as written ("Pro"), never shouted.
 export function TierChip({ tier, link = true }) {
   if (!tier) return null;
   const label = tier.label || tier.key || "Free";
   const upgradeable = tier.key === "free" || tier.key === "basic";
-  const cls = "tierchip mono";
+  const cls = "tierchip";
   return link && upgradeable ? (
     <button type="button" className={`${cls} tierchip-btn`} title="See plans" onClick={() => openUpgrade("general")}>
-      {label.toUpperCase()}
+      {label}
     </button>
   ) : (
-    <span className={cls}>{label.toUpperCase()}</span>
+    <span className={cls}>{label}</span>
   );
 }
 
