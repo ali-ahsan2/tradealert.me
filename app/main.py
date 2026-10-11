@@ -778,7 +778,10 @@ class SPAStaticFiles(StaticFiles):
         try:
             return await super().get_response(path, scope)
         except StarletteHTTPException as e:
-            if e.status_code == 404 and not path.split("/")[0] == "api":
+            # a missing hashed chunk, font or image is a real 404: the browser
+            # must see it (a stale tab then reloads, see main.jsx) rather than
+            # receive index.html as a module script
+            if e.status_code == 404 and path.split("/")[0] not in ("api", "assets", "fonts", "shots"):
                 index = Path(self.directory) / "index.html"
                 if index.is_file():
                     return FileResponse(index)

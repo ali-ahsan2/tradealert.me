@@ -114,7 +114,7 @@ export default function Strategies() {
           </div>
           {me && me.is_admin && (
             <p className="plain-note" style={{ marginTop: "var(--s-5)" }}>
-              <Link to="/lab">The recipe, in the Lab</Link>
+              <a href="/lab">The recipe, in the Lab</a>
             </p>
           )}
         </>
@@ -267,7 +267,7 @@ export function StrategyDetail({ strategyKey }) {
 
         {me && me.is_admin && (
           <p className="plain-note">
-            <Link to="/lab">The recipe, in the Lab</Link>
+            <a href="/lab">The recipe, in the Lab</a>
             {d.version ? ` · version ${d.version.number} (${d.version.state})` : ""}
           </p>
         )}

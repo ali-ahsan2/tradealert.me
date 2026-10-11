@@ -142,4 +142,15 @@ function App() {
 
 applyTheme();
 applyMode();
+// A tab opened before a deploy may ask for a route chunk the new build no
+// longer ships. Reload once so it picks up the current index page.
+window.addEventListener("vite:preloadError", (e) => {
+  try {
+    if (sessionStorage.getItem("ta_reloaded_for_chunk")) return;
+    sessionStorage.setItem("ta_reloaded_for_chunk", "1");
+  } catch {}
+  e.preventDefault();
+  window.location.reload();
+});
+
 createRoot(document.getElementById("root")).render(<App />);
