@@ -17,39 +17,55 @@ export function prefersReducedMotion() {
 export function useReveal({ once = true, rootMargin = "0px 0px -10% 0px" } = {}) {
   const ref = useRef(null);
   const [seen, setSeen] = useState(() => prefersReducedMotion());
-  // No dependency list on purpose: the element may mount after data arrives,
-  // so the hook looks for it on every render until it is observing.
-  const observing = useRef(false);
+  // The observer outlives re-renders (a number counting up re-renders its
+  // section every frame) and is torn down only on unmount; the element may
+  // mount after data arrives, so the effect below has no dependency list and
+  // (re)targets the observer whenever the ref points somewhere new.
+  const io = useRef(null);
+  const watched = useRef(null);
+  const heard = useRef(false);
+  const safety = useRef(0);
   useEffect(() => {
     const el = ref.current;
-    if (!el || seen || observing.current) return undefined;
+    if (!el || seen || watched.current === el) return;
     if (typeof IntersectionObserver === "undefined") {
       setSeen(true);
-      return undefined;
+      return;
     }
-    observing.current = true;
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            setSeen(true);
-            if (once) io.disconnect();
-          } else if (!once) setSeen(false);
-        }
-      },
-      { rootMargin, threshold: 0.12 }
-    );
-    io.observe(el);
-    // never leave content hidden: if the observer has not fired within a
-    // moment (print, a scroll container it cannot see, a stalled frame),
-    // show it anyway
-    const safety = setTimeout(() => setSeen(true), 1500);
-    return () => {
-      io.disconnect();
-      clearTimeout(safety);
-      observing.current = false;
-    };
+    if (!io.current) {
+      io.current = new IntersectionObserver(
+        (entries) => {
+          heard.current = true;
+          for (const e of entries) {
+            if (e.isIntersecting) {
+              setSeen(true);
+              if (once) io.current.disconnect();
+            } else if (!once) setSeen(false);
+          }
+        },
+        { rootMargin, threshold: 0 }
+      );
+      // never leave content hidden: an observer that has not reported at all
+      // within a moment (print, a stalled frame, a scroll container it cannot
+      // see) is not going to, so the section shows anyway
+      safety.current = setTimeout(() => {
+        if (!heard.current) setSeen(true);
+      }, 1500);
+    }
+    if (watched.current) io.current.unobserve(watched.current);
+    io.current.observe(el);
+    watched.current = el;
   });
+  useEffect(
+    () => () => {
+      if (io.current) io.current.disconnect();
+      clearTimeout(safety.current);
+      io.current = null;
+      watched.current = null;
+      heard.current = false;
+    },
+    []
+  );
   return [ref, seen];
 }
 
