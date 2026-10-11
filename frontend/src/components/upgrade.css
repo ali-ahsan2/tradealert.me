@@ -1,0 +1,172 @@
+/* v5 upgrade sheet and record cards (DESIGN_V5 §5). The sheet shell, the
+   plan rows' look, the lead chip and the rec-row grid come from
+   styles/assist.css; this file adds only what the two components need on
+   top of them: a close control, the plan row as a button, 44px tap
+   targets, the record card's headline, summary, nudge and beyond lines.
+   Every colour and size is a token so dark mode follows. */
+
+/* Upgrade sheet ------------------------------------------------------- */
+.upsheet {
+  outline: none;
+}
+
+.upsheet .sheet-x {
+  position: absolute;
+  top: var(--s-2);
+  right: var(--s-2);
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.upsheet .sheet-x:hover {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+.upsheet h2 {
+  padding-right: 44px;
+  text-wrap: balance;
+}
+
+/* a plan row is a button: whole row tappable, one pressed at a time */
+.upsheet .plan-row {
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+}
+
+.upsheet .plan-row:hover {
+  border-color: var(--border-strong);
+}
+
+.upsheet .plan-row[aria-pressed="true"]:hover {
+  border-color: var(--accent);
+}
+
+.upsheet .plan-row:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+}
+
+.upsheet .plan-row .pmain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.upsheet .plan-row .pwhat {
+  line-height: 1.4;
+}
+
+.upsheet .sheet-sk {
+  margin: var(--s-3) 0 var(--s-4);
+}
+
+.upsheet .sheet-msg {
+  margin: var(--s-3) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+/* phones: the two actions stack full width so each is a clear tap */
+@media (max-width: 719px) {
+  .upsheet .acts .btn {
+    flex: 1 1 100%;
+  }
+}
+
+/* Record cards -------------------------------------------------------- */
+.rec-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* the told headline: a statement set like the big measured number */
+.rec-head {
+  margin: 0 0 var(--s-3);
+  font-size: var(--fs-xl);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.rec-head b {
+  font-variant-numeric: tabular-nums;
+}
+
+.rec-move .move {
+  font-size: var(--fs-sm);
+}
+
+.rec-sum,
+.rec-empty {
+  margin: var(--s-3) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+  line-height: 1.5;
+  max-width: 68ch;
+}
+
+.rec-empty {
+  margin-top: 0;
+  color: var(--ink);
+}
+
+.rec-nudge,
+.rec-beyond {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  margin-top: var(--s-3);
+}
+
+.rec-beyond {
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--border);
+}
+
+.rec-beyond p {
+  margin: 0;
+  flex: 1 1 240px;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+/* tap targets: 44px on every control in the cards */
+.rec-act .btn-sm,
+.rec-nudge .btn-sm,
+.rec-nudge .btn-quiet,
+.rec-beyond .btn-quiet {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* a quiet button inside running text keeps the line height and still
+   offers a 44px hit area */
+.rec-sum .btn-quiet {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 6px;
+  margin: -12px 0;
+  font-size: var(--fs-sm);
+  vertical-align: middle;
+}
