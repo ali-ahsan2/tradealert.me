@@ -4,29 +4,34 @@ import { Link } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { DAYS, delta, dollars, downloadText, inDays, pct, plural, score as fmtScore, shortDate, signed, toCsv, tone } from "../lib/fmt.js";
 import { GLOSSARY } from "../lib/glossary.js";
-import { bandWord } from "../lib/plain.js";
+import { CTA, bandWord } from "../lib/plain.js";
 import { useMode } from "../lib/mode.js";
 import { fetchRecord } from "../lib/record.js";
 import { openUpgrade } from "../lib/upgrade.js";
-import { WATCHLIST_FACTS } from "../lib/caps.js";
+import { LIST_CARDS, WATCHLIST_FACTS } from "../lib/caps.js";
+import { FINE_PRINT_SHORT } from "../lib/legal.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Spark, { Move } from "../components/Spark.jsx";
 import NotifyButton from "../components/NotifyButton.jsx";
+import ScreenHead from "../components/ScreenHead.jsx";
+import FinePrint from "../components/FinePrint.jsx";
+import { ShowAll } from "../components/NameCard.jsx";
 import { Empty, ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
 import "./tools.css";
 
-// My watchlist (DESIGN_V6 §5): each name I watch as a card with one
-// sentence (the lead fact from my record when there is one, else what the
-// score has done since I pinned it), one meta line in words, the 30-day
-// sparkline and its move, and two actions. Unpin, reorder and the note
-// live behind "More". Full mode keeps the stat tiles, a capped facts row,
-// compare and the CSV export.
+// My watchlist (DESIGN_V6 §5, §7): one line and one action at the top, then
+// each name I watch as a card with one sentence (the lead fact from my
+// record when there is one, else what the score has done since I started
+// watching it), one meta line in words, the 30-day sparkline and its move,
+// and two actions. Stop watching, reorder and the note live behind "More".
+// Full mode keeps three stat tiles, a capped facts row, compare and the
+// CSV export.
 
 const SORTS = {
   order: ["Your order", null],
   score: ["Score", (a, b) => (b.value ?? -1) - (a.value ?? -1)],
-  since_pin: ["Score since pinned", (a, b) => ((b.value ?? 0) - (b.score_at_pin ?? 0)) - ((a.value ?? 0) - (a.score_at_pin ?? 0))],
-  px: ["Price since pinned", (a, b) => ((b.st && b.st.chg_since_pin) ?? -Infinity) - ((a.st && a.st.chg_since_pin) ?? -Infinity)],
+  since_pin: ["Score since you started", (a, b) => ((b.value ?? 0) - (b.score_at_pin ?? 0)) - ((a.value ?? 0) - (a.score_at_pin ?? 0))],
+  px: ["Price since you started", (a, b) => ((b.st && b.st.chg_since_pin) ?? -Infinity) - ((a.st && a.st.chg_since_pin) ?? -Infinity)],
   earnings: ["Next earnings", (a, b) => ((a.st && a.st.earnings && a.st.earnings.days) ?? Infinity) - ((b.st && b.st.earnings && b.st.earnings.days) ?? Infinity)],
 };
 
@@ -47,18 +52,36 @@ function coverageOf(p) {
   return { present, total, known: present != null && total != null && total > 0 };
 }
 
-// The score since pinning, as one sentence from the stored figures. The
-// current score keeps its ~ on thin coverage; the score at pin has no
-// coverage on record, so it is the stored integer.
+// The score since I started watching, as one sentence from the stored
+// figures. The current score keeps its ~ on thin data; the score on the day
+// I started has no input count on record, so it is the stored integer.
 function sincePinSentence(p) {
-  if (p.value == null) return "No score on this run.";
+  if (p.value == null) return "No score in the latest scoring.";
   const { present, total } = coverageOf(p);
   const now = fmtScore(p.value, present, total);
-  if (p.score_at_pin == null) return `Scores ${now} now; no score was on file when you pinned it.`;
+  if (p.score_at_pin == null) return `Scores ${now} now; it had no score when you started watching.`;
   const was = fmtScore(p.score_at_pin);
   const dlt = Math.round(p.value) - Math.round(p.score_at_pin);
-  if (dlt === 0) return `Same score as when you pinned it, ${now}.`;
-  return `Score ${dlt > 0 ? "up" : "down"} ${Math.abs(dlt)} point${Math.abs(dlt) === 1 ? "" : "s"} since you pinned it, from ${was} to ${now}.`;
+  if (dlt === 0) return `Same score as when you started watching, ${now}.`;
+  return `Score ${dlt > 0 ? "up" : "down"} ${Math.abs(dlt)} point${Math.abs(dlt) === 1 ? "" : "s"} since you started watching, from ${was} to ${now}.`;
+}
+
+// The screen's one line (DESIGN_V6 §7), fourteen words at most, from the
+// watched names and their stats: "You watch 4 names; 3 score higher since
+// you started; 2 have alerts on."
+function watchLine({ picks, err, tier, limit, used, comparable, higher, lower, withAlerts }) {
+  if (err) return "Your watchlist could not be loaded.";
+  if (!picks) return "Checking the names you watch…";
+  if (picks.length === 0) {
+    return tier && limit != null ? `You are not watching any names yet; ${tier.label} watches up to ${limit} for you.` : "You are not watching any names yet.";
+  }
+  let mid;
+  if (comparable === 0) mid = "none was scored when you started";
+  else if (higher > 0) mid = `${higher} score${higher === 1 ? "s" : ""} higher since you started`;
+  else if (lower > 0) mid = `${lower} score${lower === 1 ? "s" : ""} lower since you started`;
+  else mid = "none changed score since you started";
+  const tail = withAlerts == null ? "" : withAlerts === 0 ? "; none has alerts on" : `; ${withAlerts} ${withAlerts === 1 ? "has" : "have"} alerts on`;
+  return `You watch ${plural(used, "name")}; ${mid}${tail}.`;
 }
 
 // The lead fact on a pinned name from the subscriber's record (DESIGN_V5
@@ -103,11 +126,11 @@ function LeadFact({ e }) {
 // bar when the counts are missing, so without them the band word and the
 // score() figure stand alone with a hint.
 function PickBand({ p }) {
-  if (!p.band) return <span className="chip chip-plain">No run</span>;
+  if (!p.band) return <span className="chip chip-plain">No score</span>;
   const { present, total, known } = coverageOf(p);
   if (known) return <ScoreBadge band={p.band} value={p.value} present={present} total={total} />;
   return (
-    <span className="tl-nocov" title="The run did not record how many inputs had data for this score">
+    <span className="tl-nocov" title="The scoring did not record how many inputs had data for this score">
       <span>
         <b>{bandWord(p.band)}</b> <span className="num">{fmtScore(p.value)}</span>
       </span>
@@ -118,7 +141,7 @@ function PickBand({ p }) {
 
 // The rating as words for the Simple card's meta line: "Elevated ~54".
 function bandWords(p) {
-  if (!p.band) return "no score this run";
+  if (!p.band) return "no score yet";
   const { present, total } = coverageOf(p);
   return (
     <>
@@ -155,7 +178,7 @@ function NoteEditor({ pick, onSaved }) {
   }
   return (
     <div className="notebox" style={{ flexBasis: "100%" }}>
-      <textarea value={v} maxLength={280} onChange={(e) => setV(e.target.value)} placeholder="Why you pinned it, what would change your mind…" />
+      <textarea value={v} maxLength={280} onChange={(e) => setV(e.target.value)} placeholder="Why you watch it, what would change your mind…" />
       <div className="row" style={{ marginTop: "var(--s-2)" }}>
         <button className="btn btn-primary btn-sm" disabled={busy} onClick={save}>
           {busy ? "Saving…" : "Save"}
@@ -181,6 +204,7 @@ export default function Watchlist() {
   const [stats, setStats] = useState(null);
   const [sort, setSort] = useState("order");
   const [record, setRecord] = useState(null);
+  const [showAll, setShowAll] = useState(false);
   const signedIn = Boolean(me);
 
   useEffect(() => {
@@ -250,7 +274,7 @@ export default function Watchlist() {
       setPicks((p) => p.filter((x) => x.symbol !== sym));
       toast(`Stopped watching ${sym}.`);
     } catch (e) {
-      toast(e.detail || "Couldn't unpin. Try again.");
+      toast(e.detail || "Couldn't stop watching it. Try again.");
     }
   };
 
@@ -279,7 +303,7 @@ export default function Watchlist() {
       { label: "hard_filters", get: (p) => (p.st && p.st.hf_pass != null ? (p.st.hf_pass ? "pass" : "fail") : "") },
       { label: "note", get: (p) => p.note || "" },
     ];
-    downloadText(`tradealert-watchlist-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(ordered, cols) + "\n# Research and information only; not investment advice.\n");
+    downloadText(`tradealert-watchlist-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(ordered, cols) + `\n# ${FINE_PRINT_SHORT}\n`);
   };
 
   const tier = me && me.tier;
@@ -298,110 +322,74 @@ export default function Watchlist() {
 
   const saveNote = (sym, note) => setPicks((xs) => xs.map((x) => (x.symbol === sym ? { ...x, note } : x)));
 
+  // Simple shows LIST_CARDS cards before "Show all N" (lib/caps.js).
+  const cards = simple && !showAll ? ordered.slice(0, LIST_CARDS) : ordered;
+
   return (
     <div className="wrap">
-      <div className="pagehead">
-        <div>
-          <h1>My watchlist</h1>
-          <p className="utility">
-            {!picks && !err && "Checking the names you follow…"}
-            {err && "Your watchlist could not be loaded."}
-            {picks &&
-              (picks.length === 0 ? (
-                <>
-                  You are not watching any names yet{tier && limit != null ? <>; {tier.label} watches up to <b>{limit}</b> for you</> : null}.
-                </>
-              ) : (
-                <>
-                  You are watching <b>{used}</b> {used === 1 ? "name" : "names"}
-                  {tier && limit != null ? ` (${used} of ${limit} on ${tier.label})` : ""}.{" "}
-                  {comparable === 0 ? (
-                    <>No score was on file when you pinned them, so there is nothing to compare yet</>
-                  ) : higher + lower > 0 ? (
-                    <>
-                      <b>{higher}</b> score higher than when you pinned {higher === 1 ? "it" : "them"} and <b>{lower}</b> lower
-                    </>
-                  ) : (
-                    <>None has changed score since you pinned it</>
-                  )}
-                  {withAlerts == null ? "." : withAlerts === 0 ? "; none has alerts on yet." : <>; <b>{withAlerts}</b> {withAlerts === 1 ? "has" : "have"} alerts on.</>}
-                </>
-              ))}
-          </p>
-        </div>
-        <div className="actions">
-          {picks && picks.length > 1 && (
-            <label className="ctl">
-              Sort
-              <select className="inline" value={sort} onChange={(e) => setSort(e.target.value)}>
-                {Object.entries(SORTS).map(([k, [l]]) => (
-                  <option key={k} value={k}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          {picks && picks.length > 1 && (
-            <Link to={`/compare?symbols=${picks.slice(0, 4).map((p) => p.symbol).join(",")}`} className="btn btn-secondary btn-sm full-only">
-              Compare {Math.min(4, picks.length)}
-            </Link>
-          )}
-          {picks && picks.length > 0 && (
-            <button className="btn-quiet full-only" onClick={exportCsv}>
-              Export CSV
-            </button>
-          )}
-          <Link to="/screen?pinned=1" className="btn btn-secondary btn-sm full-only">
-            Screen my picks
+      <ScreenHead
+        title="My watchlist"
+        line={watchLine({ picks, err, tier, limit, used, comparable, higher, lower, withAlerts })}
+        action={
+          <Link to="/board" className="btn btn-primary">
+            Watch more names for me
           </Link>
-          <Link to="/board" className="btn btn-secondary btn-sm">
-            Add from the Board
-          </Link>
-        </div>
-      </div>
+        }
+        secondary={
+          <>
+            {picks && picks.length > 1 && (
+              <label className="ctl">
+                Sort
+                <select className="inline" value={sort} onChange={(e) => setSort(e.target.value)}>
+                  {Object.entries(SORTS).map(([k, [l]]) => (
+                    <option key={k} value={k}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {picks && picks.length > 1 && (
+              <Link to={`/compare?symbols=${picks.slice(0, 4).map((p) => p.symbol).join(",")}`} className="btn btn-secondary btn-sm full-only">
+                Compare {Math.min(4, picks.length)}
+              </Link>
+            )}
+            {picks && picks.length > 0 && (
+              <button className="btn-quiet full-only" onClick={exportCsv}>
+                Export CSV
+              </button>
+            )}
+            {picks && picks.length > 0 && (
+              <Link to="/screen?pinned=1" className="btn-quiet full-only">
+                Find among my names
+              </Link>
+            )}
+          </>
+        }
+      />
 
       {summary && summary.count > 0 && (
         <div className="tiles full-only">
           <div className="tile card">
-            <span className="tile-label">Score since pinned</span>
+            <span className="tile-label">Score since you started watching</span>
             <span className="tile-value">{delta(summary.mean_score_delta_since_pin)}</span>
-            <span className="tile-sub">mean across {plural(summary.count, "pick")}</span>
+            <span className="tile-sub">average across {plural(summary.count, "name")}</span>
           </div>
           <div className="tile card">
-            <span className="tile-label">Price since pinned</span>
+            <span className="tile-label">Price since you started watching</span>
             <span className={`tile-value ${tone(summary.mean_chg_since_pin)}`}>{signed(summary.mean_chg_since_pin, 1, "%")}</span>
             <span className="tile-sub">
               {summary.mean_rel_since_pin != null ? `${signed(summary.mean_rel_since_pin, 1, "%")} vs each name's industry ETF` : "no benchmark bars yet"}
             </span>
           </div>
           <div className="tile card">
-            <span className="tile-label">Passed every rule</span>
-            <span className="tile-value">{summary.cleared}</span>
-            <span className="tile-sub">every Fast Mover must-pass rule passed</span>
-          </div>
-          <div className="tile card">
-            <span className="tile-label">Earnings in 14 days</span>
-            <span className="tile-value">{summary.earnings_14d}</span>
+            <span className="tile-label">Alerts on</span>
+            <span className="tile-value">{summary.armed}</span>
             <span className="tile-sub">
-              {summary.unread} unread {summary.unread === 1 ? "alert" : "alerts"} · {summary.armed} armed
+              {summary.unread} unread {summary.unread === 1 ? "alert" : "alerts"} · {summary.earnings_14d} with earnings in 14 days
             </span>
           </div>
         </div>
-      )}
-
-      {settings && (
-        <p className="hint tl-digest">
-          {settings.digest_enabled ? (
-            <>
-              Your weekly digest goes out {DAYS[settings.digest_day]} at {String(settings.digest_hour).padStart(2, "0")}:00 {settings.timezone}.
-            </>
-          ) : (
-            <>Your weekly digest is off.</>
-          )}{" "}
-          <Link to="/digests">See my digests</Link> · <Link to="/settings#digest">Change</Link>
-          {me && !me.verified && <> · Verify your email before the first one can send.</>}
-        </p>
       )}
 
       {atQuota && picks && picks.length > 0 && (
@@ -410,13 +398,13 @@ export default function Watchlist() {
           {nextTier ? (
             <>
               {" "}
-              Unpin one, or {nextTier.label} watches {plural(nextTier.picks_limit, "name")} for you for {dollars(nextTier.price_monthly_cents)}/mo.{" "}
+              Stop watching one, or {nextTier.label} watches {plural(nextTier.picks_limit, "name")} for you for {dollars(nextTier.price_monthly_cents)}/mo.{" "}
               <button type="button" className="tl-linkbtn" onClick={() => openUpgrade("picks")}>
-                Show me the plans
+                {CTA.SHOW_PLANS}
               </button>
             </>
           ) : (
-            " Unpin one to make room."
+            " Stop watching one to make room."
           )}
         </Notice>
       )}
@@ -433,12 +421,12 @@ export default function Watchlist() {
             </Link>
           }
         >
-          {GLOSSARY.pin.short} We keep a note of the score on the day you pin a name, so this page can tell you what has changed since.
+          {GLOSSARY.pin.short} We keep a note of the score on the day you start watching a name, so this page can tell you what has changed since.
           {tier && limit != null && (
             <>
               {" "}
-              {tier.label} includes {plural(limit, "pick")}
-              {nextTier ? `; ${nextTier.label} includes ${nextTier.picks_limit}.` : "."}
+              {tier.label} watches up to {plural(limit, "name")} for you
+              {nextTier ? `; ${nextTier.label} watches ${nextTier.picks_limit}.` : "."}
             </>
           )}
         </Empty>
@@ -446,7 +434,7 @@ export default function Watchlist() {
 
       {picks && picks.length > 0 && simple && (
         <div className="wl-list">
-          {ordered.map((p) => {
+          {cards.map((p) => {
             const st = p.st;
             const i = picks.findIndex((x) => x.symbol === p.symbol);
             const lead = leads[p.symbol];
@@ -487,9 +475,9 @@ export default function Watchlist() {
                   )}
                 </div>
                 <div className="tl-acts">
-                  <NotifyButton symbol={p.symbol} compact label="Alert me" onLabel="Alerts on" />
+                  <NotifyButton symbol={p.symbol} compact />
                   <Link to={`/stock/${p.symbol}`} className="btn btn-secondary btn-sm">
-                    Open report
+                    {CTA.REPORT}
                   </Link>
                   <details className="tl-more">
                     <summary className="btn-quiet">More</summary>
@@ -521,6 +509,7 @@ export default function Watchlist() {
               </article>
             );
           })}
+          <ShowAll total={ordered.length} shown={cards.length} open={showAll} onToggle={() => setShowAll((v) => !v)} />
         </div>
       )}
 
@@ -567,7 +556,7 @@ export default function Watchlist() {
                 <div className="facts">
                   {[
                     <span key="pinned">
-                      Pinned {shortDate(p.pinned_at, tz)}
+                      Watching since {shortDate(p.pinned_at, tz)}
                       {p.score_at_pin != null && (
                         <>
                           {" "}
@@ -580,12 +569,12 @@ export default function Watchlist() {
                     </span>,
                     since != null && (
                       <span key="since">
-                        Since pinned <b>{delta(since)}</b>
+                        Score since then <b>{delta(since)}</b>
                       </span>
                     ),
                     st && st.chg_since_pin != null && (
                       <span key="px" title={st.last_date ? `close ${shortDate(st.last_date)}` : ""}>
-                        Price since pinned <b className={tone(st.chg_since_pin)}>{signed(st.chg_since_pin, 1, "%")}</b>
+                        Price since then <b className={tone(st.chg_since_pin)}>{signed(st.chg_since_pin, 1, "%")}</b>
                         {st.benchmark_chg_since_pin != null && (
                           <span className="xs faint">
                             {" "}
@@ -608,7 +597,7 @@ export default function Watchlist() {
                     ),
                     p.delta_1d != null && (
                       <span key="run">
-                        Since last run <b>{delta(p.delta_1d)}</b>
+                        Since the last scoring <b>{delta(p.delta_1d)}</b>
                       </span>
                     ),
                     st && st.unread > 0 && (
@@ -620,7 +609,7 @@ export default function Watchlist() {
                     .filter(Boolean)
                     .slice(0, WATCHLIST_FACTS)}
                   <span className="spacer" />
-                  <Link to={`/stock/${p.symbol}`}>Open report</Link>
+                  <Link to={`/stock/${p.symbol}`}>{CTA.REPORT}</Link>
                   <button className="btn-quiet" onClick={() => unpin(p.symbol)}>
                     Stop watching
                   </button>
@@ -631,6 +620,23 @@ export default function Watchlist() {
           })}
         </div>
       )}
+
+      <div className="tl-foot">
+        {settings && (
+          <p className="hint tl-digest">
+            {settings.digest_enabled ? (
+              <>
+                Your weekly brief goes out {DAYS[settings.digest_day]} at {String(settings.digest_hour).padStart(2, "0")}:00 {settings.timezone}.
+              </>
+            ) : (
+              <>Your weekly brief is off.</>
+            )}{" "}
+            <Link to="/digests">My week</Link> · <Link to="/settings#digest">Change</Link>
+            {me && !me.verified && <> · Verify your email before the first one can send.</>}
+          </p>
+        )}
+        <FinePrint short />
+      </div>
     </div>
   );
 }

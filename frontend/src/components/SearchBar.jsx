@@ -3,9 +3,10 @@ import { api } from "../api.js";
 import { navigate } from "../lib/router.jsx";
 import { score as fmtScore } from "../lib/fmt.js";
 
-// Searches only the visible universe. Zero results is a legitimate answer
-// and must look identical whether a name is hidden or does not exist.
-export default function SearchBar({ onPick, placeholder = "Search symbol or theme", autoFocus = false }) {
+// Searches only the names in the viewer's industries and watchlist. Zero
+// results is a legitimate answer and must look identical whether a name is
+// hidden or does not exist.
+export default function SearchBar({ onPick, placeholder = "Find a name", autoFocus = false }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
@@ -71,7 +72,7 @@ export default function SearchBar({ onPick, placeholder = "Search symbol or them
         <path d="M11 11l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
       <input
-        aria-label="Search the universe"
+        aria-label="Find a name in your industries or watchlist"
         role="combobox"
         aria-expanded={open}
         aria-autocomplete="list"
@@ -85,7 +86,7 @@ export default function SearchBar({ onPick, placeholder = "Search symbol or them
       {open && searched && (
         <div className="dropdown" role="listbox">
           {results.length === 0 ? (
-            <div className="dropdown-empty">No names match in your universe.</div>
+            <div className="dropdown-empty">No name in your industries or watchlist matches.</div>
           ) : (
             results.map((r, i) => (
               <button

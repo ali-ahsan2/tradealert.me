@@ -5,24 +5,28 @@ import { useMe } from "../lib/me.jsx";
 import { alertsLabel, coverage, dateTime, delta, dollars, downloadText, fmtMoney, inDays, pct, plural, score as fmtScore, shortDate, toCsv, tone } from "../lib/fmt.js";
 import { nounFor } from "../lib/evidence.js";
 import { PLAIN_FIELD } from "../lib/glossary.js";
-import { bandWord } from "../lib/plain.js";
+import { CTA, bandWord } from "../lib/plain.js";
 import { useRowNav } from "../lib/rownav.js";
 import { useMode } from "../lib/mode.js";
 import { openUpgrade } from "../lib/upgrade.js";
 import { FIND_PRESETS, LIST_CARDS } from "../lib/caps.js";
+import { FINE_PRINT_SHORT } from "../lib/legal.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import NameCard, { ShowAll } from "../components/NameCard.jsx";
 import Pin from "../components/Pin.jsx";
 import Spark, { Move } from "../components/Spark.jsx";
 import Explain from "../components/Explain.jsx";
 import NotifyButton from "../components/NotifyButton.jsx";
-import { Empty, ErrorCard, Monogram, Skeleton, StatusChip } from "../components/ui.jsx";
+import ScreenHead from "../components/ScreenHead.jsx";
+import FinePrint from "../components/FinePrint.jsx";
+import { PlainStatusChip } from "../components/Plain.jsx";
+import { Empty, ErrorCard, Monogram, Skeleton } from "../components/ui.jsx";
 import "./board.css";
 
-// The screener: every filter is a query-string parameter, so a screen is a
-// link you can keep or send. Results are the subscriber's visible universe
-// clamped to the plan's names_shown_limit; what was left out is reported as
-// a count, never as a name.
+// Find: every filter is a query-string parameter, so a screen is a link you
+// can keep or send. Results are the names in the subscriber's industries
+// and watchlist, clamped to the plan's names_shown_limit; what was left out
+// is reported as a count, never as a name.
 
 const PARAMS = [
   "strategy", "bands", "min_score", "max_score", "coverage", "hf", "industries", "lane", "group", "q",
@@ -70,33 +74,33 @@ const PRESETS = [
     params: { volx_min: "3", sort: "volx" },
   },
   {
-    key: "up", label: "Up 5+ since last run", simpleLabel: "Rose 5 points or more", desc: "Score rose five points or more",
-    plain: "scored five points or more above their previous run. Something in their inputs changed.",
+    key: "up", label: "Up 5+ since last scoring", simpleLabel: "Rose 5 points or more", desc: "Score rose five points or more",
+    plain: "scored five points or more above their last scoring. Something in their inputs changed.",
     params: { min_delta: "5", sort: "delta" },
   },
   {
-    key: "cleared", label: "Cleared the screen", simpleLabel: "Passed every rule", desc: "Every must-pass rule passed",
-    plain: "passed every one of the strategy's must-pass rules on this run. The names its setup fully applies to.",
+    key: "cleared", label: "Passed every rule", simpleLabel: "Passed every rule", desc: "Every must-pass rule passed",
+    plain: "passed every one of the strategy's must-pass rules this morning. The names its setup fully applies to.",
     params: { hf: "pass", sort: "score" },
   },
   {
-    key: "down", label: "Down 5+ since last run", simpleLabel: "Fell 5 points or more", desc: "Score fell five points or more",
-    plain: "scored five points or more below their previous run. Something in their inputs weakened.",
+    key: "down", label: "Down 5+ since last scoring", simpleLabel: "Fell 5 points or more", desc: "Score fell five points or more",
+    plain: "scored five points or more below their last scoring. Something in their inputs weakened.",
     params: { max_delta: "-5", sort: "delta", dir: "asc" },
   },
   {
-    key: "new", label: "New this run", simpleLabel: "Are new this run", desc: "Not scored on the previous run",
-    plain: "were not scored on the previous run. The newest arrivals in your universe.",
+    key: "new", label: "New this morning", simpleLabel: "Are new this morning", desc: "Not scored last time",
+    plain: "were not scored last time. The newest arrivals in your industries.",
     params: { new: "1" },
   },
   {
-    key: "thin", label: "Thin coverage to verify", simpleLabel: "Have thin data", desc: "Fewer than half the inputs had data",
+    key: "thin", label: "Thin data to verify", simpleLabel: "Have thin data", desc: "Fewer than half the inputs had data",
     plain: "were scored on fewer than half of their inputs, so the number carries a ~. Worth a look before you lean on the score.",
     params: { coverage: "thin", sort: "coverage", dir: "asc" },
   },
   {
-    key: "pinned", label: "My pinned names", simpleLabel: "Are on my watchlist", desc: "Only your watchlist",
-    plain: "are on your watchlist, with their scores on this run.",
+    key: "pinned", label: "On my watchlist", simpleLabel: "Are on my watchlist", desc: "Only your watchlist",
+    plain: "are on your watchlist, with this morning's scores.",
     params: { pinned: "1" },
   },
 ];
@@ -109,16 +113,16 @@ function daysWords(n) {
   return `in ${n} days`;
 }
 
-// "up 6 since the last run", "new this run".
+// "up 6 since the last scoring", "new this morning".
 function changeWords(d) {
-  if (d == null) return "new this run";
+  if (d == null) return "new this morning";
   const r = Math.round(d);
-  if (r === 0) return "unchanged since the last run";
-  return `${r > 0 ? "up" : "down"} ${Math.abs(r)} since the last run`;
+  if (r === 0) return "unchanged since the last scoring";
+  return `${r > 0 ? "up" : "down"} ${Math.abs(r)} since the last scoring`;
 }
 
 // The one figure a screen is about, in words, from the fields each row
-// already carries. Falls back to the change since the last run.
+// already carries. Falls back to the change since the last scoring.
 const FIGURE = {
   earnings: (r) => (r.earnings ? `earnings ${daysWords(r.earnings.days) || `on ${shortDate(r.earnings.date, "UTC")}`}` : "no earnings date on file"),
   squeeze: (r) => {
@@ -132,7 +136,7 @@ const FIGURE = {
   volume: (r) => (r.snapshot && r.snapshot.volx20d != null ? `volume ${r.snapshot.volx20d}x normal` : null),
   up: (r) => changeWords(r.delta_1d),
   down: (r) => changeWords(r.delta_1d),
-  new: () => "new this run",
+  new: () => "new this morning",
   thin: (r) => `${r.components_present} of ${r.components_total} inputs had data`,
   cleared: () => "passed every must-pass rule",
   pinned: () => "on my watchlist",
@@ -144,14 +148,14 @@ function figureFor(presetKey, r) {
 }
 
 const SORTS = [
-  ["score", "Score"], ["delta", "Change since last run"], ["coverage", "Coverage"], ["symbol", "Symbol"],
+  ["score", "Score"], ["delta", "Change since the last scoring"], ["coverage", "Coverage"], ["symbol", "Symbol"],
   ["industry", "Industry"], ["cap", "Market cap"], ["si", "Short interest"], ["float", "Float"], ["fee", "Borrow fee"],
   ["volx", "Volume vs 20-day"], ["run3m", "3-month move"], ["chg30", "30-day price move"], ["earnings", "Next earnings"],
 ];
 
 // Plain names for the sort menu and the facet chips in Simple mode.
 const SORT_PLAIN = {
-  coverage: "Data coverage", symbol: "Name", cap: PLAIN_FIELD.cap_usd_m, si: PLAIN_FIELD.si_pct_float, float: PLAIN_FIELD.float_m,
+  coverage: "How much data", symbol: "Name", cap: PLAIN_FIELD.cap_usd_m, si: PLAIN_FIELD.si_pct_float, float: PLAIN_FIELD.float_m,
   fee: PLAIN_FIELD.fee_pct, volx: PLAIN_FIELD.volx20d, run3m: PLAIN_FIELD.run3m_pct, earnings: PLAIN_FIELD.earnings,
 };
 const COV_PLAIN = { full: "full data", partial: "some data missing", thin: "thin data" };
@@ -209,7 +213,7 @@ function useSideScroll(deps) {
 // When the run happened, in words that hold for the viewer's own clock.
 function runWhen(iso, tz) {
   const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return "on the latest run";
+  if (Number.isNaN(t.getTime())) return "in the latest scoring";
   const opts = tz ? { timeZone: tz } : {};
   const day = (d) => d.toLocaleDateString("en-CA", opts);
   const now = new Date();
@@ -246,67 +250,22 @@ function Th({ children, plain, simple, term, text, num }) {
   );
 }
 
-// One sentence from meta: what matched, out of what, and what the plan lists.
-// `universe` is the unfiltered match count for the same strategy and run,
-// or null when it is not yet known; the sentence then leaves it out.
-function ScreenUtility({ data, universe, activeCount, strat, tz }) {
-  const { matched, shown, truncated, names_shown_limit } = data.meta;
-  const when = runWhen(data.as_of, tz);
-  const names = matched === 1 ? "name" : "names";
-  const showing =
-    shown === matched ? (
-      <>
-        showing all <b>{shown}</b>
-      </>
-    ) : (
-      <>
-        showing <b>{shown}</b>
-      </>
-    );
-  let lead;
+// The screen's one line (DESIGN_V6 §7), fourteen words at most, from meta:
+// what matched, out of what, and what the plan lists. `universe` is the
+// unfiltered match count for the same strategy and scoring, or null when it
+// is not yet known; the line then leaves it out.
+function findLine(data, universe, activeCount, strat, tz) {
+  if (!data) return "Pick a ready-made screen or set your own limits.";
+  const { matched, truncated, names_shown_limit } = data.meta;
   if (activeCount === 0) {
-    lead =
-      matched === 0 ? (
-        <>
-          No names in your universe were scored on {strat.label} {when}.
-        </>
-      ) : (
-        <>
-          <b>{matched}</b> {names} in your universe scored on {strat.label} {when}; {showing}.
-        </>
-      );
-  } else if (universe != null) {
-    lead =
-      matched === 0 ? (
-        <>
-          Nothing matched among the <b>{universe}</b> names in your universe.
-        </>
-      ) : (
-        <>
-          Matched <b>{matched}</b> of <b>{universe}</b> names in your universe; {showing}.
-        </>
-      );
-  } else {
-    lead =
-      matched === 0 ? (
-        <>Nothing in your universe matched these filters.</>
-      ) : (
-        <>
-          Matched <b>{matched}</b> {names} in your universe; {showing}.
-        </>
-      );
+    if (matched === 0) return `No names in your industries were scored on ${strat.label} ${runWhen(data.as_of, tz)}.`;
+    return `${plural(matched, "name")} in your industries; pick a ready-made screen or set your own limits.`;
   }
-  return (
-    <p className="utility">
-      {lead}
-      {truncated && (
-        <>
-          {" "}
-          Your plan lists <b>{names_shown_limit}</b>; the other <b>{matched - shown}</b> are counted here, not shown.
-        </>
-      )}
-    </p>
-  );
+  if (matched === 0) return "Nothing in your industries matches this screen; loosen a limit or pick another.";
+  const verb = matched === 1 ? "matches" : "match";
+  const count = universe != null ? `${matched} of ${universe} names` : plural(matched, "name");
+  if (truncated) return `${count} ${verb} this screen; your plan lists ${names_shown_limit} of them.`;
+  return `${count} ${verb} this screen.`;
 }
 
 export default function Screen() {
@@ -347,7 +306,7 @@ export default function Screen() {
   // The tab title matches the nav word and the heading; restored on leave.
   useEffect(() => {
     const prev = document.title;
-    document.title = `${simple ? "Find" : "Screener"} · tradealert.me`;
+    document.title = "Find names for me · tradealert.me";
     return () => {
       document.title = prev;
     };
@@ -491,7 +450,7 @@ export default function Screen() {
     ];
     downloadText(
       `tradealert-screen-${data.as_of.slice(0, 10)}.csv`,
-      toCsv(rows, cols) + "\n# Information and alerts, not advice. Scores rank names for a human to review.\n"
+      toCsv(rows, cols) + `\n# ${FINE_PRINT_SHORT} Scores rank names for a human to review.\n`
     );
   };
 
@@ -605,12 +564,12 @@ export default function Screen() {
       <div className="fgroup two">
         <label className="fnum" htmlFor="f-lane">
           <span>
-            Stage <Explain term="lane" />
+            {simple ? "Dated event" : "Stage"} <Explain term="lane" />
           </span>
           <select id="f-lane" value={draft.lane || ""} onChange={(e) => set("lane", e.target.value)}>
             <option value="">Any</option>
-            <option value="Early">Early</option>
-            <option value="Event">Event</option>
+            <option value="Early">{simple ? "No date set yet" : "Early"}</option>
+            <option value="Event">{simple ? "A date is set" : "Event"}</option>
           </select>
         </label>
         <label className="fnum" htmlFor="f-group">
@@ -627,21 +586,21 @@ export default function Screen() {
       </div>
       <div className="fgroup">
         <label className="fnum" htmlFor="f-q">
-          <span>Text in symbol, theme, hook or thesis</span>
+          <span>Words in the symbol, theme or notes</span>
           <input id="f-q" value={draft.q || ""} onChange={(e) => set("q", e.target.value)} placeholder="e.g. HALEU, drone, GLP" />
         </label>
       </div>
       <div className="fgroup two">
-        <Num id="f-dmin" label={simple ? "Change since last run at least" : "Δ run at least"} value={draft.min_delta} onChange={(v) => set("min_delta", v)} />
+        <Num id="f-dmin" label={simple ? "Change since the last scoring, at least" : "Δ run at least"} value={draft.min_delta} onChange={(v) => set("min_delta", v)} />
         <Num id="f-dmax" label="at most" value={draft.max_delta} onChange={(v) => set("max_delta", v)} />
       </div>
       <label className="check" style={{ padding: 0 }}>
         <input type="checkbox" checked={draft.new === "1"} onChange={(e) => set("new", e.target.checked ? "1" : "")} />
-        <span>New this run only</span>
+        <span>New this morning only</span>
       </label>
       <label className="check" style={{ padding: 0 }}>
         <input type="checkbox" checked={draft.pinned === "1"} onChange={(e) => set("pinned", e.target.checked ? "1" : "")} />
-        <span>My pinned names only</span>
+        <span>Only names I watch</span>
       </label>
       <h3 className="fgroup-label" style={{ marginTop: "var(--s-4)" }}>
         Market data on file
@@ -696,40 +655,48 @@ export default function Screen() {
     </label>
   );
 
+  // The one action: the screen of names that passed every must-pass rule,
+  // or every name again once that screen is on.
+  const clearedPreset = PRESETS.find((p) => p.key === "cleared");
+  const clearedOn = presetOn(clearedPreset);
+
   return (
     <div className="wrap screen-v">
-      <div className="pagehead">
-        <div>
-          <h1>{simple ? "Find" : "Screener"}</h1>
-          {data ? (
-            <ScreenUtility data={data} universe={universeFor} activeCount={activeCount} strat={strat} tz={tz} />
+      <ScreenHead
+        title="Find names for me"
+        line={findLine(data, universeFor, activeCount, strat, tz)}
+        action={
+          clearedOn ? (
+            <button type="button" className="btn btn-primary" onClick={clear}>
+              Show me every name
+            </button>
           ) : (
-            <div className="meta">
-              {simple
-                ? "Pick a ready-made screen and we show you the names in your industries that match."
-                : "Filter your universe on score, coverage, the must-pass rules and the market data on file. The address is the screen; share it as a link."}
-            </div>
-          )}
-        </div>
-        <div className="actions">
-          <select
-            className="inline"
-            value={stratKey}
-            aria-label="Strategy"
-            onChange={(e) => go({ ...filters, strategy: e.target.value === "fast_mover" ? "" : e.target.value })}
-          >
-            {(strategies || [{ key: "fast_mover", label: "Fast Mover", calibrated: true }]).map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label}
-                {s.calibrated ? "" : " (no record yet)"}
-              </option>
-            ))}
-          </select>
-          <button className="btn btn-secondary btn-sm fpanel-toggle full-only" onClick={() => setAdv((a) => !a)} aria-expanded={adv}>
-            Filters{activeCount ? ` · ${activeCount}` : ""}
-          </button>
-        </div>
-      </div>
+            <button type="button" className="btn btn-primary" onClick={() => preset(clearedPreset)}>
+              Show me names that passed every rule
+            </button>
+          )
+        }
+        secondary={
+          <>
+            <select
+              className="inline"
+              value={stratKey}
+              aria-label="Strategy"
+              onChange={(e) => go({ ...filters, strategy: e.target.value === "fast_mover" ? "" : e.target.value })}
+            >
+              {(strategies || [{ key: "fast_mover", label: "Fast Mover", calibrated: true }]).map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                  {s.calibrated ? "" : " (no record yet)"}
+                </option>
+              ))}
+            </select>
+            <button className="btn btn-secondary btn-sm fpanel-toggle full-only" onClick={() => setAdv((a) => !a)} aria-expanded={adv}>
+              Filters{activeCount ? ` · ${activeCount}` : ""}
+            </button>
+          </>
+        }
+      />
 
       <section className="find simple-only" aria-labelledby="find-h">
         <h2 id="find-h" className="find-h">
@@ -789,11 +756,11 @@ export default function Screen() {
             <div className="boardhead">
               <Monogram size={20}>{strat.monogram}</Monogram>
               <b>{strat.label}</b>
-              <StatusChip calibrated={strat.calibrated} />
+              <PlainStatusChip status={(strat.plain && strat.plain.status) || (strat.calibrated ? "measured" : "provisional")} />
               <span>
                 <b>{data.meta.matched}</b> {data.meta.matched === 1 ? "name matches" : "names match"} · showing {data.meta.shown}
               </span>
-              <span>run {dateTime(data.as_of, tz)}</span>
+              <span>scored {dateTime(data.as_of, tz)}</span>
               <span className="spacer" />
               {sortControl}
               <button className="btn-quiet" onClick={() => go({ ...filters, dir: data.meta.dir === "asc" ? "desc" : "asc" })} title="Flip sort direction">
@@ -829,8 +796,8 @@ export default function Screen() {
                 activeCount
                   ? "Nothing in your industries matches this screen."
                   : strat.key !== "fast_mover"
-                    ? `No ${strat.label} ${noun}s were rated on the latest run.`
-                    : "No names were rated on the latest run."
+                    ? `No ${strat.label} ${noun}s were rated in the latest scoring.`
+                    : "No names were rated in the latest scoring."
               }
               action={
                 activeCount ? (
@@ -843,7 +810,7 @@ export default function Screen() {
                   </button>
                 ) : (
                   <Link to="/board" className="btn btn-secondary">
-                    Open the Board
+                    {CTA.BOARD}
                   </Link>
                 )
               }
@@ -871,7 +838,7 @@ export default function Screen() {
                         {figureFor(activePreset && activePreset.key, r)}
                       </>
                     }
-                    action={<NotifyButton symbol={r.symbol} compact label="Alert me" onLabel="Alerts on" />}
+                    action={<NotifyButton symbol={r.symbol} compact />}
                   />
                 ))}
               </ol>
@@ -925,7 +892,7 @@ export default function Screen() {
                         </Th>
                         <Th term="catalyst">Earnings</Th>
                         <th scope="col">
-                          <span className="sr-only">Pin</span>
+                          <span className="sr-only">Watch</span>
                         </th>
                       </tr>
                     </thead>
@@ -1047,7 +1014,7 @@ export default function Screen() {
                         ) : (
                           <>
                             , with {alertsLabel(nextTier.alerts_limit)} on{" "}
-                            {nextTier.picks_limit == null || nextTier.picks_limit >= 999 ? "the names you pin" : `up to ${plural(nextTier.picks_limit, "pinned name")}`}.
+                            {nextTier.picks_limit == null || nextTier.picks_limit >= 999 ? "the names you watch" : `up to ${plural(nextTier.picks_limit, "watched name")}`}.
                           </>
                         )}
                       </>
@@ -1067,7 +1034,7 @@ export default function Screen() {
                 {full ? (
                   <>
                     Market data columns show the latest snapshot on file per name; each figure carries its own date on the report. <kbd className="kbd">j</kbd>/
-                    <kbd className="kbd">k</kbd> move, <kbd className="kbd">↵</kbd> open, <kbd className="kbd">p</kbd> pin.{" "}
+                    <kbd className="kbd">k</kbd> move, <kbd className="kbd">↵</kbd> open, <kbd className="kbd">p</kbd> watch.{" "}
                   </>
                 ) : (
                   <>Each figure is the latest on file for that name; its date is on the report. </>
@@ -1078,6 +1045,8 @@ export default function Screen() {
           )}
         </div>
       </div>
+
+      <FinePrint short />
     </div>
   );
 }

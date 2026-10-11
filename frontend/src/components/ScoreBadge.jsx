@@ -6,7 +6,7 @@ import { bandWord } from "../lib/plain.js";
 // fails a must-pass rule is flagged FAIL and still rated; "excluded" is the
 // engine's word for the band it lands in, never "left out before scoring".
 const BAND_MEANING = {
-  strong: "Top of the strategy's range on this run",
+  strong: "Top of the strategy's range this morning",
   elevated: "Above the strategy's typical range",
   neutral: "Within the typical range",
   weak: "Below the typical range",
@@ -25,9 +25,9 @@ export default function ScoreBadge({ band, value, present, total, size = "compac
   const cov = coverage(present, total);
   const label = [
     bandWord(b),
-    value != null ? `score ${fmtScore(value, present, total)}` : "no score",
+    value != null ? `scores ${fmtScore(value, present, total)} of 100` : "no score",
     COVERAGE_WORD[cov.state],
-    strategy ? `${strategy.label}, ${strategy.calibrated ? "measured record" : "no record yet"}` : null,
+    strategy ? `on ${strategy.label}, which ${strategy.calibrated ? "has a measured record" : "has no measured record yet"}` : null,
   ]
     .filter(Boolean)
     .join(", ");

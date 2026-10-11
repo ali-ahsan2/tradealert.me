@@ -22,9 +22,10 @@ import {
 import { EVIDENCE, nounFor } from "../lib/evidence.js";
 import { useRowNav } from "../lib/rownav.js";
 import { useMode } from "../lib/mode.js";
-import { bandWord, changeSentence } from "../lib/plain.js";
+import { CTA, bandWord, changeSentence } from "../lib/plain.js";
 import { openUpgrade } from "../lib/upgrade.js";
 import { LIST_CARDS } from "../lib/caps.js";
+import { FINE_PRINT_SHORT } from "../lib/legal.js";
 import SearchBar from "../components/SearchBar.jsx";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import NameCard, { ShowAll } from "../components/NameCard.jsx";
@@ -32,8 +33,10 @@ import Pin from "../components/Pin.jsx";
 import Spark, { Move } from "../components/Spark.jsx";
 import Explain from "../components/Explain.jsx";
 import NotifyButton from "../components/NotifyButton.jsx";
-import { StrategyPlainCard } from "../components/Plain.jsx";
-import { AgeChip, Empty, ErrorCard, Monogram, Notice, Skeleton, StatusChip } from "../components/ui.jsx";
+import ScreenHead from "../components/ScreenHead.jsx";
+import FinePrint from "../components/FinePrint.jsx";
+import { PlainStatusChip, StrategyPlainCard } from "../components/Plain.jsx";
+import { AgeChip, Empty, ErrorCard, Monogram, Notice, Skeleton } from "../components/ui.jsx";
 import "./board.css";
 
 // Storage access throws in Safari private browsing; preferences degrade to
@@ -60,7 +63,7 @@ const ss = store("sessionStorage");
 const SORTS = {
   score: { label: "Score", cmp: (a, b) => b.value - a.value },
   delta: {
-    label: "Change since last run",
+    label: "Change since the last scoring",
     cmp: (a, b) => (b.delta_1d ?? -Infinity) - (a.delta_1d ?? -Infinity),
   },
   symbol: { label: "Symbol", cmp: (a, b) => a.symbol.localeCompare(b.symbol) },
@@ -90,15 +93,14 @@ const SORT_PLAIN = { coverage: "How much data", symbol: "Name", px30: "30-day pr
 // Column explainers, in the words of DESIGN_V6 §7: plain word first.
 const HELP = {
   score:
-    "A 0 to 100 number saying how well a name fits this strategy's setup on this run. Thin data pulls it toward neutral and marks it with ~.",
+    "A 0 to 100 number saying how well a name fits this strategy's setup this morning. Thin data pulls it toward neutral and marks it with ~.",
   band: "The rating word (band): strong, elevated, neutral or weak. The word carries the meaning; the colour only repeats it.",
   coverage:
     "How much data the score had (coverage). Two of three segments: some inputs missing, so the score was pulled toward neutral.",
-  delta: "Change in the score since the previous run. 'new' means the name was not scored last run.",
+  delta: "Change in the score since the last scoring. 'new' means the name was not scored last time.",
   screen:
-    "The must-pass rules (hard filters): PASS when every rule passed, FAIL when one did not. A name flagged FAIL is still rated. Only Fast Mover stores a verdict.",
+    "The must-pass rules: PASS when every rule passed, FAIL when one did not. A name flagged FAIL is still rated. Only Fast Mover stores a verdict.",
   px: "Price change over the last 30 days from daily closes, and the gap to the industry's ETF over the same window.",
-  why: "The one-line reason this name is on the board, and whether it passed the strategy's must-pass rules on this run. Open the row for the inputs behind the number.",
 };
 
 const BANDS = ["strong", "elevated", "neutral", "weak", "excluded"];
@@ -165,22 +167,10 @@ function nextTierFor(tiers, current) {
   return sorted.find((t) => t.price_monthly_cents > (current.price_monthly_cents || 0)) || null;
 }
 
-// "up to 10 pinned names", or "the names you pin" when the plan sets no cap.
-function pinsLabel(limit) {
-  if (limit == null || limit >= 999) return "the names you pin";
-  return `up to ${plural(limit, "pinned name")}`;
-}
-
-function capital(s) {
-  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
-}
-
-// "up 6 since the last run", "new this run", "unchanged since the last run".
-function changeWords(d) {
-  if (d == null) return "new this run";
-  const r = Math.round(d);
-  if (r === 0) return "unchanged since the last run";
-  return `${r > 0 ? "up" : "down"} ${Math.abs(r)} since the last run`;
+// "up to 10 watched names", or "the names you watch" when the plan sets no cap.
+function watchedLabel(limit) {
+  if (limit == null || limit >= 999) return "the names you watch";
+  return `up to ${plural(limit, "watched name")}`;
 }
 
 // "today", "tomorrow", "in 12 days": the one dated event, in words. Past
@@ -197,10 +187,11 @@ function nextEventWords(r) {
   return w ? `earnings ${w}` : null;
 }
 
-// When the run happened, in words that hold for the viewer's own clock.
+// When the scoring happened, in words that hold for the viewer's own clock:
+// "this morning", "today", "yesterday", "on Aug 9".
 function runWhen(iso, tz) {
   const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return "on the latest run";
+  if (Number.isNaN(t.getTime())) return "in the latest scoring";
   const opts = tz ? { timeZone: tz } : {};
   const day = (d) => d.toLocaleDateString("en-CA", opts);
   const now = new Date();
@@ -209,48 +200,19 @@ function runWhen(iso, tz) {
     return hour < 12 ? "this morning" : "today";
   }
   if (day(t) === day(new Date(now.getTime() - 864e5))) return "yesterday";
-  return `on ${shortDate(iso, tz)}`;
+  return `on ${t.toLocaleDateString(undefined, { month: "short", day: "numeric", ...opts })}`;
 }
 
-// One sentence with real figures from the rows the board returned. Nothing
-// here is derived from data the payload does not carry.
-function BoardUtility({ data, rows, followed, tz }) {
-  const n = rows.length;
+// The screen's one line (DESIGN_V6 §7), fourteen words at most, from the
+// rows the board returned: "50 names in your 3 industries, rated this
+// morning: 7 strong, 30 elevated." Nothing here is derived from data the
+// payload does not carry.
+function boardLine(data, rows, tz) {
   const keys = data.meta.industries && data.meta.industries.length ? data.meta.industries : [...new Set(rows.map((r) => r.industry.key))];
-  const m = keys.length;
-  const one = m === 1 ? followed.find((f) => f.key === keys[0]) || rows.find((r) => r.industry.key === keys[0])?.industry : null;
-  const scope = one ? one.label : `your ${plural(m, "industry", "industries")}`;
+  const scope = keys.length === 1 ? "your industry" : `your ${keys.length} industries`;
   const strong = rows.filter((r) => r.band === "strong").length;
   const elevated = rows.filter((r) => r.band === "elevated").length;
-  const fresh = rows.filter((r) => r.delta_1d == null).length;
-  const moved = rows.filter((r) => r.delta_1d != null && Math.abs(Math.round(r.delta_1d)) >= 5).length;
-  return (
-    <p className="utility">
-      {data.meta.truncated ? (
-        <>
-          The top <b>{n}</b> names in
-        </>
-      ) : (
-        <>
-          <b>{n}</b> {n === 1 ? "name" : "names"} in
-        </>
-      )}{" "}
-      {scope}, rated {runWhen(data.as_of, tz)}: <b>{strong}</b> strong, <b>{elevated}</b> elevated,{" "}
-      {n > 0 && fresh === n ? (
-        "all new this run."
-      ) : (
-        <>
-          <b>{moved}</b> moved 5 points or more since the last run
-          {fresh ? (
-            <>
-              , <b>{fresh}</b> new
-            </>
-          ) : null}
-          .
-        </>
-      )}
-    </p>
-  );
+  return `${plural(rows.length, "name")} in ${scope}, rated ${runWhen(data.as_of, tz)}: ${strong} strong, ${elevated} elevated.`;
 }
 
 export default function Board() {
@@ -456,7 +418,7 @@ export default function Board() {
       { label: "earnings_in_days", get: (r) => (r.earnings_in == null ? "" : r.earnings_in) },
       { label: "run_as_of", get: () => data.as_of },
     ];
-    const csv = toCsv(view, cols) + `\n# Information and alerts, not advice. Scores rank names for a human to review.\n`;
+    const csv = toCsv(view, cols) + `\n# ${FINE_PRINT_SHORT} Scores rank names for a human to review.\n`;
     downloadText(`tradealert-board-${strategy}-${data.as_of.slice(0, 10)}.csv`, csv);
   };
 
@@ -477,6 +439,8 @@ export default function Board() {
   const distTotal = view.length;
   const allOn = industry === "all" && lane === "all" && !cleared;
   const status = statusOf(strat);
+  // the one action: alerts on the top-ranked name in view, whatever the sort
+  const topName = view.find((r) => r.viewRank === 1) || view[0] || null;
 
   // The strategy row: not-running strategies are hidden in Simple and
   // labelled in Full. The chosen one always shows, whatever its state.
@@ -542,7 +506,7 @@ export default function Board() {
   if (newRun)
     notices.push(
       <Notice key="newrun" tone="info" onDismiss={() => setNewRun(null)}>
-        New scores are ready from the run at {dateTime(newRun.as_of, tz)}.{" "}
+        New scores are ready from the scoring at {dateTime(newRun.as_of, tz)}.{" "}
         <button className="btn btn-primary btn-sm" onClick={() => setReload((n) => n + 1)}>
           Show me the new scores
         </button>
@@ -557,7 +521,7 @@ export default function Board() {
   if (stale)
     notices.push(
       <Notice key="stale" tone="warn">
-        The last run was {shortDate(data.as_of, tz)}. Scores may be out of date.
+        The last scoring was on {shortDate(data.as_of, tz)}; scores may be out of date.
       </Notice>
     );
   if (data && status === "provisional" && rows.length > 0 && !provHidden[strategy])
@@ -570,19 +534,19 @@ export default function Board() {
 
   return (
     <div className="wrap board-v">
-      <div className="pagehead">
-        <div>
-          <h1>Board</h1>
-          {data && rows.length > 0 ? (
-            <BoardUtility data={data} rows={rows} followed={followed} tz={tz} />
-          ) : (
-            <div className="meta">The names in your industries, rated each morning by one strategy at a time.</div>
-          )}
-        </div>
-        <div className="actions">
-          <SearchBar />
-        </div>
-      </div>
+      <ScreenHead
+        title="Ranked for me"
+        line={data && rows.length > 0 ? boardLine(data, rows, tz) : "The names in your industries, rated each morning by one strategy at a time."}
+        action={topName ? <NotifyButton symbol={topName.symbol} label={CTA.ALERT_ME_ON(topName.symbol)} /> : null}
+        secondary={
+          <>
+            <SearchBar />
+            <Link to={`/strategies/${strategy}`} className="btn-quiet">
+              How it hunts
+            </Link>
+          </>
+        }
+      />
 
       {simple ? notices.slice(0, 1) : notices}
 
@@ -614,7 +578,7 @@ export default function Board() {
 
       {strat.plain && strat.plain.one_line && (
         <div className="lens-plain">
-          <StatusChip calibrated={strat.calibrated} />
+          <PlainStatusChip status={status} />
           <StrategyPlainCard strategy={strat} compact />
         </div>
       )}
@@ -629,7 +593,7 @@ export default function Board() {
             ) : (
               "Scores update each morning."
             )}{" "}
-            Click any row for the full report; the coverage column shows how much data backed each score. Pin a name to add it to your weekly digest;
+            Open any row for the full report; the Data column shows how much data backed each score. Watch a name to keep it in your weekly brief;
             tick names to compare them.{" "}
             <a href="#board-howto" className="strip-link" onClick={openHowto}>
               How to read this board
@@ -707,7 +671,7 @@ export default function Board() {
           <span>
             {view.length} of {data.meta.shown} names · {scopeLabel}
           </span>
-          <span>run {dateTime(data.as_of, tz)}</span>
+          <span>scored {dateTime(data.as_of, tz)}</span>
           {distTotal > 0 && (
             <span className="row" style={{ gap: "var(--s-2)" }} title="Band distribution of the visible rows">
               <span className="dist" style={{ width: 120 }} aria-hidden="true">
@@ -752,15 +716,14 @@ export default function Board() {
                   symbol={r.symbol}
                   sub={r.industry.label}
                   to={hrefFor(r)}
-                  sentence={r.hook ? capital(r.hook) : changeSentence(r.delta_1d)}
+                  sentence={changeSentence(r.delta_1d, r.band)}
                   meta={
                     <>
                       <b>{bandWord(r.band)}</b> <span className="num">{fmtScore(r.value, r.components_present, r.components_total)}</span>
-                      {r.hook ? <> · {changeWords(r.delta_1d)}</> : null}
                       {ev ? <> · {ev}</> : null}
                     </>
                   }
-                  action={<NotifyButton symbol={r.symbol} compact label="Alert me" onLabel="Alerts on" />}
+                  action={<NotifyButton symbol={r.symbol} compact />}
                 />
               );
             })}
@@ -773,8 +736,8 @@ export default function Board() {
         <>
           {movers && (
             <div className="movers">
-              <MoverCard title="Up most since last run" rows={movers.up} />
-              <MoverCard title="Down most since last run" rows={movers.down} />
+              <MoverCard title="Up most since the last scoring" rows={movers.up} />
+              <MoverCard title="Down most since the last scoring" rows={movers.down} />
               <MoverCard title="New on the board" rows={movers.fresh} fresh />
             </div>
           )}
@@ -803,7 +766,7 @@ export default function Board() {
                   <SortTh k="coverage" sort={sort} setSort={setSort} num help={HELP.coverage} title="How much data (coverage)">
                     Data
                   </SortTh>
-                  <SortTh k="delta" sort={sort} setSort={setSort} num help={HELP.delta} title="Change since last run">
+                  <SortTh k="delta" sort={sort} setSort={setSort} num help={HELP.delta} title="Change since the last scoring">
                     Δ run
                   </SortTh>
                   {hasVerdicts && (
@@ -829,7 +792,7 @@ export default function Board() {
                     </>
                   )}
                   <th scope="col">
-                    <span className="sr-only">Pin</span>
+                    <span className="sr-only">Watch</span>
                   </th>
                 </tr>
               </thead>
@@ -944,9 +907,9 @@ export default function Board() {
                 <b>{elevatedCount}</b> elevated; more were rated {runWhen(data.as_of, tz)} than the list shows. On <b>{nextTier.label}</b> we would tell you
                 which of up to {nextTier.names_shown_limit} names changed rating each morning, across {industriesLabel(nextTier.industries_limit)}
                 {nextTier.alerts_limit === 0 ? (
-                  <>, with {pinsLabel(nextTier.picks_limit)} kept in view.</>
+                  <>, with {watchedLabel(nextTier.picks_limit)} kept in view.</>
                 ) : (
-                  <>, and send {alertsLabel(nextTier.alerts_limit)} on {pinsLabel(nextTier.picks_limit)}.</>
+                  <>, and send {alertsLabel(nextTier.alerts_limit)} on {watchedLabel(nextTier.picks_limit)}.</>
                 )}
               </div>
               <div className="actions">
@@ -970,8 +933,8 @@ export default function Board() {
           )}
 
           <p className="footnote">
-            Scores from the run at {dateTime(data.as_of, tz)}. {strat.label} {noun}s rank names for you to look into; nothing on this board is a
-            recommendation. <Link to={`/strategies/${strategy}`}>What {strat.label} looks for</Link>.
+            Scored {dateTime(data.as_of, tz)}. {strat.label} {noun}s rank names for you to look into; nothing on this board is a recommendation.{" "}
+            <Link to={`/strategies/${strategy}`}>What {strat.label} looks for</Link>.
           </p>
         </>
       )}
@@ -1015,8 +978,8 @@ export default function Board() {
                 </>
               )}
             </dd>
-            <dt>{simple ? "Since the last run" : "Δ run"}</dt>
-            <dd>Change in the score since the previous run. "new" means the name was not scored last run.</dd>
+            <dt>{simple ? "Since the last scoring" : "Δ run"}</dt>
+            <dd>Change in the score since the last scoring. "new" means the name was not scored last time.</dd>
             <dt>Must-pass rules (hard filters)</dt>
             <dd>
               Each Fast Mover score carries a verdict: PASS means every rule passed, FAIL means one did not. A name flagged FAIL is still rated. The
@@ -1031,11 +994,13 @@ export default function Board() {
             <dt>Keyboard</dt>
             <dd>
               <kbd className="kbd">j</kbd>/<kbd className="kbd">k</kbd> move through the list, <kbd className="kbd">Enter</kbd> opens the report,{" "}
-              <kbd className="kbd">p</kbd> pins.
+              <kbd className="kbd">p</kbd> watches.
             </dd>
           </dl>
         </div>
       </details>
+
+      <FinePrint short />
     </div>
   );
 }
@@ -1046,7 +1011,7 @@ function MoverCard({ title, rows, fresh }) {
       <h3>{title}</h3>
       {rows.length === 0 ? (
         <p className="xs faint" style={{ margin: 0 }}>
-          none this run
+          none this time
         </p>
       ) : (
         <ul>
@@ -1100,7 +1065,7 @@ function BoardEmpty({ me, strat, status, onFastMover }) {
   if (!strat.calibrated) {
     return (
       <Empty
-        title={`No scored run for ${strat.label} yet.`}
+        title={`${strat.label} has not scored your names yet.`}
         action={
           <button className="btn btn-secondary" onClick={onFastMover}>
             Show me Fast Mover
@@ -1126,8 +1091,8 @@ function BoardEmpty({ me, strat, status, onFastMover }) {
     );
   }
   return (
-    <Empty title={`No rated names in your industries for ${strat.label} on the latest run.`}>
-      Scores regenerate each morning. Try another industry in your account settings, or check back after the next run.
+    <Empty title={`No rated names in your industries for ${strat.label} in the latest scoring.`}>
+      Scores regenerate each morning. Try another industry in My account, or check back after the next scoring.
     </Empty>
   );
 }

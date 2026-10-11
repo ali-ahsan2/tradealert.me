@@ -4,28 +4,87 @@
    dark mode follows. Nothing here uses green or red: price moves and
    PASS/FAIL keep the classes they already have. */
 
-/* Header: symbol and company in the body face, one meta line, the detail
-   switch at the right. */
-.sr-head {
-  margin-bottom: var(--s-4);
-  align-items: flex-start;
+/* Head (DESIGN_V6 §5, §7): the ScreenHead carries the name and company, the
+   verdict sentence as its line, "Alert me" as the one action and "Watch
+   this for me" beside it. */
+.sr-shead {
+  margin-bottom: var(--s-3);
 }
 
-.sr-headmain {
-  min-width: 0;
-  flex: 1 1 auto;
+.sr-shead .shead-title .company {
+  margin-left: var(--s-3);
+  font-size: var(--fs-base);
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ink-muted);
 }
 
-.sr-headside {
-  flex: none;
+.sr-shead .shead-line {
+  font-size: var(--fs-lede);
+  max-width: 34em;
+  overflow-wrap: anywhere;
 }
 
-.sr-head .meta {
+.sr-shead .sr-lede {
+  font-weight: 500;
+}
+
+.sr-shead .sr-lede .sr-band {
+  font-weight: 700;
+}
+
+.sr-shead .sr-lede-d {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  color: var(--ink-muted);
+  max-width: 68ch;
+}
+
+.sr-shead .sr-lede-d + .sr-lede-d {
+  margin-top: 2px;
+}
+
+@media (min-width: 900px) {
+  .sr-shead .shead-line {
+    font-size: var(--fs-lg);
+  }
+}
+
+/* The watch control beside the one action reads as a labelled pill. */
+.sr-shead .shead-secondary .pin.pin-labelled {
+  min-height: 44px;
+  padding: 0 var(--s-4);
+  border-radius: var(--r-pill);
+}
+
+.sr-shead .shead-secondary .btn,
+.sr-shead .shead-secondary .btn-quiet {
+  min-height: 44px;
+}
+
+/* One meta line under the head: the industry, when it was scored, the
+   Full-mode strategy chips, and the detail switch at the right. */
+.sr-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
+  gap: 6px 8px;
+  margin: 0 0 var(--s-4);
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
   min-width: 0;
+}
+
+.sr-meta .spacer {
+  flex: 1;
+}
+
+.sr-meta .sr-detail {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
 }
 
 .sr-headfull {
@@ -35,50 +94,8 @@
   gap: 4px 8px;
 }
 
-.sr-head .meta .monogram {
+.sr-meta .monogram {
   vertical-align: middle;
-}
-
-/* The lede: the rating word and the integer, in one sentence. */
-.sr-verdictcard {
-  padding: 0 0 var(--s-2);
-}
-
-.sr-lede {
-  margin: 0 0 var(--s-2);
-  font-size: var(--fs-lede);
-  font-weight: 500;
-  line-height: 1.4;
-  letter-spacing: 0;
-  max-width: 34em;
-  overflow-wrap: anywhere;
-  text-wrap: pretty;
-}
-
-.sr-lede .sr-band {
-  font-weight: 700;
-}
-
-.sr-lede-d {
-  margin: 0;
-  color: var(--ink-muted);
-  line-height: 1.5;
-  max-width: 68ch;
-}
-
-.sr-lede-d + .sr-lede-d {
-  margin-top: 2px;
-}
-
-.sr-verdictcard .hint {
-  margin-top: var(--s-3);
-  max-width: 72ch;
-}
-
-@media (min-width: 900px) {
-  .sr-lede {
-    font-size: var(--fs-lg);
-  }
 }
 
 /* The chart carries the price figures; the sparkline stands in until it
@@ -114,26 +131,6 @@
 
 .sr-price .move {
   font-size: var(--fs-sm);
-}
-
-/* Action row: at least 44px tall for a thumb. */
-.sr-actrow {
-  margin: var(--s-4) 0;
-}
-
-.sr-actrow .btn,
-.sr-actrow .pin,
-.sr-actrow .btn-quiet {
-  min-height: 44px;
-}
-
-.sr-actrow .pin.pin-labelled {
-  padding: 0 var(--s-4);
-  border-radius: var(--r-pill);
-}
-
-.sr-actrow .btn-quiet {
-  padding: 0 var(--s-3);
 }
 
 .sr-next {
@@ -535,6 +532,10 @@ html[data-mode="full"] .sr-inputs li {
   min-height: 40px;
 }
 
+.sr-foot .fineprint-short {
+  margin: 0;
+}
+
 /* Input rows on a phone: the label takes its own line and the value and
    status sit beneath it. */
 @media (max-width: 480px) {
@@ -640,10 +641,10 @@ html[data-mode="full"] .sr-inputs li {
   max-width: 72ch;
 }
 
-/* Print: the switch and the sticky row are screen furniture. */
+/* Print: the switch and the action row are screen furniture. */
 @media print {
-  .sr-headside,
-  .sr-actrow {
+  .sr-meta .sr-detail,
+  .sr-shead .shead-acts {
     display: none !important;
   }
 

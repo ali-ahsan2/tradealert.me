@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createChart, CrosshairMode } from "lightweight-charts";
 import { api } from "../api.js";
 import { age, pct, price, seriesChange, shortDate } from "../lib/fmt.js";
+import { TRIGGER_PLAIN } from "../lib/glossary.js";
 import { ErrorCard, Skeleton } from "./ui.jsx";
 
 // TradingView's own charting library, so crosshair, zoom and pan behave the
@@ -30,6 +31,12 @@ const TRIGGER_GLYPH = {
   social_surge: "S",
   contract_award: "$",
 };
+
+// "B the cost to borrow doubles, SI short interest crosses a line, …": the
+// legend reads each glyph in the alert's own plain words (glossary.js).
+const GLYPH_LEGEND = Object.entries(TRIGGER_GLYPH)
+  .map(([k, g]) => `${g} ${TRIGGER_PLAIN[k] ? TRIGGER_PLAIN[k][0].toLowerCase() : k}`)
+  .join(", ");
 
 function token(name, fallback) {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -246,7 +253,7 @@ export default function PriceChart({ symbol, initialDays = 90, placeholder = nul
               <i className="lg-dot pos" /> E = dated event, filled when the name then moved 20% or traded 3x volume
             </span>
             <span>
-              <i className="lg-arrow" /> alert fired (B borrow, SI short interest, V volume, C catalyst, F filing, Δ band, I insider, S social, $ contract)
+              <i className="lg-arrow" /> an alert fired: {GLYPH_LEGEND}
             </span>
             <span className="spacer" />
             <span>{data.source.name}</span>

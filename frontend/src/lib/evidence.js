@@ -20,7 +20,7 @@ export const EVIDENCE = {
 export const GROUPS = [
   { key: "random", label: "Random trading days", sub: "no earnings within 6 days", hits: 85, n: 232, pct: 36.6 },
   { key: "earnings", label: "All earnings events", sub: "27 tickers, about two years", hits: 112, n: 191, pct: 58.6 },
-  { key: "filtered", label: "Events that cleared the screen", sub: "8 tickers, 32 events", hits: 26, n: 32, pct: 81.2 },
+  { key: "filtered", label: "Events that passed every must-pass rule", sub: "8 tickers, 32 events", hits: 26, n: 32, pct: 81.2 },
 ];
 
 export const TICKER_RECORD = [
@@ -40,17 +40,19 @@ export function nounFor(strategy) {
   return strategy && strategy.calibrated ? "signal" : "candidate";
 }
 
-// Trigger catalogue mirrors db/seed.sql so the arm form can describe each
-// trigger without a round trip.
+// Trigger catalogue mirrors db/seed.sql so the alerts form can describe each
+// fact without a round trip. The labels are the alert rules' own names
+// (Full mode and the Lab); the plain phrase for each lives in
+// glossary.js TRIGGER_PLAIN. The sentences say what prints, in plain words.
 export const TRIGGERS = [
-  ["borrow_fee_2x", "Borrow fee 2x+", "Borrow fee doubles or more versus its recent baseline."],
-  ["si_cross", "Short interest crosses 10/15/20%", "A FINRA print moves the name across a 10%, 15%, or 20% threshold."],
-  ["volume_3x", "Volume at 3x+", "Daily volume prints above 3x the 20-day average."],
-  ["catalyst_dated", "Catalyst dated", "A dated catalyst (earnings, FDA action, contract) lands inside the look-ahead."],
-  ["s3_424b", "S-3 or 424B filing", "A dilution-risk filing lands on EDGAR."],
-  ["band_change", "Band change", "A score crosses a band boundary between runs."],
-  ["insider_buying", "Insider buying", "A Form 4 cluster shows open-market buys after a period of sales."],
-  ["social_surge", "Social surge", "20+ messages in 24 hours on the social feed."],
+  ["borrow_fee_2x", "Borrow fee 2x+", "The cost to borrow the shares doubles or more against its recent level."],
+  ["si_cross", "Short interest crosses 10/15/20%", "A FINRA print moves the share of the float sold short across 10%, 15% or 20%."],
+  ["volume_3x", "Volume at 3x+", "A day trades at three times its 20-day average volume or more."],
+  ["catalyst_dated", "Catalyst dated", "A dated event (earnings, an FDA decision, a contract) lands inside the look-ahead window."],
+  ["s3_424b", "S-3 or 424B filing", "The company files to sell more shares (an S-3 or 424B lands on EDGAR)."],
+  ["band_change", "Band change", "A score moves to a different rating word between one morning's scoring and the next."],
+  ["insider_buying", "Insider buying", "Insiders report open-market buys (a cluster of Form 4s) after a stretch of selling."],
+  ["social_surge", "Social surge", "The social feed prints 20 or more messages about the name in a day."],
   ["contract_award", "Contract award", "A government or corporate contract award with a dollar figure."],
 ];
 

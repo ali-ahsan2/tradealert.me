@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link } from "../lib/router.jsx";
 import { openUpgrade } from "../lib/upgrade.js";
 import { age, shortDate } from "../lib/fmt.js";
+import { CTA } from "../lib/plain.js";
 import Icon from "./Icons.jsx";
+import { PlainStatusChip } from "./Plain.jsx";
 
 // Small shared primitives. Each one exists because a screen spec names a
 // state (loading, empty, error, locked) and every screen should render it
@@ -114,18 +116,12 @@ export function Monogram({ children, size = 24 }) {
 }
 
 // Whether a strategy has a measured record (DESIGN_V6 §7: "calibrated" is
-// the technical word, "has a measured record" the plain one). The chip says
-// the plain thing; the title says what was measured.
-export function StatusChip({ calibrated }) {
-  return calibrated ? (
-    <span className="chip chip-cal" title="Its setups have been checked against what happened next">
-      Measured record
-    </span>
-  ) : (
-    <span className="chip chip-prov" title="Its setups have not been checked against what happened next">
-      No record yet
-    </span>
-  );
+// the technical word, "has a measured record" the plain one). One chip, one
+// vocabulary: this is the PlainStatusChip ("Measured record" / "No record
+// yet" / "Not running yet"), kept under its old name for existing callers.
+// Pass `status` when the strategy's plain copy carries one.
+export function StatusChip({ calibrated, status, className = "" }) {
+  return <PlainStatusChip status={status} calibrated={calibrated} className={className} />;
 }
 
 // `words` spells the age out ("61 days old") where a bare "61d" would read
@@ -175,7 +171,7 @@ export function TierChip({ tier, link = true }) {
   const upgradeable = tier.key === "free" || tier.key === "basic";
   const cls = "tierchip";
   return link && upgradeable ? (
-    <button type="button" className={`${cls} tierchip-btn`} title="See plans" onClick={() => openUpgrade("general")}>
+    <button type="button" className={`${cls} tierchip-btn`} title={CTA.SHOW_PLANS} onClick={() => openUpgrade("general")}>
       {label}
     </button>
   ) : (
@@ -223,8 +219,8 @@ export function Modal({ title, onClose, children, actions }) {
     };
   }, [onClose]);
   return (
-    // Clicks must not bubble past the modal: a Pin inside a clickable board
-    // row would otherwise navigate when the subscriber taps "See plans".
+    // Clicks must not bubble past the modal: a watch star inside a clickable
+    // board row would otherwise navigate when the subscriber taps a plan.
     <div
       className="modal-backdrop"
       onMouseDown={onClose}

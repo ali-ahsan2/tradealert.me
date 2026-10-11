@@ -210,7 +210,7 @@
   outline-offset: 2px;
 }
 
-/* Changes: "Scoring lens:" leads the strategy pills. */
+/* Changes: "Strategy:" leads the strategy pills. */
 .tl-lens {
   display: flex;
   align-items: center;
@@ -368,8 +368,10 @@
   white-space: normal;
 }
 
-/* Watchlist Simple: the digest line under the title, and "More" per card. */
-.tl-digest { margin: calc(-1 * var(--s-2)) 0 var(--s-4); font-size: var(--fs-sm); }
+/* Watchlist: the brief line beside the fine print at the foot, and "More" per card. */
+.tl-foot { margin-top: var(--s-5); }
+.tl-foot .tl-digest { margin: 0 0 var(--s-2); font-size: var(--fs-sm); }
+.tl-foot .fineprint-short { margin: 0; }
 .tl-more { position: relative; }
 .tl-more > summary {
   list-style: none;

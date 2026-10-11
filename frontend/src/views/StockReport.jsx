@@ -3,9 +3,9 @@ import { api, cached, toast } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { coverage, dateTime, delta, inDays, pct, plural, price as fmtPrice, score as fmtScore, shortDate, signed, tone } from "../lib/fmt.js";
-import { EVIDENCE, SNAPSHOT_LABELS, SNAPSHOT_ORDER, nounFor } from "../lib/evidence.js";
+import { EVIDENCE, SNAPSHOT_LABELS, SNAPSHOT_ORDER } from "../lib/evidence.js";
 import { FIELD_TERM, GLOSSARY, PLAIN_FIELD } from "../lib/glossary.js";
-import { bandWord, changeSentence, list as plainList, nextStep, triggerLabel } from "../lib/plain.js";
+import { CTA, bandWord, changeSentence, list as plainList, nextStep, triggerLabel } from "../lib/plain.js";
 import { useMode } from "../lib/mode.js";
 import { useReveal } from "../lib/motion.js";
 import { fetchSymbolRecord, leadPhrase, movePhrase } from "../lib/record.js";
@@ -19,14 +19,17 @@ import Spark, { Move } from "../components/Spark.jsx";
 import { AlertItem } from "../components/EventList.jsx";
 import Explain from "../components/Explain.jsx";
 import NotifyButton, { useRulesFor } from "../components/NotifyButton.jsx";
-import { StrategyPlainCard } from "../components/Plain.jsx";
+import ScreenHead from "../components/ScreenHead.jsx";
+import FinePrint from "../components/FinePrint.jsx";
+import { PlainStatusChip, RecordLine, StrategyPlainCard } from "../components/Plain.jsx";
 import { ModeControl } from "../components/Shell.jsx";
-import { AgeChip, ErrorCard, Monogram, Skeleton, StatusChip } from "../components/ui.jsx";
+import { AgeChip, ErrorCard, Monogram, Skeleton } from "../components/ui.jsx";
 import "./stock.css";
 
-// The dossier (DESIGN_V6 §5): the sentence, one chart, two actions, why in
-// plain words, what you'd have known, what the strategy looks for, and
-// everything else behind one "More detail". The recipe stays private
+// The dossier (DESIGN_V6 §5, §7): the head is the name, the verdict
+// sentence and one action ("Alert me") with "Watch this for me" beside it;
+// then one chart, why in plain words, what you'd have known, what the
+// strategy looks for, and everything else behind one "More detail". The recipe stays private
 // (§8, §10): inputs are named and marked lifted / weighed / no data, rules
 // are named and marked PASS / FAIL, and no weight, share, cutoff or filter
 // value is rendered in either mode.
@@ -37,7 +40,7 @@ function NotAvailable({ symbol }) {
   return (
     <div className="wrap wrap-narrow">
       <Link to="/board" className="backlink">
-        ← Board
+        ← Explore
       </Link>
       <div className="card state-card">
         <p className="state-title">No report available for {symbol.toUpperCase()}.</p>
@@ -46,7 +49,7 @@ function NotAvailable({ symbol }) {
           <SearchBar />
         </div>
         <Link to="/board" className="btn btn-secondary">
-          Back to the Board
+          {CTA.BOARD}
         </Link>
       </div>
     </div>
@@ -139,10 +142,13 @@ function armedSet(rules) {
   return rules ? new Set(rules.map((r) => r.trigger_key)) : undefined;
 }
 
+// Two sentences are shortened here to the fourteen-word card cap
+// (DESIGN_V6 §2); lib/plain.js keeps the longer forms for other screens.
 function stepFor(args) {
   const s = nextStep(args);
+  if (s.kind === "why") return { text: "Read why before you rely on the number: it lists the inputs behind it.", kind: "why" };
   if (s.kind === "wait" && args.armedKeys === undefined && args.alertsLimit !== 0 && args.verified !== false) {
-    return { text: "Nothing to do. We keep watching; your digest carries its latest rating.", kind: "wait" };
+    return { text: "Nothing to do. We keep watching; your weekly brief carries its latest rating word.", kind: "wait" };
   }
   return s;
 }
@@ -236,7 +242,7 @@ function plainTrigger(e, simple) {
 }
 
 // rec: undefined while loading, null when there is no record to show (a
-// name outside the universe answers 404 exactly like the dossier).
+// name outside your industries answers 404 exactly like the dossier).
 function KnownCard({ rec, symbol, simple, full, cap }) {
   const [ref, seen] = useReveal();
   const [all, setAll] = useState(false);
@@ -250,7 +256,7 @@ function KnownCard({ rec, symbol, simple, full, cap }) {
     <section ref={ref} className={`card sr-known reveal ${seen ? "in" : ""}`} aria-labelledby="known-h">
       <div className="card-title">
         <h2 id="known-h">What you'd have known</h2>
-        {rec && missedAny && <NotifyButton symbol={symbol} compact label="Alert me" onLabel="Alerts on" />}
+        {rec && missedAny && <NotifyButton symbol={symbol} compact />}
       </div>
       {!rec ? (
         <Skeleton rows={2} height={36} />
@@ -413,7 +419,7 @@ export default function StockReport({ symbol }) {
 
   // The record on this name: every alert that fired in the last year, told
   // or not, with the measured move after. Needs an account; a 404 (outside
-  // the universe) or any other failure hides the card.
+  // your industries) or any other failure hides the card.
   const signedIn = Boolean(me);
   const [rec, setRec] = useState(undefined);
   useEffect(() => {
@@ -440,7 +446,7 @@ export default function StockReport({ symbol }) {
     return (
       <div className="wrap wrap-narrow">
         <Link to="/board" className="backlink">
-          ← Board
+          ← Explore
         </Link>
         <ErrorCard error={err} onRetry={() => setReload((n) => n + 1)} title="Couldn't load this report." />
       </div>
@@ -451,7 +457,7 @@ export default function StockReport({ symbol }) {
     return (
       <div className="wrap sr-wrap">
         <Link to="/board" className="backlink">
-          ← Board
+          ← Explore
         </Link>
         <div className="rhead">
           <h1>{sym}</h1>
@@ -472,7 +478,6 @@ export default function StockReport({ symbol }) {
   const strat = d.strategy;
   const stratPlain = (stratList || []).find((x) => x.key === strat.key) || null;
   const tz = me && me.settings ? me.settings.timezone : undefined;
-  const noun = nounFor(strat);
   const cov = s ? coverage(s.components_present, s.components_total) : null;
   const atCap = cap && cap.limit != null && cap.used >= cap.limit && !pinned;
   const snaps = Object.entries(d.snapshot || {}).sort(
@@ -535,7 +540,7 @@ export default function StockReport({ symbol }) {
   if (!s || (s.value == null && s.band !== "excluded")) {
     lede = (
       <>
-        No {strat.label} score for {d.symbol} on this run.
+        No {strat.label} score for {d.symbol} in the latest scoring.
       </>
     );
     detailLines = ["The engine had no inputs for it yet."];
@@ -553,7 +558,7 @@ export default function StockReport({ symbol }) {
     lede = (
       <>
         {d.symbol} is <b className="sr-band">{lowerFirst(bandWord(s.band))}</b> on {strat.label}: {cov.state === "thin" ? "about " : ""}
-        {n} of 100 this run.
+        {n} of 100.
       </>
     );
     if (s.components_total) {
@@ -565,7 +570,7 @@ export default function StockReport({ symbol }) {
     }
     if (s.shrinkage_applied != null && Math.abs(s.shrinkage_applied) >= 0.5) {
       const from = Math.round(s.shrinkage_from != null ? s.shrinkage_from : s.value + s.shrinkage_applied);
-      detailLines.push(`Missing data pulled it toward neutral (shrinkage), from ${from} to ${n}.`);
+      detailLines.push(`Missing data pulled it toward neutral${full ? " (shrinkage)" : ""}, from ${from} to ${n}.`);
     }
     if (haircuts.length) detailLines.push(`A penalty was applied for ${plainList(haircuts.map((h) => h.label || h.key))}.`);
     if (strat.calibrated === false) detailLines.push(`${strat.label} has no measured record yet, so this is a candidate rather than a signal.`);
@@ -600,7 +605,7 @@ export default function StockReport({ symbol }) {
     setBusy(true);
     try {
       const r = await api("/me/picks/swap", { method: "POST", json: { symbol: d.symbol } });
-      toast(r.dropped ? `Dropped ${r.dropped} and now watching ${d.symbol}.` : `Watching ${d.symbol} for you.`);
+      toast(r.dropped ? `Stopped watching ${r.dropped}; now watching ${d.symbol}.` : `Watching ${d.symbol} for you.`);
       setPinned(true);
     } catch (e2) {
       toast(e2.detail || "That didn't work. Try again.");
@@ -640,7 +645,7 @@ export default function StockReport({ symbol }) {
         <div className="hist">
           <Sparkline points={history} label={`${strat.label} score over ${history.length} runs`} />
           <div className="hist-meta">
-            {plural(history.length, "run")} on record · from {fmtScore(history[0].value, history[0].components_present, history[0].components_total)} to{" "}
+            {plural(history.length, simple ? "morning" : "run")} on record · from {fmtScore(history[0].value, history[0].components_present, history[0].components_total)} to{" "}
             {fmtScore(history[history.length - 1].value, history[history.length - 1].components_present, history[history.length - 1].components_total)}
             {bandChanges ? ` · ${plural(bandChanges, "rating change")}` : " · no rating change"}
           </div>
@@ -709,7 +714,7 @@ export default function StockReport({ symbol }) {
               </span>
             </span>
             <span className="spacer" />
-            <NotifyButton symbol={d.symbol} triggers={["catalyst_dated"]} label="Alert me before it" onLabel="Alert set" compact />
+            <NotifyButton symbol={d.symbol} triggers={["catalyst_dated"]} label="Alert me before it" compact />
           </li>
         </ul>
       ) : (
@@ -796,7 +801,7 @@ export default function StockReport({ symbol }) {
     <Block full={full} title="Every input" note={`${components.length} with data${missing > 0 ? `, ${missing} without` : ""}`} id="breakdown">
       <p className="muted small">
         Each input is named and marked by what it did to the score: lifted it, weighed on it, or had no data.{" "}
-        {missing > 0 ? `${plural(missing, "input")} had none on this run, which pulled the total toward neutral.` : "Every input had data on this run."}
+        {missing > 0 ? `${plural(missing, "input")} had none this time, which pulled the total toward neutral.` : "Every input had data this time."}
       </p>
       {components.length === 0 ? (
         <p className="muted small" style={{ marginBottom: 0 }}>
@@ -836,7 +841,7 @@ export default function StockReport({ symbol }) {
             ))}
         </ul>
       )}
-      {catalystAssumed && earnConfirmed && <p className="hint">The dated-event input is an assumption until the engine's next run picks up the confirmed date.</p>}
+      {catalystAssumed && earnConfirmed && <p className="hint">The dated-event input is an assumption until the next scoring picks up the confirmed date.</p>}
     </Block>
   );
 
@@ -913,7 +918,7 @@ export default function StockReport({ symbol }) {
                   <Monogram size={18}>{l.monogram}</Monogram>
                 </span>
                 {l.label}
-                {full && !l.calibrated && l.value != null && <StatusChip calibrated={false} />}
+                {full && st !== "measured" && l.value != null && <PlainStatusChip status={st} />}
               </div>
               <div className="lc-score">
                 {l.value != null ? (
@@ -925,7 +930,7 @@ export default function StockReport({ symbol }) {
                     </span>
                   </>
                 ) : (
-                  <span>{st === "not_running" ? "not running yet" : "no score this run"}</span>
+                  <span>{st === "not_running" ? "not running yet" : "no score yet"}</span>
                 )}
               </div>
             </button>
@@ -1016,7 +1021,7 @@ export default function StockReport({ symbol }) {
         </div>
       )}
       <p className="hint">
-        <Link to={`/alerts?tab=armed&symbol=${encodeURIComponent(d.symbol)}`}>Choose my own triggers →</Link>
+        <Link to={`/alerts?tab=armed&symbol=${encodeURIComponent(d.symbol)}`}>Choose which facts alert me →</Link>
       </p>
     </Block>
   );
@@ -1124,20 +1129,20 @@ export default function StockReport({ symbol }) {
           </span>
         </div>
       </Block>
-      <Block full={full} title="This run" note="what this report was computed from" id="run">
+      <Block full={full} title={simple ? "This scoring" : "This run"} note="what this report was computed from" id="run">
         <div className="kv">
           <span className="k">Scored</span>
           <span className="v">{dateTime(d.run.as_of, tz)}</span>
         </div>
         {s && s.delta_1d != null && (
           <div className="kv">
-            <span className="k">Change since the previous run</span>
+            <span className="k">Change since the last scoring</span>
             <span className="v">{delta(s.delta_1d)}</span>
           </div>
         )}
         {history.length > 0 && (
           <div className="kv">
-            <span className="k">Runs on record</span>
+            <span className="k">{simple ? "Mornings on record" : "Runs on record"}</span>
             <span className="v">{history.length}</span>
           </div>
         )}
@@ -1161,28 +1166,39 @@ export default function StockReport({ symbol }) {
         </div>
       </Block>
       <Block full={full} title="The strategy's record" note={strat.calibrated ? "measured" : "no record yet"} id="record">
-        {strat.calibrated ? (
+        {simple && stratPlain && stratPlain.plain && stratPlain.plain.record ? (
+          <div className="aside-note">
+            <RecordLine plain={stratPlain.plain} /> <Link to={`/strategies/${strat.key}`}>{CTA.RECORD}</Link>
+          </div>
+        ) : strat.calibrated ? (
           <div className="aside-note">
             {strat.label}'s record rests on {strat.resolved_outcomes_count} resolved outcomes. Events that passed its must-pass rules moved {EVIDENCE.hitRate}% of
             the time ({EVIDENCE.hits} of {EVIDENCE.events}), against {EVIDENCE.earningsRate}% for earnings events generally and {EVIDENCE.randomRate}% on a
             random day. The test measures movement, not direction or profit, over {EVIDENCE.window}.{" "}
-            <Link to={`/strategies/${strat.key}`}>The evidence page</Link>
+            <Link to={`/strategies/${strat.key}`}>{CTA.RECORD}</Link>
           </div>
         ) : (
           <div className="aside-note">
             {strat.label} has {strat.resolved_outcomes_count ?? 0} resolved outcomes. Its record can be measured once {EVIDENCE.calibrationThreshold} resolve.
-            Until then it produces candidates, not signals. <Link to={`/strategies/${strat.key}`}>The evidence page</Link>
+            Until then it produces candidates, not signals. <Link to={`/strategies/${strat.key}`}>{CTA.RECORD}</Link>
           </div>
         )}
       </Block>
-      <div className="sr-foot">
-        <span>Information and alerts, not advice. Every figure here is a claim to re-verify against its primary source before you act on it.</span>
-        <button className="btn-quiet" onClick={() => window.print()}>
-          Print this report
-        </button>
-      </div>
     </>
   );
+
+  // The page foot: the fine print (DESIGN_V6 §6) and the print button, under
+  // the main column in both modes.
+  const foot = (
+    <div className="sr-foot">
+      <FinePrint short />
+      <span>Re-verify any figure against its source before you act on it.</span>
+      <button className="btn-quiet" onClick={() => window.print()}>
+        Print this report
+      </button>
+    </div>
+  );
+  const stratStatus = (stratPlain && stratPlain.plain && stratPlain.plain.status) || (strat.calibrated ? "measured" : "provisional");
 
   const priceRow = lastBar && (
     <div className="sr-price" aria-label="Price context">
@@ -1211,37 +1227,67 @@ export default function StockReport({ symbol }) {
 
   return (
     <div className="wrap sr-wrap">
-      <Link to="/board" className="backlink">
-        ← Board
-      </Link>
+      <ScreenHead
+        className="sr-shead"
+        kicker={
+          <Link to="/board" className="backlink">
+            ← Explore
+          </Link>
+        }
+        title={
+          <>
+            {d.symbol} <span className="company">{d.theme}</span>
+          </>
+        }
+        line={
+          <>
+            <span className="sr-lede">{lede}</span>
+            {(full ? detailLines : detailLines.slice(0, 1)).map((line) => (
+              <span className="sr-lede-d" key={line}>
+                {line}
+              </span>
+            ))}
+          </>
+        }
+        action={<NotifyButton symbol={d.symbol} />}
+        secondary={
+          <>
+            <Pin symbol={d.symbol} pinned={pinned} onChange={(_, on) => setPinned(on)} label labels={[CTA.WATCH_FOR_ME, CTA.WATCHING]} />
+            {atCap && (
+              <button className="btn btn-secondary btn-sm" disabled={busy} onClick={swap} title="Stops watching your oldest name to make room">
+                Replace my oldest name ({cap.used}/{cap.limit})
+              </button>
+            )}
+            <Link to={compareHref} className="btn-quiet full-only">
+              Compare
+            </Link>
+          </>
+        }
+      />
 
-      <header className="rhead sr-head">
-        <div className="sr-headmain">
-          <h1>
-            {d.symbol}
-            <span className="company">{d.theme}</span>
-          </h1>
-          <div className="meta">
-            <Link to={`/industries/${d.industry.key}`}>{d.industry.label}</Link>
+      <div className="sr-meta">
+        <Link to={`/industries/${d.industry.key}`}>{d.industry.label}</Link>
+        <span aria-hidden="true">·</span>
+        <span>scored {scoredWhen(d.run.as_of, tz)}</span>
+        {full && (
+          <span className="sr-headfull">
             <span aria-hidden="true">·</span>
-            <span>scored {scoredWhen(d.run.as_of, tz)}</span>
-            <span className="full-only sr-headfull">
-              <span aria-hidden="true">·</span>
-              <Monogram size={18}>{strat.monogram}</Monogram>
-              <Link to={`/strategies/${strat.key}`} style={{ color: "inherit", fontWeight: 600 }}>
-                {strat.label}
-              </Link>
-              <StatusChip calibrated={strat.calibrated} />
-              <AgeChip asOf={d.run.as_of} />
-              {d.lane ? <span className="chip chip-plain">stage {d.lane}</span> : null}
-              {d.group ? <span className="chip chip-plain">group {d.group}</span> : null}
-            </span>
-          </div>
-        </div>
-        <div className="sr-headside">
+            <Monogram size={18}>{strat.monogram}</Monogram>
+            <Link to={`/strategies/${strat.key}`} style={{ color: "inherit", fontWeight: 600 }}>
+              {strat.label}
+            </Link>
+            <PlainStatusChip status={stratStatus} />
+            <AgeChip asOf={d.run.as_of} />
+            {d.lane ? <span className="chip chip-plain">stage {d.lane}</span> : null}
+            {d.group ? <span className="chip chip-plain">group {d.group}</span> : null}
+          </span>
+        )}
+        <span className="spacer" />
+        <span className="sr-detail">
+          <span className="xs faint">Detail</span>
           <ModeControl />
-        </div>
-      </header>
+        </span>
+      </div>
 
       {full && (
         <p className="utility">
@@ -1263,47 +1309,17 @@ export default function StockReport({ symbol }) {
           )}{" "}
           {armedN == null ? null : armedN ? (
             <>
-              You have <b>{plural(armedN, "trigger")}</b> armed on it.
+              Alerts are on for <b>{plural(armedN, "fact")}</b> on it.
             </>
           ) : (
-            <>Nothing is armed on it yet.</>
+            <>No alert is on for it yet.</>
           )}
         </p>
       )}
 
       <div className="report">
         <div className="report-main stack">
-          <section className="sr-verdictcard" aria-labelledby="verdict-h">
-            <h2 id="verdict-h" className="sr-lede">
-              {lede}
-            </h2>
-            {(full ? detailLines : detailLines.slice(0, 1)).map((line) => (
-              <p className="sr-lede-d" key={line}>
-                {line}
-              </p>
-            ))}
-            {full && s && (
-              <p className="hint">
-                The score says how well {d.symbol} fits the {strat.label} setup on this run; the rating word is the claim and the number is detail. How
-                much data it had (coverage) is how many of its inputs were on file. It is a {noun}, not a prediction.
-              </p>
-            )}
-          </section>
-
           <PriceChart key={d.symbol} symbol={d.symbol} initialDays={90} placeholder={chartPlaceholder} />
-
-          <div className="actrow sticky sr-actrow">
-            <NotifyButton symbol={d.symbol} label="Alert me" onLabel="Alerts on" />
-            <Pin symbol={d.symbol} pinned={pinned} onChange={(_, on) => setPinned(on)} label labels={["Watch this for me", "Watching"]} />
-            {atCap && (
-              <button className="btn btn-secondary btn-sm" disabled={busy} onClick={swap} title="Drops your oldest watchlist pick to make room">
-                Replace my oldest pick ({cap.used}/{cap.limit})
-              </button>
-            )}
-            <Link to={compareHref} className="btn-quiet full-only">
-              Compare
-            </Link>
-          </div>
 
           <div className="nextstep sr-next" role="note">
             <span className="nextstep-k">Next step</span>
@@ -1480,11 +1496,13 @@ export default function StockReport({ symbol }) {
           {simple && (
             <details className="card sr-more sr-evidence">
               <summary>
-                Evidence <span className="sum-note">data on file, this run, the strategy's record</span>
+                Evidence <span className="sum-note">data on file, this scoring, the strategy's record</span>
               </summary>
               <div className="sr-more-body">{evidenceBlocks}</div>
             </details>
           )}
+
+          {foot}
         </div>
 
         {full && (

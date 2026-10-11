@@ -12,20 +12,25 @@ import re
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "frontend", "src")
 
-# The files the first half of the sweep owns. Board, Find, the dossier and
-# the watchlist join this list when the second half merges.
+# The files the sweep owns: the first half (the tools screens, the public
+# pages, the shell) and the second (the Board, Find, the dossier, the
+# watchlist and the pieces they share). Paths are relative to frontend/src;
+# the one page outside it is reached with "..".
 SWEPT = [
     "views/Alerts.jsx", "views/Changes.jsx", "views/Calendar.jsx", "views/Compare.jsx",
     "views/Digests.jsx", "views/Settings.jsx", "views/Landing.jsx", "views/Auth.jsx",
     "views/Onboarding.jsx", "views/Welcome.jsx", "views/Help.jsx", "views/Industry.jsx",
     "views/Strategies.jsx", "views/Pricing.jsx", "views/Overview.jsx", "views/Reset.jsx",
     "views/Verified.jsx", "views/Unsubscribe.jsx",
+    "views/Board.jsx", "views/Screen.jsx", "views/StockReport.jsx", "views/Watchlist.jsx",
     "components/Shell.jsx", "components/Tour.jsx", "components/NotifyButton.jsx",
     "components/Pin.jsx", "components/UpgradeSheet.jsx", "components/RecordCard.jsx",
     "components/EventList.jsx", "components/CommandPalette.jsx", "components/Shortcuts.jsx",
     "components/Explain.jsx", "components/Plain.jsx", "components/FinePrint.jsx",
-    "components/ScreenHead.jsx",
-    "lib/plain.js", "lib/record.js",
+    "components/ScreenHead.jsx", "components/SearchBar.jsx", "components/PriceChart.jsx",
+    "components/ScoreBadge.jsx", "components/ui.jsx", "components/NameCard.jsx",
+    "lib/plain.js", "lib/record.js", "lib/evidence.js",
+    "../index.html",
 ]
 
 # Strings that must not appear anywhere in a swept file, comments included,
@@ -41,8 +46,13 @@ BANNED = [
     "Continue to checkout",
     "Compare plans",
     "Open report",
+    "Add from the Board",
     "See plans",
     "Research and information only",
+    "Ranked small-cap research",
+    "Screen my picks",
+    "your universe",
+    "the universe",
 ]
 
 # Internal nouns that may not be shown to the user as actions (DESIGN_V6 §2):
@@ -152,8 +162,18 @@ def test_notify_and_pin_defaults_use_the_map():
     notify = _read("components/NotifyButton.jsx")
     assert "label = CTA.ALERT_ME" in notify and "onLabel = CTA.ALERTING" in notify
     pin = _read("components/Pin.jsx")
-    assert "CTA.WATCHING : CTA.WATCH" in pin
+    # the words come from the map, either inline or as the default `labels`
+    assert "CTA.WATCHING : CTA.WATCH" in pin or "labels = [CTA.WATCH, CTA.WATCHING]" in pin
     assert "CTA.STOP_WATCHING_SYM(symbol) : CTA.WATCH_SYM_FOR_ME(symbol)" in pin
+
+
+def test_list_buttons_take_the_default_words():
+    """Board, Find, the dossier and the watchlist no longer override the
+    button words ("Alerts on" was the old on-state)."""
+    for rel in ["views/Board.jsx", "views/Screen.jsx", "views/StockReport.jsx", "views/Watchlist.jsx", "views/Industry.jsx"]:
+        text = _read(rel)
+        assert 'onLabel="Alerts on"' not in text, f"{rel} overrides the on-state words"
+        assert 'label="Alert me"' not in text, f"{rel} repeats the default label by hand"
 
 
 def test_screen_heads_are_first_person_and_short():
@@ -166,6 +186,9 @@ def test_screen_heads_are_first_person_and_short():
         "views/Settings.jsx": "My account",
         "views/Strategies.jsx": "How it hunts",
         "views/Help.jsx": "How it works",
+        "views/Board.jsx": "Ranked for me",
+        "views/Screen.jsx": "Find names for me",
+        "views/Watchlist.jsx": "My watchlist",
     }
     for rel, title in titles.items():
         text = _read(rel)
@@ -179,8 +202,64 @@ def test_fine_print_component_is_placed():
         "views/Digests.jsx", "views/Settings.jsx", "views/Strategies.jsx", "views/Help.jsx",
         "views/Landing.jsx", "views/Auth.jsx", "views/Onboarding.jsx", "views/Welcome.jsx",
         "views/Pricing.jsx", "components/UpgradeSheet.jsx", "components/Shell.jsx",
+        "views/Board.jsx", "views/Screen.jsx", "views/StockReport.jsx", "views/Watchlist.jsx",
+        "views/Industry.jsx",
     ]:
         assert "<FinePrint" in _read(rel), f"{rel} should place the FinePrint component"
+
+
+def test_csv_exports_carry_the_fine_print():
+    """The comment line at the end of a CSV is the one fine-print sentence
+    from lib/legal.js, never a hand-typed variant."""
+    for rel in ["views/Board.jsx", "views/Screen.jsx", "views/Watchlist.jsx"]:
+        text = _read(rel)
+        assert "FINE_PRINT_SHORT" in text, f"{rel} should write FINE_PRINT_SHORT into its CSV"
+        assert "not investment advice" not in text
+
+
+def test_dossier_head_is_the_sentence_and_one_action():
+    text = _read("views/StockReport.jsx")
+    assert 'className="sr-shead"' in text and "<ScreenHead" in text
+    assert "action={<NotifyButton symbol={d.symbol} />}" in text
+    assert "labels={[CTA.WATCH_FOR_ME, CTA.WATCHING]}" in text
+    assert "sr-actrow" not in _strip_comments(text), "the second action row is gone"
+    assert "Read why before you rely on the number: it lists the inputs behind it." in text
+
+
+def test_board_card_sentence_is_plain():
+    """The Simple card says what changed in plain words; the operator hook
+    never reaches a Simple card."""
+    text = _strip_comments(_read("views/Board.jsx"))
+    assert "sentence={changeSentence(r.delta_1d, r.band)}" in text
+    assert "capital(r.hook)" not in text
+    assert "r.hook" not in text
+
+
+def test_index_html_speaks_the_proposition():
+    html = _read("../index.html")
+    assert "<title>tradealert.me · Tell me before the move is over</title>" in html
+    assert "It watches my industries. It tells me the day a fact changes, and keeps score of how early." in html
+    assert "Information and alerts, not advice." in html
+
+
+def test_shared_pieces_use_the_plain_words():
+    evidence = _read("lib/evidence.js")
+    assert '"Events that passed every must-pass rule"' in evidence
+    assert "cleared the screen" not in evidence.lower()
+    ui = _read("components/ui.jsx")
+    assert "<PlainStatusChip" in ui, "ui.jsx StatusChip renders the plain chip"
+    chart = _read("components/PriceChart.jsx")
+    assert "TRIGGER_PLAIN" in chart and "B borrow, SI short interest" not in chart
+    search = _read("components/SearchBar.jsx")
+    assert "universe" not in search.lower()
+
+
+def test_simple_lists_are_capped_with_show_all():
+    for rel in ["views/Board.jsx", "views/Screen.jsx", "views/Watchlist.jsx", "views/Industry.jsx"]:
+        text = _read(rel)
+        assert "LIST_CARDS" in text and "<ShowAll" in text, f"{rel} should cap its Simple list at LIST_CARDS with Show all"
+    dossier = _read("views/StockReport.jsx")
+    assert "KNOWN_ROWS" in dossier
 
 
 def test_landing_carries_the_three_sentences():

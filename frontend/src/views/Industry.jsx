@@ -4,21 +4,25 @@ import { Link, navigate } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { useMode } from "../lib/mode.js";
 import { coverage, dateTime, delta, industriesLabel, pct, plural, price, score as fmtScore, shortDate } from "../lib/fmt.js";
-import { CTA, firesSentence, firstSentence } from "../lib/plain.js";
+import { CTA, bandWord, changeSentence, firesSentence, firstSentence } from "../lib/plain.js";
 import { LIST_CARDS } from "../lib/caps.js";
 import { openUpgrade } from "../lib/upgrade.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import BandBar from "../components/BandBar.jsx";
 import ScreenHead from "../components/ScreenHead.jsx";
 import FinePrint from "../components/FinePrint.jsx";
+import NameCard, { ShowAll } from "../components/NameCard.jsx";
+import NotifyButton from "../components/NotifyButton.jsx";
 import { EVIDENCE } from "../lib/evidence.js";
 import { Empty, ErrorCard, Skeleton } from "../components/ui.jsx";
+import "./board.css";
 
 // One industry, plain first (DESIGN_V6 §7, §8): one line on why it moves
 // and one action (watch it for me), then what is in it, what tends to fire
 // there (measured from the alert record, never written), the month in
 // numbers, then its top names on Fast Mover when the viewer's plan follows
-// it. Simple mode shows one sentence where Full shows a card. Names in an
+// it: cards in Simple (LIST_CARDS, then "Show all"), the table in Full.
+// Simple mode shows one sentence where Full shows a card. Names in an
 // industry outside the plan are never listed; only the count is.
 export default function Industry({ industryKey }) {
   const { me, refresh } = useMe();
@@ -28,7 +32,7 @@ export default function Industry({ industryKey }) {
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
-  // Simple shows ten names before "Show all" (lib/caps.js); Full shows the list
+  // Simple shows LIST_CARDS names before "Show all" (lib/caps.js); Full shows the table
   const [allNames, setAllNames] = useState(false);
 
   useEffect(() => {
@@ -237,14 +241,36 @@ export default function Industry({ industryKey }) {
       {d.names ? (
         <>
           <div className="boardhead" style={{ marginTop: "var(--s-5)" }}>
-            <b>Fast Mover</b>
+            <b>{simple ? "Top names on Fast Mover" : "Fast Mover"}</b>
             <span>
               top {d.names.length} of {d.universe_count} names
             </span>
-            {d.run_as_of && <span>{dateTime(d.run_as_of, tz)}</span>}
+            {d.run_as_of && <span>{simple ? "scored " : ""}{dateTime(d.run_as_of, tz)}</span>}
           </div>
           {d.names.length === 0 ? (
             <Empty title="No rated names in this industry this morning." />
+          ) : simple ? (
+            <>
+              <ol className="bcards" aria-label={`Top names in ${d.label}`}>
+                {(allNames ? d.names : d.names.slice(0, LIST_CARDS)).map((r, i) => (
+                  <NameCard
+                    key={r.symbol}
+                    index={i}
+                    symbol={r.symbol}
+                    sub={r.theme}
+                    to={`/stock/${r.symbol}`}
+                    sentence={changeSentence(r.delta_1d, r.band)}
+                    meta={
+                      <>
+                        <b>{bandWord(r.band)}</b> <span className="num">{fmtScore(r.value, r.components_present, r.components_total)}</span>
+                      </>
+                    }
+                    action={<NotifyButton symbol={r.symbol} compact />}
+                  />
+                ))}
+              </ol>
+              <ShowAll total={d.names.length} shown={allNames ? d.names.length : Math.min(LIST_CARDS, d.names.length)} open={allNames} onToggle={() => setAllNames((a) => !a)} />
+            </>
           ) : (
             <div className="table-card cards">
               <table className="data comfortable">
@@ -267,7 +293,7 @@ export default function Industry({ industryKey }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {(simple && !allNames ? d.names.slice(0, LIST_CARDS) : d.names).map((r) => {
+                  {d.names.map((r) => {
                     const cov = coverage(r.components_present, r.components_total);
                     return (
                       <tr key={r.symbol} className="rowlink" onClick={() => navigate(`/stock/${r.symbol}`)}>
@@ -298,11 +324,6 @@ export default function Industry({ industryKey }) {
                   })}
                 </tbody>
               </table>
-              {simple && d.names.length > LIST_CARDS && (
-                <button type="button" className="btn-quiet" style={{ margin: "var(--s-2) var(--s-3) var(--s-3)", minHeight: 44 }} onClick={() => setAllNames((a) => !a)} aria-expanded={allNames}>
-                  {allNames ? CTA.SHOW_FEWER : CTA.SHOW_ALL(d.names.length)}
-                </button>
-              )}
             </div>
           )}
           <p className="footnote">
