@@ -208,6 +208,12 @@ function read(path) {
     return body !== undefined ? json(body) : notFound();
   }
   if (b === "/billing/health") return json({ configured: false, dev: false });
+  if (b.startsWith("/admin/")) {
+    // the Lab: reads come from the capture; a diff or a version the capture
+    // did not hold is a 404 the screen already explains
+    if (b === "/admin/_check") return new Response(null, { status: 204 });
+    return notFound();
+  }
   if (b === "/me/alerts/unread") return json({ count: 0 });
   return notFound();
 }
@@ -280,6 +286,13 @@ function write(method, path, payload) {
   }
   if (b === "/me/industries" || b.startsWith("/me/industries/")) {
     return json({ detail: "industry changes are disabled in the preview; the dataset is fixed" }, 409);
+  }
+  if (b === "/admin/lab/backtest" && method === "POST") {
+    const ran = FIX["POST /admin/lab/backtest"];
+    return ran ? json(ran.body, ran.status || 200) : json({ detail: "no backtest was captured for the preview" }, 409);
+  }
+  if (b.startsWith("/admin/")) {
+    return json({ detail: "the Lab is read-only in the preview; drafts, trials and findings need the live server" }, 409);
   }
   if (b === "/login" || b === "/signup") {
     setVisitor(false);

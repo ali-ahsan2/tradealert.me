@@ -133,6 +133,46 @@ def main():
                 get(f"/stock/{sym}?strategy={s}")
                 get(f"/stock/{sym}/fields?strategy={s}")
 
+    # The Lab, when the capturing account is an admin: every read screen and
+    # one default backtest, so the preview's Lab page has something to show.
+    s, _ = _call("GET", "/admin/_check", token=token)
+    if s == 204:
+        get("/admin/_check")
+        lab = get("/admin/lab/strategies") or {}
+        for st in lab.get("strategies", []):
+            k = st["key"]
+            get(f"/admin/lab/strategies/{k}/inputs")
+            vers = get(f"/admin/lab/strategies/{k}/versions") or {}
+            get(f"/admin/lab/strategies/{k}/coverage")
+            get(f"/admin/lab/strategies/{k}/performance")
+            get(f"/admin/lab/strategies/{k}/audit")
+            nums = [v.get("version_number") for v in (vers.get("versions") or []) if v.get("version_number") is not None]
+            for v in nums:
+                get(f"/admin/lab/strategies/{k}/versions/{v}")
+            if len(nums) >= 2:
+                get(f"/admin/lab/strategies/{k}/versions/diff?a={nums[-1]}&b={nums[0]}")
+                get(f"/admin/lab/strategies/{k}/versions/diff?a={nums[0]}&b={nums[-1]}")
+        findings = get("/admin/lab/findings") or {}
+        for f_ in (findings.get("findings") or [])[:20]:
+            get(f"/admin/lab/findings/{f_['id']}")
+        get("/admin/lab/queries?limit=100")
+        for p in ("/admin/reporting/sources", "/admin/reporting/universe", "/admin/reporting/benchmarks"):
+            get(p)
+        for sym in picks:
+            get(f"/admin/reporting/stock/{sym}")
+            for d in (90, 365):
+                get(f"/admin/reporting/series/{sym}?days={d}")
+        inds_full = out["GET /industries"]["body"]["industries"]
+        for i in inds_full:
+            if i.get("id") is not None:
+                get(f"/admin/reporting/industry/{i['id']}")
+        spec = {"strategy_key": "fast_mover", "version_number": None, "universe": {}, "window": {},
+                "event_kinds": ["earnings"], "hit_definition": {"price_move_pct": 20, "volume_spike_x": 3.0,
+                "combine": "or", "window": "tight"}, "baselines": ["all_events", "random_day"],
+                "hypothesis": "", "family_key": None}
+        s, b = _call("POST", "/admin/lab/backtest", spec, token=token)
+        out["POST /admin/lab/backtest"] = {"status": s, "body": b}
+
     os.makedirs(os.path.dirname(OUT_PATH) or ".", exist_ok=True)
     with open(OUT_PATH, "w") as f:
         json.dump(_redact(out), f, separators=(",", ":"))

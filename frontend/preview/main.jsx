@@ -49,4 +49,17 @@ function mountBar() {
   createRoot(host).render(<PreviewBar />);
 }
 
+// The Lab is its own page: the account menu's plain link opens the preview's
+// copy of it instead of the server route.
+document.addEventListener(
+  "click",
+  (e) => {
+    const a = e.target && e.target.closest && e.target.closest('a[href="/lab"]');
+    if (!a) return;
+    e.preventDefault();
+    window.location.href = "./lab.html";
+  },
+  true,
+);
+
 installMock().then(() => import("../src/main.jsx")).then(mountBar);
