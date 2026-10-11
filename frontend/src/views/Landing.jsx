@@ -1,353 +1,303 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import "./landing.css";
 import { api, cached } from "../api.js";
 import { Link } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
-import { age, dateTime, dollars, plural, shortDate } from "../lib/fmt.js";
+import { alertsLabel, dateTime, dollars, industriesLabel, pct, plural, shortDate, tone } from "../lib/fmt.js";
 import { EVIDENCE, GROUPS, TICKER_RECORD } from "../lib/evidence.js";
+import { leadPhrase, tallySentence } from "../lib/record.js";
+import { prefersReducedMotion, useCountUp, useReveal } from "../lib/motion.js";
 import Icon from "../components/Icons.jsx";
+import PulsePanel, { pulseStats, usePulse } from "../components/Pulse.jsx";
 
-// The landing page sells (DESIGN_V4.md §2.7): one claim, one live visual
-// built from public data, one action. Every number is real and sourced.
-// No name a plan would hide is shown; the only tickers are the ones the
-// published backtest record already names.
+// Landing v5 (DESIGN_V5.md §1, §2, §4.1, §5): earned FOMO, visible lead, one
+// action. Every number on this page is a recorded count or the backtest as
+// published, and every sentence states a fact with its date. The only
+// tickers are the ones the published record already names (TICKER_RECORD);
+// the pulse endpoint carries none and nothing here infers one. Red and
+// green appear on price moves only; the pulse numbers are ink.
 
-const BANDS = ["strong", "elevated", "neutral", "weak", "excluded"];
+// Public screenshots live in public/shots; BASE_URL keeps them resolving in
+// the hosted preview, which is served from a relative base.
+const SHOT = (name) => `${import.meta.env.BASE_URL}shots/${name}`;
 
-function LiveRun({ run, industries }) {
-  const dist = (run && run.bands) || {};
-  const total = BANDS.reduce((a, b) => a + (dist[b] || 0), 0);
-  const a = run ? age(run.as_of) : null;
-  const universe = industries ? industries.reduce((s, i) => s + (i.universe_count || 0), 0) : null;
+// In-page anchors scroll in place and keep the URL as it is, so they work
+// under both the history router and the preview's hash router.
+function jump(e, id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  e.preventDefault();
+  el.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+  if (typeof el.focus === "function") el.focus({ preventScroll: true });
+}
+
+// Whether an element is on screen right now (both directions). It starts
+// true so the sticky bar never flashes before the first observation; without
+// an IntersectionObserver it settles to false, so the bar simply stays.
+function useOnScreen(ref) {
+  const [on, setOn] = useState(true);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setOn(false);
+      return undefined;
+    }
+    const io = new IntersectionObserver(([entry]) => setOn(Boolean(entry && entry.isIntersecting)), { threshold: 0.2 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [ref]);
+  return on;
+}
+
+function primaryAction(me) {
+  return me ? { to: "/overview", label: "Open your home" } : { to: "/signup", label: "Start free" };
+}
+
+/* 1. Hero ------------------------------------------------------------- */
+
+function Hero({ me, pulse, run, industries, loading, ctaRef }) {
+  const [panelRef, seen] = useReveal();
+  const stats = pulseStats(pulse, run, industries);
+  const showPanel = loading || stats.length > 0;
+  const primary = primaryAction(me);
   return (
-    <div className="ld-device" aria-label="Today's run, live">
-      <div className="ld-device-bar">
-        <span className="ld-dot" />
-        <span className="ld-dot" />
-        <span className="ld-dot" />
-        <span className="ld-device-title">This morning's brief</span>
-        {a && <span className={`agechip ${a.cls}`}>{a.label}</span>}
-      </div>
-      <div className="ld-device-body">
-        <div className="ld-big">
-          <span className="ld-big-num">{total || universe || "—"}</span>
-          <span className="ld-big-lab">
-            {total > 0 ? "names scored" : "names covered"}
-            {run ? ` · ${shortDate(run.as_of)}` : ""}
-          </span>
+    <section className="ld-hero ld-dark" aria-labelledby="ld-h1">
+      <div className={`ld-wrap ld-hero-grid ${showPanel ? "" : "solo"}`}>
+        <div className="ld-hero-copy">
+          <p className="ld-eyebrow">A research assistant for small caps</p>
+          <h1 id="ld-h1">
+            <span>It watches your industries.</span> <span>It tells you before the move is over.</span>
+          </h1>
+          <p className="ld-lede">
+            Every morning it reads the filings and market data on every name in the industries you follow, scores each one with the working shown, and
+            messages you the day a fact changes.
+          </p>
+          <div className="ld-actions" ref={ctaRef}>
+            <Link to={primary.to} className="btn btn-primary btn-lg">
+              {primary.label} <Icon name="arrow" size={18} />
+            </Link>
+            <a href="#record" className="btn btn-ghost btn-lg" onClick={(e) => jump(e, "record")}>
+              See the record
+            </a>
+          </div>
+          <p className="ld-fine">Free plan, no card. Nothing on this page is a forecast.</p>
         </div>
-        {total > 0 && (
-          <>
-            <div className="dist ld-dist" aria-hidden="true">
-              {BANDS.map((b) => (dist[b] ? <span key={b} className={b} style={{ width: `${(dist[b] / total) * 100}%` }} /> : null))}
-            </div>
-            <ul className="ld-bands">
-              {BANDS.filter((b) => dist[b]).map((b) => (
-                <li key={b}>
-                  <span className={`badge compact ${b}`}>
-                    <span className="word">{b}</span>
-                  </span>
-                  <span className="ld-band-n">{dist[b]}</span>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-        {industries && industries.length > 0 && (
-          <div className="ld-inds">
-            {industries.slice(0, 6).map((i) => (
-              <span key={i.key} className="ld-ind">
-                {i.label} <b>{i.universe_count}</b>
-              </span>
-            ))}
-            {industries.length > 6 && <span className="ld-ind faint">+{industries.length - 6} more</span>}
+        {showPanel && (
+          <div ref={panelRef} className={`ld-hero-panel reveal ${seen ? "in" : ""}`}>
+            <PulsePanel pulse={pulse} stats={stats} loading={loading} active={seen} onJump={jump} />
           </div>
         )}
-        <p className="ld-device-foot">Choose an industry and the brief names them, explains each score and tells you what to watch. The counts above are live.</p>
+      </div>
+    </section>
+  );
+}
+
+/* 2. What you'd have been told ---------------------------------------- */
+
+const WORDS = ["No", "One", "Two", "Three", "Four", "Five", "Six"];
+
+// The section mounts only once the pulse is in, so useReveal observes a real
+// element on its first run (the hook attaches on mount, not on data).
+function Told({ pulse }) {
+  return pulse ? <ToldBody pulse={pulse} /> : null;
+}
+
+function ToldBody({ pulse }) {
+  const [ref, seen] = useReveal();
+  const days = pulse.days || 30;
+  const examples = (pulse.examples || []).filter((e) => e && e.max_5d != null);
+  const byIndustry = (pulse.industries || []).filter((i) => i && i.fired > 0).slice(0, 5);
+  return (
+    <section ref={ref} id="told" className={`ld-sec reveal ${seen ? "in" : ""}`} aria-labelledby="told-h">
+      <div className="ld-wrap">
+        <div className="ld-sec-head">
+          <p className="ld-kicker">The last {days} days</p>
+          <h2 id="told-h">What you'd have been told.</h2>
+          <p className="ld-sub">
+            An alert fired on a name in each of these industries. This is what the price did in the five sessions after, and how many sessions before the
+            peak the alert went out.
+          </p>
+        </div>
+
+        {examples.length > 0 ? (
+          <div className="ld-told">
+            {examples.map((e, i) => {
+              const lead = leadPhrase(e);
+              return (
+                <div className="rec-row ld-stagger" style={{ "--i": i }} key={`${e.industry_key || e.industry_label}-${e.trigger}-${e.date}-${i}`}>
+                  <div className="rec-main">
+                    <div className="rec-top">
+                      <b className="ld-told-ind">{e.industry_label}</b>
+                      <span className="ld-told-trig">{e.trigger}</span>
+                      <span className="when">{shortDate(e.date, "UTC")}</span>
+                    </div>
+                    {e.chg_5d != null && (
+                      <p className="rec-say">
+                        Closed the five-session window <span className={`move ${tone(e.chg_5d) || "flat"}`}>{pct(e.chg_5d)}</span>.
+                      </p>
+                    )}
+                  </div>
+                  <div className="rec-act ld-told-act">
+                    <span className={`rec-num move ${tone(e.max_5d) || "flat"}`}>
+                      {pct(e.max_5d)}
+                      <small>at the high</small>
+                    </span>
+                    {lead && <span className={`lead-chip ${e.pending ? "open" : ""}`}>{lead}</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="ld-empty">
+            No measured alert in the last {days} days moved 10% or more within five sessions. The counts above are the whole story so far.
+          </p>
+        )}
+
+        {byIndustry.length > 0 && (
+          <ul className="ld-inds" aria-label="Where alerts fired, by industry">
+            {byIndustry.map((i) => (
+              <li key={i.key || i.label}>
+                <b>{i.label}</b> {plural(i.fired, "alert")}
+                {i.measured > 0 ? ` · ${i.moved_10} moved 10%+` : ""}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <p className="ld-caption" id="method" tabIndex={-1}>
+          {examples.length > 0 && `${WORDS[Math.min(examples.length, 6)]} of the measured alerts from the last ${days} days. Names are shown to subscribers. `}
+          {pulse.method}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/* 3. How it works ----------------------------------------------------- */
+
+const STEPS = [
+  {
+    n: "01",
+    title: "Your brief every morning",
+    body: "Pick the industries you follow. Each morning it scores every name in them and opens with what changed since the last run, which alerts are waiting and which dates fall in the next two weeks.",
+    detail: "Since the previous run, 46 of the 152 names we score across your 3 industries changed band, 3 alerts are waiting for you, and 21 catalysts fall in the next 14 days.",
+    cite: "The opening line of Home, as it read on the morning shown.",
+    shot: "home-desk.jpg",
+    alt: "The Home screen on a desktop: a heading that reads Your brief, one sentence summing up what changed since the previous run, and a What changed list in which each name shows its band, its score marked with a tilde, a pin and a Notify me button.",
+    phone: "home-phone.jpg",
+    phoneAlt: "The same brief on a phone, with the What changed list and bottom tabs for Home, Board, Find, Watchlist and Alerts.",
+  },
+  {
+    n: "02",
+    title: "Every number explained",
+    body: "Open a name and the score is a sentence, not a verdict: where it sits on the scale, how many of the strategy's inputs had data, and what the missing ones did to the number.",
+    detail: "3 of 10 inputs had data, so read the number as approximate. Missing data pulled it toward a neutral 40, from 70 to 54.",
+    cite: "How a report states its own coverage, as it read on the screen shown.",
+    shot: "stock-desk.jpg",
+    alt: "A name's report on a desktop: the price with its day and 30-day moves, a sentence stating the score against the strategy's typical range, two lines on coverage and shrinkage, an Elevated badge reading tilde 54, and an evidence panel listing the data on file and the calibration record.",
+    phone: "stock-phone.jpg",
+    phoneAlt: "The same kind of report on a phone: a Strong badge reading tilde 78 under the sentence that explains it, with Manage alerts and Pinned buttons.",
+  },
+  {
+    n: "03",
+    title: "Alerts on facts",
+    body: "Watch a name and it messages you the day a fact changes: a short-interest print crossing 15%, a borrow fee doubling, a catalyst dated, insiders buying. Each alert names the fact that fired it and how it reached you.",
+    detail: "94 more fired across your industries on names you were not watching.",
+    cite: "The Alerts screen counts what you were told and what you were not, as it read on the screen shown.",
+    shot: "alerts-desk.jpg",
+    alt: "The Alerts screen on a desktop: a line counting the alerts sent in the last year and how many more fired on names not watched, tabs for Fired, Watching and What followed, and three alert cards that each state the fact that fired them, how long ago, and that they were sent by email.",
+  },
+];
+
+function HowItWorks() {
+  const [ref, seen] = useReveal();
+  return (
+    <section ref={ref} id="how" className={`ld-sec reveal ${seen ? "in" : ""}`} aria-labelledby="how-h">
+      <div className="ld-wrap">
+        <div className="ld-sec-head">
+          <p className="ld-kicker">How it works</p>
+          <h2 id="how-h">Three screens, every morning.</h2>
+          <p className="ld-sub">Real screens from the product. The figures are from the morning each one was taken.</p>
+        </div>
+        <ol className="ld-steps">
+          {STEPS.map((s) => (
+            <li className="ld-step" key={s.n}>
+              <div className="ld-step-copy">
+                <span className="ld-step-n" aria-hidden="true">
+                  {s.n}
+                </span>
+                <h3>{s.title}</h3>
+                <p>{s.body}</p>
+                <blockquote className="ld-detail">
+                  <p>“{s.detail}”</p>
+                  <cite>{s.cite}</cite>
+                </blockquote>
+              </div>
+              <figure className="ld-shot">
+                <img className="ld-shot-desk" src={SHOT(s.shot)} width="1280" height="800" loading="lazy" decoding="async" alt={s.alt} />
+                {s.phone && <img className="ld-shot-phone" src={SHOT(s.phone)} width="390" height="844" loading="lazy" decoding="async" alt={s.phoneAlt} />}
+              </figure>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+  );
+}
+
+/* 4. The record ------------------------------------------------------- */
+
+function GroupBar({ g, seen }) {
+  const v = useCountUp(g.pct, { active: seen, duration: 1000, decimals: 1 });
+  return (
+    <div className={`ld-group ${g.key === "filtered" ? "hi" : ""}`}>
+      <div className="ld-group-lab">
+        <b>{g.label}</b>
+        <span>{g.sub}</span>
+      </div>
+      <div className="ld-group-pct">
+        <span aria-hidden="true">{Number(v).toFixed(1)}%</span>
+        <span className="sr-only">{g.pct}%</span>
+      </div>
+      <div className="ld-bar" aria-hidden="true">
+        <i style={{ width: seen ? `${g.pct}%` : 0 }} />
+      </div>
+      <div className="ld-group-n">
+        {g.hits} of {g.n} moved
       </div>
     </div>
   );
 }
 
-function Proof() {
-  const filtered = GROUPS.find((g) => g.key === "filtered");
-  const earnings = GROUPS.find((g) => g.key === "earnings");
-  const random = GROUPS.find((g) => g.key === "random");
+function Record() {
+  const [ref, seen] = useReveal();
   return (
-    <section className="ld-proof" aria-labelledby="proof-h">
-      <div className="ld-proof-head">
-        <h2 id="proof-h">Claims you can check.</h2>
-        <p className="ld-sub">
-          On real data, names that cleared Fast Mover's hard filters moved {EVIDENCE.hitRate}% of the time inside the event window. Earnings events in
-          general moved {EVIDENCE.earningsRate}%. A random day, {EVIDENCE.randomRate}%.
-        </p>
-      </div>
-      <div className="ld-proofgrid">
-        {[filtered, earnings, random].map((g) => (
-          <div className={`ld-proofcard ${g.key === "filtered" ? "hi" : ""}`} key={g.key}>
-            <div className="ld-proof-num">{g.pct}%</div>
-            <div className="ld-proof-lab">{g.label}</div>
-            <div className="ld-proof-bar" aria-hidden="true">
-              <span style={{ width: `${g.pct}%` }} />
-            </div>
-            <div className="ld-proof-sub">
-              {g.hits} of {g.n} moved · {g.sub}
-            </div>
-          </div>
-        ))}
-      </div>
-      <p className="ld-foot">
-        A move is {EVIDENCE.hitDefinition}, measured over {EVIDENCE.window}. Movement, not direction or profit. Full record on the{" "}
-        <Link to="/strategies/fast_mover">evidence page</Link>.
-      </p>
-    </section>
-  );
-}
-
-function Benefits() {
-  const items = [
-    {
-      icon: "board",
-      title: "It tells you what matters today",
-      body: "A ranked board every morning, with the working shown for every name: what had data, what was missing, what passed. Then what changed since yesterday and why.",
-    },
-    {
-      icon: "alerts",
-      title: "It alerts you on facts, not opinions",
-      body: "A borrow fee doubling. Short interest crossing 15%. Volume at 3x. A dated catalyst. An S-3 shelf. You pick the names; it watches and messages you by email, push or SMS.",
-    },
-    {
-      icon: "calendar",
-      title: "It explains, and it shows its record",
-      body: "Plain-language reasons on every score, a calendar of what is coming for your names, and the measured move after every past event. Nothing predicted; everything measured.",
-    },
-    {
-      icon: "search",
-      title: "It speaks your language",
-      body: "No jargon wall. Every term is a tap away from its definition, every screen opens with one plain sentence about your names, and Simple mode shows only what you need until you ask for more.",
-    },
-  ];
-  return (
-    <section className="ld-benefits" aria-label="What you get">
-      {items.map((it) => (
-        <div className="ld-benefit" key={it.title}>
-          <span className="ld-benefit-icon">
-            <Icon name={it.icon} size={22} />
-          </span>
-          <h3>{it.title}</h3>
-          <p>{it.body}</p>
-        </div>
-      ))}
-    </section>
-  );
-}
-
-function Tour() {
-  const screens = [
-    {
-      title: "Board",
-      sub: "The names that fit the setup today in the industries you follow, each with how much data backed it and what changed overnight.",
-      body: (
-        <ul className="ld-mock-rows">
-          {[["strong", 78, "+14"], ["elevated", 59, "+1"], ["elevated", 57, "0"], ["neutral", 51, "−3"]].map(([b, v, dlt], i) => (
-            <li key={i}>
-              <span className="ld-mock-rank">{i + 1}</span>
-              <span className="ld-mock-sym" />
-              <span className={`badge compact ${b}`}>
-                <span className="word">{b}</span>
-                <span className="num">{v}</span>
-              </span>
-              <span className="ld-mock-spark" aria-hidden="true">
-                <svg viewBox="0 0 60 20" preserveAspectRatio="none">
-                  <path d={i % 2 ? "M0,14 L12,10 L24,16 L36,8 L48,11 L60,4" : "M0,6 L12,10 L24,5 L36,12 L48,9 L60,15"} fill="none" stroke="currentColor" strokeWidth="1.6" />
-                </svg>
-              </span>
-              <span className="ld-mock-delta">{dlt}</span>
-            </li>
-          ))}
-        </ul>
-      ),
-    },
-    {
-      title: "Report",
-      sub: "One name explained: the plain-language reason for its score, every filter with the actual figure against the rule, and the price with its events marked.",
-      body: (
-        <div className="ld-mock-report">
-          <div className="ld-mock-price">
-            <span className="ld-mock-sym wide" />
-            <span className="ld-mock-big">$64.90</span>
-            <span className="move pos">+3.6%</span>
-          </div>
-          <svg className="ld-mock-chart" viewBox="0 0 300 80" preserveAspectRatio="none" aria-hidden="true">
-            <path d="M0,60 L30,52 L60,58 L90,40 L120,46 L150,30 L180,36 L210,22 L240,28 L270,18 L300,12 L300,80 L0,80 Z" fill="var(--pos)" opacity="0.12" />
-            <path d="M0,60 L30,52 L60,58 L90,40 L120,46 L150,30 L180,36 L210,22 L240,28 L270,18 L300,12" fill="none" stroke="var(--pos)" strokeWidth="2" />
-          </svg>
-          <ul className="ld-mock-filters">
-            {[["$300M–$3B market cap", "PASS"], ["Float < 50M shares", "PASS"], ["Short interest > 10%", "PASS"], ["Growth > 40% y/y", "FAIL"]].map(([k, v]) => (
-              <li key={k}>
-                <span>{k}</span>
-                <span className={`verdict ${v === "PASS" ? "pass" : "fail"}`}>{v}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ),
-    },
-    {
-      title: "Alerts",
-      sub: "Say which names to watch; it messages you when a fact changes, each alert a sentence you can verify.",
-      body: (
-        <ul className="ld-mock-alerts">
-          {[["Borrow fee 2x+", "Borrow fee 2.4x its 5-session average"], ["Volume at 3x+", "3.6x the 20-day average by midday"], ["Catalyst dated", "Earnings call dated inside the look-ahead"]].map(([t, d]) => (
-            <li key={t}>
-              <span className="chip chip-plain">{t}</span>
-              <span className="ld-mock-sym" />
-              <span className="ld-mock-text">{d}</span>
-            </li>
-          ))}
-        </ul>
-      ),
-    },
-  ];
-  return (
-    <section className="ld-tour" aria-labelledby="tour-h">
-      <h2 id="tour-h">How it helps, screen by screen.</h2>
-      <p className="ld-sub">Illustrations of the layout. Names appear once you sign in; the figures are examples, not data.</p>
-      <div className="ld-tourgrid">
-        {screens.map((sc) => (
-          <figure className="ld-screen" key={sc.title}>
-            <div className="ld-screen-frame">
-              <div className="ld-screen-head">{sc.title}</div>
-              {sc.body}
-            </div>
-            <figcaption>
-              <b>{sc.title}.</b> {sc.sub}
-            </figcaption>
-          </figure>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function Plans({ tiers }) {
-  if (!tiers) return null;
-  const sorted = [...tiers].sort((a, b) => a.price_monthly_cents - b.price_monthly_cents);
-  const free = sorted.find((t) => t.price_monthly_cents === 0);
-  const pro = sorted.find((t) => t.key === "pro") || sorted[sorted.length - 2];
-  if (!free || !pro) return null;
-  const line = (t) => [
-    t.industries_limit >= 999 ? "All industries" : plural(t.industries_limit, "industry", "industries"),
-    `Top ${t.names_shown_limit} per board`,
-    plural(t.picks_limit, "pinned name"),
-    t.alerts_limit === 0 ? "Weekly digest" : t.alerts_limit == null ? "Unlimited alerts" : plural(t.alerts_limit, "alert"),
-  ];
-  return (
-    <section className="ld-plans" aria-labelledby="plans-h">
-      <h2 id="plans-h">Start free. Upgrade when it has earned a place in your morning.</h2>
-      <div className="ld-plangrid">
-        <div className="ld-plan">
-          <div className="ld-plan-name">{free.label}</div>
-          <div className="ld-plan-price">$0</div>
-          <ul>
-            {line(free).map((l) => (
-              <li key={l}>
-                <Icon name="check" size={16} /> {l}
-              </li>
-            ))}
-          </ul>
-          <Link to="/signup" className="btn btn-secondary btn-block">
-            Start free
-          </Link>
-        </div>
-        <div className="ld-plan hi">
-          <div className="ld-plan-name">{pro.label}</div>
-          <div className="ld-plan-price">
-            {dollars(pro.price_monthly_cents)}
-            <span>/mo</span>
-          </div>
-          <ul>
-            {line(pro).map((l) => (
-              <li key={l}>
-                <Icon name="check" size={16} /> {l}
-              </li>
-            ))}
-          </ul>
-          <Link to="/pricing" className="btn btn-primary btn-block">
-            See all plans
-          </Link>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-export default function Landing() {
-  const { me } = useMe();
-  const [run, setRun] = useState(null);
-  const [industries, setIndustries] = useState(null);
-  const [tiers, setTiers] = useState(null);
-  useEffect(() => {
-    api("/runs/latest").then(setRun).catch(() => setRun(null));
-    cached("/industries").then((d) => setIndustries(d.industries)).catch(() => setIndustries([]));
-    cached("/entitlements").then((d) => setTiers(d.tiers)).catch(() => setTiers(null));
-  }, []);
-  const primary = me ? ["/overview", "Open your home"] : ["/signup", "Start free"];
-  const record = useMemo(() => TICKER_RECORD.slice(0, 8), []);
-
-  return (
-    <div className="ld">
-      <section className="ld-hero">
-        <div className="ld-hero-copy">
-          <p className="eyebrow">A research assistant for small caps</p>
-          <h1>It watches your industries, explains what changed, and alerts you on facts.</h1>
-          <p className="ld-lede">
-            Every morning it reads the filings and market data on the names in your industries, tells you which ones have the setup it looks for ahead of
-            their next dated event and why, and messages you when a fact changes: a borrow fee doubling, a dated catalyst, a filing. On real data,{" "}
-            <b>
-              {EVIDENCE.hits} of {EVIDENCE.events}
-            </b>{" "}
-            events that cleared its filters went on to move.
-          </p>
-          <div className="ld-actions">
-            <Link to={primary[0]} className="btn btn-primary btn-lg">
-              {primary[1]} <Icon name="arrow" size={18} />
-            </Link>
-            <Link to="/strategies/fast_mover" className="btn btn-quiet btn-lg">
-              See the evidence
-            </Link>
-          </div>
-          <ul className="ld-ticks">
-            <li>
-              <Icon name="check" size={16} /> Free plan, no card
-            </li>
-            <li>
-              <Icon name="check" size={16} /> Every score shows its working
-            </li>
-            <li>
-              <Icon name="check" size={16} /> Cancel any time
-            </li>
-          </ul>
-        </div>
-        <div className="ld-hero-visual">
-          <LiveRun run={run} industries={industries} />
-        </div>
-      </section>
-
-      <Proof />
-      <Benefits />
-      <Tour />
-
-      <section className="ld-record" aria-labelledby="rec-h">
-        <div className="ld-rechead">
-          <h2 id="rec-h">Every tested name, on the record.</h2>
+    <section ref={ref} id="record" tabIndex={-1} className={`ld-sec reveal ${seen ? "in" : ""}`} aria-labelledby="rec-h">
+      <div className="ld-wrap">
+        <div className="ld-sec-head">
+          <p className="ld-kicker">The backtest</p>
+          <h2 id="rec-h">The record, as published.</h2>
           <p className="ld-sub">
-            The {EVIDENCE.tickers} names that cleared the screen in the backtest and how many of their events moved. Published as tested; nothing
-            cherry-picked.
+            On real data, {EVIDENCE.hits} of {EVIDENCE.events} events that cleared Fast Mover's hard filters went on to move inside the event window. A move
+            is {EVIDENCE.hitDefinition}, measured over {EVIDENCE.window}.
+          </p>
+        </div>
+
+        <div className="ld-groups">
+          {GROUPS.map((g) => (
+            <GroupBar g={g} seen={seen} key={g.key} />
+          ))}
+        </div>
+
+        <div className="ld-rechead">
+          <h3>Every tested name, on the record.</h3>
+          <p className="ld-sub">
+            The {EVIDENCE.tickers} names that cleared the screen and how many of their events moved. Published as tested; nothing cherry-picked.
           </p>
         </div>
         <div className="ld-recgrid">
-          {record.map(([t, n, h]) => (
+          {TICKER_RECORD.map(([t, n, h]) => (
             <div className="ld-rec" key={t}>
               <span className="ld-rec-sym">{t}</span>
               <span className="ld-rec-bar" aria-hidden="true">
@@ -361,23 +311,279 @@ export default function Landing() {
             </div>
           ))}
         </div>
-      </section>
 
-      <Plans tiers={tiers} />
+        <ol className="ld-caveats" aria-label="Three caveats">
+          <li>
+            <b>Small sample.</b> {EVIDENCE.events} events across {EVIDENCE.tickers} names, about two years of market regimes. Enough to publish, not enough
+            to lean on.
+          </li>
+          <li>
+            <b>Movement, not direction or profit.</b> A hit is a 20% move either way, or volume at 3x. The test says nothing about what a position would
+            have returned.
+          </li>
+          <li>
+            <b>One calibrated strategy.</b> Fast Mover is the only strategy with a measured record. Every other strategy is provisional and says so on
+            every screen.
+          </li>
+        </ol>
+        <p className="ld-foot">
+          Method, the event list and what the test does not prove: <Link to="/strategies/fast_mover">the evidence page</Link>.
+        </p>
+      </div>
+    </section>
+  );
+}
 
-      <section className="ld-cta">
-        <h2>Your first brief is a minute away.</h2>
-        <p className="ld-sub">Pick an industry, read today's brief, and tell it which names to watch for you.</p>
-        <Link to={primary[0]} className="btn btn-primary btn-lg">
-          {primary[1]} <Icon name="arrow" size={18} />
+/* 5. Who it is for ---------------------------------------------------- */
+
+const WHO = [
+  {
+    title: "You already follow an industry.",
+    body: "You know the names. What you lack is the morning: which of them changed, which filed, which has a date coming. The brief is that morning, every day, with the working shown.",
+  },
+  {
+    title: "You want to be told, not to watch.",
+    body: "Pin the names, arm the facts you care about, and get on with your day. When a borrow fee doubles or a short-interest print crosses 15%, the message arrives the same day.",
+  },
+  {
+    title: "You want the working shown.",
+    body: "Every score says how many inputs had data and what the missing ones did to it. Every alert names its fact. Every figure carries a source and a date you can check.",
+  },
+];
+
+function WhoFor() {
+  const [ref, seen] = useReveal();
+  return (
+    <section ref={ref} id="who" className={`ld-sec reveal ${seen ? "in" : ""}`} aria-labelledby="who-h">
+      <div className="ld-wrap">
+        <div className="ld-sec-head">
+          <p className="ld-kicker">Who it is for</p>
+          <h2 id="who-h">Three kinds of morning.</h2>
+        </div>
+        <div className="ld-who">
+          {WHO.map((w) => (
+            <article className="ld-who-card" key={w.title}>
+              <h3>{w.title}</h3>
+              <p>{w.body}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* 6. Plans ------------------------------------------------------------ */
+
+const CHANNEL_LABEL = { email: "email", push: "web push", sms: "SMS", webhook: "signed webhook" };
+
+function listWords(items) {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+// "unlimited alerts · 5 industries · 20 pins": the plan's facts, alerts first.
+function factsLine(t) {
+  return [alertsLabel(t.alerts_limit), industriesLabel(t.industries_limit), plural(t.picks_limit, "pin")].join(" · ");
+}
+
+// One sentence per plan saying what you would be told, built from the plan's
+// own limits. Utility first; the price is a number beside it.
+function toldText(t) {
+  const ind = t.industries_limit >= 999 ? "every industry" : plural(t.industries_limit, "industry", "industries");
+  const names = `the top ${t.names_shown_limit} names explained`;
+  const chans = (t.channels || []).map((c) => CHANNEL_LABEL[c] || c);
+  const by = chans.length ? ` by ${listWords(chans)}` : "";
+  if (t.alerts_limit === 0) return `Each morning you'd be told what changed across ${ind}, with ${names}. No alerts, so you check in yourself.`;
+  const pins = t.picks_limit >= 999 ? "any name you pin" : plural(t.picks_limit, "pinned name");
+  return `Each morning you'd be told what changed across ${ind}, with ${names}. Arm ${alertsLabel(t.alerts_limit)} on ${pins} and you're messaged${by} the day a fact changes.`;
+}
+
+// Same shape as Told: wait for /entitlements (loaded or failed), then mount.
+function Plans({ tiers, me }) {
+  return tiers === undefined ? null : <PlansBody tiers={tiers} me={me} />;
+}
+
+function PlansBody({ tiers, me }) {
+  const [ref, seen] = useReveal();
+  const sorted = tiers ? [...tiers].sort((a, b) => a.price_monthly_cents - b.price_monthly_cents) : [];
+  return (
+    <section ref={ref} id="plans" className={`ld-sec reveal ${seen ? "in" : ""}`} aria-labelledby="plans-h">
+      <div className="ld-wrap">
+        <div className="ld-sec-head">
+          <p className="ld-kicker">Plans</p>
+          <h2 id="plans-h">Start free. Pay for coverage, not for different numbers.</h2>
+          <p className="ld-sub">
+            Every plan sees the same scores and the same reports. Plans differ only in how much of the universe you follow, how many names you pin, and how
+            alerts reach you.
+          </p>
+        </div>
+        {sorted.length > 0 ? (
+          <div className="ld-plangrid">
+            {sorted.map((t) => {
+              const free = t.price_monthly_cents === 0;
+              const to = me ? "/pricing" : free ? "/signup" : `/signup?next=${encodeURIComponent("/pricing")}`;
+              const label = me ? "Compare plans" : free ? "Start free" : `Start on ${t.label}`;
+              const pro = t.key === "pro";
+              return (
+                <article className={`ld-plan ${pro ? "hi" : ""}`} key={t.key} aria-label={`${t.label} plan`}>
+                  <div className="ld-plan-top">
+                    <span className="ld-plan-name">{t.label}</span>
+                    <span className="ld-plan-price">
+                      {free ? "$0" : dollars(t.price_monthly_cents)}
+                      {!free && <small>/mo</small>}
+                    </span>
+                  </div>
+                  <p className="ld-plan-facts">{factsLine(t)}</p>
+                  <p className="ld-plan-told">{toldText(t)}</p>
+                  <ul className="ld-plan-list">
+                    <li>Top {t.names_shown_limit} names per industry each morning</li>
+                    <li>{(t.channels || []).length ? `Delivery by ${listWords((t.channels || []).map((c) => CHANNEL_LABEL[c] || c))}` : "Weekly digest by email"}</li>
+                  </ul>
+                  <Link to={to} className={`btn ${pro || free ? "btn-primary" : "btn-secondary"} btn-block`}>
+                    {label}
+                  </Link>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="ld-empty">
+            Plans start free. <Link to="/pricing">See every plan side by side</Link>.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* 7. FAQ -------------------------------------------------------------- */
+
+const FAQ = [
+  [
+    "Is this advice?",
+    "No. Everything here is a recorded fact with its source and its date: what a score was, what fired, what the price did after. Nothing on this site is a recommendation to buy or sell anything.",
+  ],
+  [
+    "What is an alert?",
+    "A message we send when a specific fact changes on a name you asked us to watch: a borrow fee doubling, a short-interest print crossing 10, 15 or 20%, volume at 3x its 20-day average, a dated catalyst, a dilution filing, insiders buying. Each alert names the fact that fired it and how it reached you.",
+  ],
+  [
+    "What does the ~ mean?",
+    "Thin coverage. Fewer than half of a strategy's inputs had data on that run, so the score is approximate and the report says so: how many inputs had data, and how far the missing ones pulled the number toward a neutral 40.",
+  ],
+  [
+    "Can I cancel?",
+    "Yes, any time, from your account. Access runs to the end of the period you have paid for, then the account returns to Free with your pins and settings intact.",
+  ],
+];
+
+function Faq() {
+  const [ref, seen] = useReveal();
+  return (
+    <section ref={ref} id="faq" className={`ld-sec reveal ${seen ? "in" : ""}`} aria-labelledby="faq-h">
+      <div className="ld-wrap">
+        <div className="ld-sec-head">
+          <p className="ld-kicker">Questions</p>
+          <h2 id="faq-h">Four things people ask first.</h2>
+        </div>
+        <div className="faq ld-faq">
+          {FAQ.map(([q, a]) => (
+            <details key={q}>
+              <summary>{q}</summary>
+              <p>{a}</p>
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* 8. Final call and the sticky bar ----------------------------------- */
+
+function Final({ me, pulse, run, innerRef }) {
+  const [ref, seen] = useReveal();
+  const primary = primaryAction(me);
+  const tally = pulse && pulse.alerts && pulse.alerts.fired > 0 ? tallySentence(pulse.alerts) : null;
+  return (
+    <section ref={ref} className={`ld-final ld-dark reveal ${seen ? "in" : ""}`} aria-labelledby="final-h">
+      <div className="ld-wrap ld-final-inner" ref={innerRef}>
+        <h2 id="final-h">Your first brief is a minute away.</h2>
+        <p className="ld-final-sub">Pick an industry, read today's brief, and tell it which names to watch for you.</p>
+        {tally && (
+          <p className="ld-final-fact">
+            Last {pulse.days || 30} days, every industry: {tally}
+          </p>
+        )}
+        <Link to={primary.to} className="btn btn-primary btn-lg">
+          {primary.label} <Icon name="arrow" size={18} />
         </Link>
-        {run && <p className="ld-age">Latest run {dateTime(run.as_of)}</p>}
-      </section>
+        {run && run.as_of && <p className="ld-age">Latest run {dateTime(run.as_of)}</p>}
+      </div>
+    </section>
+  );
+}
 
+function StickyCta({ hide }) {
+  return (
+    <div className={`ld-stick ${hide ? "hide" : ""}`} aria-hidden={hide ? "true" : undefined}>
+      <span className="ld-stick-text">
+        <b>Free plan</b>, no card
+      </span>
+      <Link to="/signup" className="btn btn-primary" tabIndex={hide ? -1 : undefined}>
+        Start free
+      </Link>
+    </div>
+  );
+}
+
+/* The page ------------------------------------------------------------ */
+
+export default function Landing() {
+  const { me, loading: meLoading } = useMe();
+  const { pulse, loading: pulseLoading } = usePulse(30);
+  // undefined = pending, null = failed, value = loaded
+  const [run, setRun] = useState(undefined);
+  const [industries, setIndustries] = useState(undefined);
+  const [tiers, setTiers] = useState(undefined);
+  useEffect(() => {
+    let alive = true;
+    api("/runs/latest")
+      .then((d) => alive && setRun(d || null))
+      .catch(() => alive && setRun(null));
+    cached("/industries")
+      .then((d) => alive && setIndustries((d && d.industries) || []))
+      .catch(() => alive && setIndustries(null));
+    cached("/entitlements")
+      .then((d) => alive && setTiers((d && d.tiers) || null))
+      .catch(() => alive && setTiers(null));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const loading = pulseLoading || (!pulse && (run === undefined || industries === undefined));
+
+  const ctaRef = useRef(null);
+  const finalRef = useRef(null);
+  const heroCtaOnScreen = useOnScreen(ctaRef);
+  const finalOnScreen = useOnScreen(finalRef);
+
+  return (
+    <div className="ld">
+      <Hero me={me} pulse={pulse} run={run} industries={industries} loading={loading} ctaRef={ctaRef} />
+      <Told pulse={pulse} />
+      <HowItWorks />
+      <Record />
+      <WhoFor />
+      <Plans tiers={tiers} me={me} />
+      <Faq />
+      <Final me={me} pulse={pulse} run={run} innerRef={finalRef} />
       <p className="ld-legal">
         Research and information only. Scores are machine output ranked for a human to review; nothing here is a recommendation to buy or sell any
-        security. Past movement after a screen is not a forecast of future movement.
+        security. Past movement after a screen or an alert is not a forecast of future movement.
       </p>
+      {!me && !meLoading && <StickyCta hide={heroCtaOnScreen || finalOnScreen} />}
     </div>
   );
 }
