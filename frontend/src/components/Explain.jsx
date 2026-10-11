@@ -91,7 +91,7 @@ export default function Explain({ term, text, title, plain, label, more, childre
           )}
           {more && (
             <Link to={more} className="xp-more" onClick={() => setOpen(false)}>
-              How it scores
+              How it hunts
             </Link>
           )}
           {term && !more && (
@@ -105,10 +105,16 @@ export default function Explain({ term, text, title, plain, label, more, childre
   );
 }
 
-// The term's own name, explained. <Term k="shrinkage" /> → "Shrinkage" underlined.
-export function Term({ k, children }) {
+// The term's own name, explained. <Term k="shrinkage" /> → "pulled toward
+// neutral for missing data" underlined: the plain phrase, the technical word
+// in brackets left to the popover's heading.
+export function plainTerm(k) {
   const g = GLOSSARY[k];
-  return (
-    <Explain term={k}>{children || (g ? g.term.toLowerCase() : k)}</Explain>
-  );
+  if (!g) return k;
+  const plain = g.term.replace(/\s*\([^)]*\)\s*$/, "");
+  return plain.charAt(0).toLowerCase() + plain.slice(1);
+}
+
+export function Term({ k, children }) {
+  return <Explain term={k}>{children || plainTerm(k)}</Explain>;
 }

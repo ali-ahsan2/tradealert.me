@@ -2,19 +2,35 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
-import { coverage, dateTime, delta, score as fmtScore } from "../lib/fmt.js";
+import { coverage, dateTime, delta } from "../lib/fmt.js";
 import { SNAPSHOT_LABELS, HARD_FILTER_FORMAT } from "../lib/evidence.js";
+import { inputName } from "../lib/plain.js";
+import { useMode } from "../lib/mode.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import SearchBar from "../components/SearchBar.jsx";
-import { Empty, Monogram, Skeleton, StatusChip } from "../components/ui.jsx";
+import ScreenHead from "../components/ScreenHead.jsx";
+import FinePrint from "../components/FinePrint.jsx";
+import { PlainStatusChip } from "../components/Plain.jsx";
+import { Empty, Monogram, Skeleton } from "../components/ui.jsx";
 
 const MAX = 4;
+
+const statusOf = (st) => (st && st.plain && st.plain.status) || (st && st.calibrated ? "measured" : "provisional");
+
+// An input's part in the score, in three words: it lifted the number, it
+// weighed on it, or it had no data. The recipe (weights) is never shown;
+// the input's own 0-1 reading is a Full-mode figure.
+function inputWord(c) {
+  if (!c || c.score == null || c.backed === false) return "no data";
+  return Number(c.score) >= 0.5 ? "lifted" : "weighed";
+}
 
 // Up to four names side by side, each fetched through the same dossier
 // endpoint the report uses, so nothing is compared that the subscriber
 // could not open on its own. The URL is the state: a comparison is a link.
 export default function Compare() {
   const { me } = useMe();
+  const { simple } = useMode();
   const q = useQuery();
   const symbols = useMemo(
     () => (q.get("symbols") || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean).slice(0, MAX),
@@ -55,7 +71,7 @@ export default function Compare() {
   const loaded = symbols.map((s) => data[s]).filter((d) => d && !d.error);
   const componentKeys = useMemo(() => {
     const keys = new Map();
-    loaded.forEach((d) => (d.score?.components || []).forEach((c) => keys.set(c.key, c.label)));
+    loaded.forEach((d) => (d.score?.components || []).forEach((c) => keys.set(c.key, inputName(c))));
     return [...keys.entries()];
   }, [loaded]);
   const snapshotKeys = useMemo(() => {
@@ -70,38 +86,41 @@ export default function Compare() {
   }, [loaded]);
   const tz = me && me.settings ? me.settings.timezone : undefined;
 
+  const line =
+    symbols.length === 0
+      ? "Up to four names side by side on one strategy."
+      : `${symbols.length} of ${MAX} names side by side on ${(loaded[0] && loaded[0].strategy && loaded[0].strategy.label) || "one strategy"}.`;
+
   return (
     <div className="wrap">
-      <div className="pagehead">
-        <div>
-          <h1>Compare</h1>
-          <div className="meta">Up to four names, side by side, through one lens. The address bar is the comparison; share it as a link.</div>
-        </div>
-        <div className="actions">
-          {strategies && (
+      <ScreenHead
+        title="Compare for me"
+        line={line}
+        action={symbols.length < MAX ? <SearchBar onPick={add} placeholder={`Add a name (${symbols.length}/${MAX})`} /> : null}
+        secondary={
+          strategies ? (
             <select
               className="inline"
               value={strategy}
               onChange={(e) =>
                 navigate(`/compare?symbols=${symbols.join(",")}${e.target.value !== "fast_mover" ? `&strategy=${e.target.value}` : ""}`, { replace: true })
               }
-              aria-label="Strategy lens"
+              aria-label="Strategy"
             >
               {strategies.map((s) => (
                 <option key={s.key} value={s.key}>
                   {s.label}
-                  {s.calibrated ? "" : " (provisional)"}
+                  {statusOf(s) === "measured" ? "" : " (no measured record yet)"}
                 </option>
               ))}
             </select>
-          )}
-          {symbols.length < MAX && <SearchBar onPick={add} placeholder={`Add a name (${symbols.length}/${MAX})`} />}
-        </div>
-      </div>
+          ) : null
+        }
+      />
 
       {symbols.length === 0 && (
-        <Empty title="Pick up to four names to compare." action={<Link to="/board" className="btn btn-secondary">Choose from the Board</Link>}>
-          Search above, or tick names on the Board and choose “Compare”.
+        <Empty title="Pick up to four names to compare." action={<Link to="/board" className="btn btn-secondary">Pick from Explore</Link>}>
+          Search above, or tick names on Explore and choose “Compare”.
         </Empty>
       )}
 
@@ -143,8 +162,7 @@ export default function Compare() {
                         <span className="chip chip-plain">No score</span>
                       )}
                       <span className="small muted">
-                        <Monogram size={18}>{d.strategy.monogram}</Monogram> {d.strategy.label}{" "}
-                        <StatusChip calibrated={d.strategy.calibrated} short />
+                        <Monogram size={18}>{d.strategy.monogram}</Monogram> {d.strategy.label} <PlainStatusChip status={statusOf(d.strategy)} />
                       </span>
                     </div>
                     <div className="cmp-row">
@@ -152,11 +170,11 @@ export default function Compare() {
                       <span className="small">{d.industry.label}</span>
                     </div>
                     <div className="cmp-row">
-                      <span className="k">Since last run</span>
+                      <span className="k">Since the last scoring</span>
                       <span className="mono">{d.score ? delta(d.score.delta_1d) : "—"}</span>
                     </div>
                     <div className="cmp-row">
-                      <span className="k">Coverage</span>
+                      <span className="k">{simple ? "Inputs with data" : "Coverage"}</span>
                       <span className="mono">
                         {d.score ? `${d.score.components_present}/${d.score.components_total} · ${coverage(d.score.components_present, d.score.components_total).state}` : "—"}
                       </span>
@@ -164,7 +182,7 @@ export default function Compare() {
 
                     {filterKeys.length > 0 && (
                       <div className="cmp-section">
-                        <h4>Hard filters</h4>
+                        <h4>{simple ? "Must-pass rules" : "Hard filters"}</h4>
                         {filterKeys.map(([k, label]) => {
                           const f = (d.score?.hard_filters || []).find((x) => x.key === k);
                           return (
@@ -174,7 +192,7 @@ export default function Compare() {
                                 {f ? (
                                   <>
                                     <span className={`verdict ${f.pass ? "pass" : "fail"}`}>{f.pass ? "PASS" : "FAIL"}</span>{" "}
-                                    <span className="muted">{(HARD_FILTER_FORMAT[k] || String)(f.value)}</span>
+                                    <span className="muted full-only">{(HARD_FILTER_FORMAT[k] || String)(f.value)}</span>
                                   </>
                                 ) : (
                                   "no data"
@@ -188,22 +206,17 @@ export default function Compare() {
 
                     {componentKeys.length > 0 && (
                       <div className="cmp-section">
-                        <h4>Components</h4>
+                        <h4>{simple ? "What moved the score" : "Components"}</h4>
                         {componentKeys.map(([k, label]) => {
                           const c = (d.score?.components || []).find((x) => x.key === k);
+                          const word = inputWord(c);
                           return (
-                            <div className={`cmp-row ${c ? "" : "missing"}`} key={k} title={c && c.value != null ? String(c.value) : ""}>
+                            <div className={`cmp-row ${c && word !== "no data" ? "" : "missing"}`} key={k} title={c && c.value != null ? String(c.value) : ""}>
                               <span className="k">{label}</span>
-                              {c ? (
-                                <>
-                                  <span className="cmp-track" aria-hidden="true">
-                                    <span style={{ width: `${Math.round((c.score || 0) * 100)}%` }} />
-                                  </span>
-                                  <span className="mono">{(c.score ?? 0).toFixed(2)}</span>
-                                </>
-                              ) : (
-                                <span className="mono faint">no data</span>
-                              )}
+                              <span className={`mono ${word === "no data" ? "faint" : ""}`}>
+                                {word}
+                                {c && word !== "no data" ? <span className="full-only"> · {(c.score ?? 0).toFixed(2)}</span> : null}
+                              </span>
                             </div>
                           );
                         })}
@@ -226,7 +239,7 @@ export default function Compare() {
                       </div>
                     )}
 
-                    <p className="footnote">Run {dateTime(d.run.as_of, tz)}</p>
+                    <p className="footnote">Rated {dateTime(d.run.as_of, tz)}</p>
                   </>
                 )}
               </div>
@@ -236,10 +249,10 @@ export default function Compare() {
       )}
       {loaded.length > 1 && (
         <p className="footnote">
-          Band words are only comparable within one strategy; this view holds the lens fixed for
-          that reason. Scores rank; they are not probabilities.
+          Rating words are only comparable within one strategy, so this view holds the strategy fixed. Scores rank; they are not probabilities.
         </p>
       )}
+      <FinePrint short />
     </div>
   );
 }

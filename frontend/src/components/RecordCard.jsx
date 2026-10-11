@@ -4,6 +4,7 @@ import { plural, tone } from "../lib/fmt.js";
 import { HOME_ROWS } from "../lib/caps.js";
 import { beyondSentence, leadPhrase, missSentence, tallySentence, toldHeadline } from "../lib/record.js";
 import { openUpgrade } from "../lib/upgrade.js";
+import { CTA } from "../lib/plain.js";
 import { Move } from "./Spark.jsx";
 import NotifyButton from "./NotifyButton.jsx";
 import "./upgrade.css";
@@ -14,7 +15,7 @@ import "./upgrade.css";
 //
 //   <YoudHaveKnown record={record} />
 //     the alerts that fired on names in your industries with no rule armed,
-//     biggest measured move first, each with its lead time and Notify me;
+//     biggest measured move first, each with its lead time and Alert me;
 //     the tally; the names the plan did not list, as a count; and, as
 //     counts only, what fired beyond the industries you follow.
 //
@@ -114,7 +115,7 @@ export function YoudHaveKnown({ record }) {
         <>
           <ul className="rec-list">
             {rows.map((e) => (
-              <RecordRow key={e.id ?? `${e.symbol}-${e.date}-${e.trigger_key}`} e={e} action={<NotifyButton symbol={e.symbol} compact label="Alert me" onLabel="Alerting you" />} />
+              <RecordRow key={e.id ?? `${e.symbol}-${e.date}-${e.trigger_key}`} e={e} action={<NotifyButton symbol={e.symbol} compact />} />
             ))}
           </ul>
           <p className="rec-sum">
@@ -155,19 +156,19 @@ export function YourRecord({ record, topPinned = null, canAlert = true }) {
           {canAlert
             ? topPinned
               ? `Ask to be alerted on ${topPinned.symbol} and this fills from the first one, with what the price did after.`
-              : "Pin a name and ask to be alerted; this fills from the first one, with what the price did after."
+              : "Watch a name and ask to be alerted; this fills from the first one, with what the price did after."
             : "Alerts start on the next plan; this fills from the first one you are told about."}
         </p>
         <div className="rec-nudge">
-          {canAlert && topPinned && <NotifyButton symbol={topPinned.symbol} compact label="Alert me" onLabel="Alerting you" />}
+          {canAlert && topPinned && <NotifyButton symbol={topPinned.symbol} compact />}
           {canAlert && !topPinned && (
             <Link to="/board" className="btn btn-secondary btn-sm">
-              Show me the Board
+              {CTA.BOARD}
             </Link>
           )}
           {!canAlert && (
             <button type="button" className="btn-quiet" onClick={() => openUpgrade("alerts")}>
-              See plans with alerts
+              {CTA.PLANS_WITH_ALERTS}
             </button>
           )}
         </div>

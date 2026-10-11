@@ -3,6 +3,7 @@ import { api, logout, toast } from "../api.js";
 import { Link, Redirect, navigate } from "../lib/router.jsx";
 import { currentTermsVersion, hasConsent, useMe } from "../lib/me.jsx";
 import { CONSENT_LABEL } from "../lib/legal.js";
+import FinePrint from "../components/FinePrint.jsx";
 
 // The consent gate (DESIGN_V6 §6, §10): one screen, one tick, one button.
 // Shown in place of any app screen until the account has accepted the
@@ -52,8 +53,9 @@ export default function Welcome() {
             </span>
           </span>
         </label>
+        <FinePrint short links={false} className="welcome-fine" />
         <button type="submit" className="btn btn-primary btn-block" disabled={!tick || busy}>
-          {busy ? "One moment…" : "Continue"}
+          {busy ? "One moment…" : "Open my Home"}
         </button>
         <p className="xs faint welcome-out">
           {me && me.email ? `Signed in as ${me.email}. ` : ""}

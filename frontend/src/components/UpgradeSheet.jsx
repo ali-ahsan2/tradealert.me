@@ -5,7 +5,9 @@ import { useMe } from "../lib/me.jsx";
 import { UPGRADE_EVENT } from "../lib/upgrade.js";
 import { beyondSentence, fetchRecord } from "../lib/record.js";
 import { dollars, plural } from "../lib/fmt.js";
+import { CTA } from "../lib/plain.js";
 import { Skeleton } from "./ui.jsx";
+import FinePrint from "./FinePrint.jsx";
 import "./upgrade.css";
 
 // The upgrade sheet (DESIGN_V5 §4.6, §5). Mounted once in the shell; any
@@ -23,14 +25,14 @@ const unlimited = (n) => n == null || n >= 999;
 const lim = (n) => (unlimited(n) ? Infinity : n);
 const industriesWord = (n) => (unlimited(n) ? "every industry" : plural(n, "industry", "industries"));
 const alertsWord = (n) => (n === 0 ? "no alerts" : unlimited(n) ? "unlimited alerts" : plural(n, "alert"));
-const pinsWord = (n) => (unlimited(n) ? "unlimited pins" : plural(n, "pin"));
+const pinsWord = (n) => (unlimited(n) ? "any number of names watched" : `${plural(n, "name")} watched`);
 const channelNames = (cs) => (cs || []).map((c) => CHANNEL_LABEL[c] || c);
 const andList = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs[0] || "");
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 // One line per plan, from its own limits: what it watches and how it tells you.
 function whatLine(t) {
-  return `Follows ${industriesWord(t.industries_limit)} · top ${t.names_shown_limit} names each · ${pinsWord(t.picks_limit)} · ${alertsWord(t.alerts_limit)} · ${channelNames(t.channels).join(", ")}`;
+  return `Watches ${industriesWord(t.industries_limit)} · top ${t.names_shown_limit} names each · ${pinsWord(t.picks_limit)} · ${alertsWord(t.alerts_limit)} · ${channelNames(t.channels).join(", ")}`;
 }
 
 // Whether a plan above the current one actually answers the reason the
@@ -81,14 +83,14 @@ function titleFor(reason, ctx, cur, usage, record, tiers) {
   if (cur) {
     if (reason === "alerts") {
       const n = cur.alerts_limit;
-      if (n === 0) return "Your plan arms no alerts.";
-      if (unlimited(n)) return "Your plan arms unlimited alerts.";
-      if (u.alerts_used != null && u.alerts_used >= n) return `Your plan arms ${plural(n, "alert")}; you have used them.`;
-      if (u.alerts_used != null) return `Your plan arms ${plural(n, "alert")}; you have used ${u.alerts_used}.`;
-      return `Your plan arms ${plural(n, "alert")}.`;
+      if (n === 0) return "Your plan sends no alerts.";
+      if (unlimited(n)) return "Your plan sends unlimited alerts.";
+      if (u.alerts_used != null && u.alerts_used >= n) return `Your plan sends ${plural(n, "alert")}; you have used them.`;
+      if (u.alerts_used != null) return `Your plan sends ${plural(n, "alert")}; you have used ${u.alerts_used}.`;
+      return `Your plan sends ${plural(n, "alert")}.`;
     }
-    if (reason === "picks") return `Your plan pins ${unlimited(cur.picks_limit) ? "any number of names" : plural(cur.picks_limit, "name")}.`;
-    if (reason === "industries") return `Your plan follows ${industriesWord(cur.industries_limit)}.`;
+    if (reason === "picks") return `Your plan watches ${unlimited(cur.picks_limit) ? "any number of names" : plural(cur.picks_limit, "name")} for you.`;
+    if (reason === "industries") return `Your plan watches ${industriesWord(cur.industries_limit)}.`;
     if (reason === "names") return `Your plan lists the top ${cur.names_shown_limit} names per industry.`;
   }
   if (reason === "beyond") {
@@ -99,7 +101,7 @@ function titleFor(reason, ctx, cur, usage, record, tiers) {
     const s = channelsTitle(ctx, cur, tiers);
     if (s) return s;
   }
-  if (cur) return `Your plan follows ${industriesWord(cur.industries_limit)} and arms ${alertsWord(cur.alerts_limit)}.`;
+  if (cur) return `Your plan watches ${industriesWord(cur.industries_limit)} and sends ${alertsWord(cur.alerts_limit)}.`;
   return "Plans differ in how much we watch for you and how alerts reach you.";
 }
 
@@ -114,22 +116,22 @@ function ledeFor(reason, ctx, cur, usage, record, t) {
   switch (reason) {
     case "alerts": {
       if (missed && missed.summary && missed.summary.fired) {
-        return `${L} arms ${alertsWord(t.alerts_limit)}; this month ${plural(missed.summary.fired, "alert")} fired on ${plural(missed.summary.names, "name")} in your industries you were not watching.`;
+        return `${L} sends ${alertsWord(t.alerts_limit)}; this month ${plural(missed.summary.fired, "alert")} fired on ${plural(missed.summary.names, "name")} in your industries you were not watching.`;
       }
-      return `${L} arms ${alertsWord(t.alerts_limit)} on the names you choose, by ${andList(channelNames(t.channels))}.`;
+      return `${L} sends ${alertsWord(t.alerts_limit)} on the names you choose, by ${andList(channelNames(t.channels))}.`;
     }
     case "picks": {
       const n = unlimited(t.picks_limit) ? "any number of names" : plural(t.picks_limit, "name");
-      if (ctx.symbol) return `${L} pins ${n}, so ${ctx.symbol} would stay in view beside the ${u.picks_used != null ? plural(u.picks_used, "name") : "names"} you have pinned.`;
-      if (cur && u.picks_used != null) return `${L} pins ${n}; you have pinned ${u.picks_used} of ${cur.picks_limit}.`;
-      return `${L} pins ${n}.`;
+      if (ctx.symbol) return `${L} watches ${n} for you, so ${ctx.symbol} would stay in view beside the ${u.picks_used != null ? plural(u.picks_used, "name") : "names"} you already watch.`;
+      if (cur && u.picks_used != null) return `${L} watches ${n} for you; you watch ${u.picks_used} of ${cur.picks_limit}.`;
+      return `${L} watches ${n} for you.`;
     }
     case "industries": {
       if (beyond && beyond.summary && beyond.summary.fired) {
-        return `${L} follows ${industriesWord(t.industries_limit)}; this month ${plural(beyond.summary.fired, "alert")} fired across ${plural(beyond.summary.industries, "industry", "industries")} you don't follow.`;
+        return `${L} watches ${industriesWord(t.industries_limit)}; this month ${plural(beyond.summary.fired, "alert")} fired across ${plural(beyond.summary.industries, "industry", "industries")} you don't follow.`;
       }
-      if (cur && u.industries_followed != null) return `${L} follows ${industriesWord(t.industries_limit)}; you follow ${u.industries_followed} of ${cur.industries_limit}.`;
-      return `${L} follows ${industriesWord(t.industries_limit)}.`;
+      if (cur && u.industries_followed != null) return `${L} watches ${industriesWord(t.industries_limit)}; you follow ${u.industries_followed} of ${cur.industries_limit}.`;
+      return `${L} watches ${industriesWord(t.industries_limit)}.`;
     }
     case "names": {
       if (missed && missed.names_total > missed.names_shown) {
@@ -141,16 +143,16 @@ function ledeFor(reason, ctx, cur, usage, record, t) {
       const s = beyond && beyond.summary;
       if (s && s.fired) {
         if (unlimited(t.industries_limit)) {
-          return s.fired === 1 ? `${L} follows every industry, so that alert would have been in your industries.` : `${L} follows every industry, so all ${s.fired} of those alerts would have been in your industries.`;
+          return s.fired === 1 ? `${L} watches every industry, so that alert would have been in your industries.` : `${L} watches every industry, so all ${s.fired} of those alerts would have been in your industries.`;
         }
-        return `${L} follows ${industriesWord(t.industries_limit)}; you follow ${u.industries_followed != null ? u.industries_followed : "yours"} and those alerts came from ${plural(s.industries, "industry", "industries")} more.`;
+        return `${L} watches ${industriesWord(t.industries_limit)}; you follow ${u.industries_followed != null ? u.industries_followed : "yours"} and those alerts came from ${plural(s.industries, "industry", "industries")} more.`;
       }
-      return `${L} follows ${industriesWord(t.industries_limit)}.`;
+      return `${L} watches ${industriesWord(t.industries_limit)}.`;
     }
     case "channels":
       return `${L} delivers the same alerts by ${andList(channelNames(t.channels))}.`;
     default:
-      return `${L} follows ${industriesWord(t.industries_limit)}, lists the top ${t.names_shown_limit} names in each, pins ${unlimited(t.picks_limit) ? "any number" : t.picks_limit} and arms ${alertsWord(t.alerts_limit)}.`;
+      return `${L} watches ${industriesWord(t.industries_limit)}, lists the top ${t.names_shown_limit} names in each, watches ${unlimited(t.picks_limit) ? "any number of names" : plural(t.picks_limit, "name")} for you and sends ${alertsWord(t.alerts_limit)}.`;
   }
 }
 
@@ -338,7 +340,7 @@ export default function UpgradeSheet() {
           <p className="lede">
             Couldn't load the plans.{" "}
             <Link to="/pricing" onClick={close}>
-              Open the plans page
+              {CTA.SHOW_PLANS}
             </Link>
             .
           </p>
@@ -370,10 +372,10 @@ export default function UpgradeSheet() {
 
         <div className="acts">
           <button type="button" className="btn btn-primary" disabled={busy || !t} onClick={choose}>
-            {busy ? "Opening…" : sandbox ? "Switch now" : "Continue to checkout"}
+            {busy ? "Opening…" : !getToken() && t ? CTA.START_ON(t.label) : sandbox ? CTA.SWITCH_NOW : CTA.CHECKOUT}
           </button>
           <Link to="/pricing" className="btn btn-secondary" onClick={close}>
-            Compare plans
+            {CTA.SHOW_PLANS}
           </Link>
         </div>
         {msg && (
@@ -381,7 +383,8 @@ export default function UpgradeSheet() {
             {msg}
           </p>
         )}
-        <p className="fine">Ends any time; changes take effect at the end of the period. Nothing here is a recommendation.</p>
+        <p className="fine">Ends any time; changes take effect at the end of the period.</p>
+        <FinePrint short links={false} className="fine" />
       </div>
     </div>
   );

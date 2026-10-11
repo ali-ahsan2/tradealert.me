@@ -31,7 +31,7 @@ export default function Verified() {
             <>Verification gates delivery, not browsing: your Home worked before this and keeps working now.</>
           ) : (
             <>
-              Need a fresh link? Open <Link to={signedIn ? "/settings" : `/login?next=${encodeURIComponent("/settings")}`}>Account</Link> and tap
+              Need a fresh link? Open <Link to={signedIn ? "/settings" : `/login?next=${encodeURIComponent("/settings")}`}>My account</Link> and tap
               “Resend the email”.
             </>
           )}

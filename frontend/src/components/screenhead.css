@@ -1,0 +1,101 @@
+/* One line and one action at the top of a screen (DESIGN_V6 §5, §7). The
+   title is a short first-person noun, the line reads at card size, the one
+   primary control sits beside them on desktop and under them on a phone. */
+
+.shead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-5);
+  margin: 0 0 var(--s-5);
+  min-width: 0;
+}
+
+.shead-copy {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.shead-kicker {
+  margin: 0 0 var(--s-2);
+  font-size: 15px;
+  color: var(--ink-muted);
+}
+
+.shead-kicker a,
+.shead-kicker .backlink {
+  display: inline-block;
+  margin: 0;
+}
+
+.shead-title {
+  margin: 0;
+  font-size: var(--fs-xl);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.shead-line {
+  margin: var(--s-2) 0 0;
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--ink);
+  max-width: 56ch;
+  text-wrap: pretty;
+  font-variant-numeric: tabular-nums;
+}
+
+.shead-line b {
+  font-weight: 600;
+}
+
+.shead-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  min-width: 0;
+}
+
+.shead-primary .btn {
+  min-height: 44px;
+}
+
+.shead-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.shead-secondary .btn,
+.shead-secondary .btn-quiet {
+  min-height: 40px;
+}
+
+/* the quiet fine print right under a screen head */
+.shead + .fineprint-short {
+  margin: calc(-1 * var(--s-3)) 0 var(--s-5);
+}
+
+@media (max-width: 719px) {
+  .shead {
+    align-items: stretch;
+  }
+
+  .shead-acts {
+    width: 100%;
+  }
+
+  .shead-primary {
+    flex: 1 1 100%;
+  }
+
+  .shead-primary .btn {
+    width: 100%;
+    display: inline-flex;
+    justify-content: center;
+  }
+}

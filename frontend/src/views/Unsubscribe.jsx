@@ -52,19 +52,19 @@ export default function Unsubscribe() {
         {state === "ok" && (
           <>
             <h1>Unsubscribed.</h1>
-            <p className="sub">No more {what} to this address. Your account and watchlist are unchanged; turn it back on any time in Account.</p>
+            <p className="sub">No more {what} to this address. Your account and watchlist are unchanged; turn it back on any time in My account.</p>
           </>
         )}
         {state === "bad" && (
           <>
             <h1>That link is invalid or already used.</h1>
-            <p className="sub">If you still receive {what}, open Account and turn the channel off there.</p>
+            <p className="sub">If you still receive {what}, open My account and turn the channel off there.</p>
           </>
         )}
         {state === "missing" && (
           <>
             <h1>This link is incomplete.</h1>
-            <p className="sub">Open the unsubscribe link from the email itself, or manage delivery in Account.</p>
+            <p className="sub">Open the unsubscribe link from the email itself, or change how you are reached in My account.</p>
           </>
         )}
         {state === "offline" && (
@@ -75,7 +75,7 @@ export default function Unsubscribe() {
         )}
         {state !== "busy" && (
           <Link to={signedIn ? "/settings#channels" : `/login?next=${encodeURIComponent("/settings")}`} className="btn btn-secondary btn-block">
-            Manage delivery in Account
+            Change how I'm reached
           </Link>
         )}
         <p className="small muted" style={{ marginTop: "var(--s-4)", marginBottom: 0 }}>

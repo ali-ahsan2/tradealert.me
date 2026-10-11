@@ -256,6 +256,19 @@
   color: var(--h-faint);
 }
 
+/* the fine print line under the hero actions sits on the dark panel */
+.ld-hero .ld-fineprint {
+  margin-top: 4px;
+  font-size: var(--fs-sm);
+  color: var(--h-faint);
+}
+
+/* "Measured, not predicted." opens the lede in the hero's ink */
+.ld-measured {
+  color: var(--h-fg, #fff);
+  font-weight: 700;
+}
+
 .ld-hero-panel {
   min-width: 0;
 }
@@ -885,7 +898,8 @@
   min-width: 0;
 }
 
-.ld-plan.hi {
+/* only the viewer's own plan is marked (DESIGN_V6 §1: never "popular") */
+.ld-plan.mine {
   box-shadow: 0 0 0 2px var(--accent), var(--shadow-lift);
 }
 
@@ -929,9 +943,8 @@
   color: var(--ink);
 }
 
-.ld-plan.hi .ld-plan-facts {
+.ld-plan.mine .ld-plan-facts {
   color: var(--accent);
-  font-size: var(--fs-md);
 }
 
 .ld-plan-told {
@@ -1048,6 +1061,65 @@
   font-size: var(--fs-xs);
   color: var(--ink-faint);
   line-height: 1.55;
+}
+
+/* three told rows, then "Show all N" in the same quiet weight */
+.ld-told .ld-more {
+  align-self: flex-start;
+  min-height: 44px;
+  margin-top: var(--s-2);
+}
+
+.ld-inds .ld-inds-more {
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+
+/* every tested name sits behind one closed drawer */
+.ld-recdetails {
+  margin-top: var(--s-6);
+}
+
+.ld-recdetails > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.ld-recdetails > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ld-recdetails > summary h3 {
+  margin: 0;
+  font-size: var(--fs-lg);
+}
+
+.ld-recdetails > summary h3::after {
+  content: " ›";
+  color: var(--ink-muted);
+}
+
+.ld-recdetails[open] > summary h3::after {
+  content: " ⌄";
+}
+
+.ld-recdetails > summary .ld-sub {
+  margin: 0;
+}
+
+.ld-recdetails[open] > summary {
+  margin-bottom: var(--s-4);
+}
+
+/* the final call carries the three sentences; let it wrap as three lines */
+.ld-final h2 {
+  text-wrap: balance;
+  max-width: 26ch;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 @media (min-width: 900px) {

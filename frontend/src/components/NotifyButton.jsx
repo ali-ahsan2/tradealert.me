@@ -4,12 +4,16 @@ import { Link, navigate } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { openUpgrade } from "../lib/upgrade.js";
 import { DEFAULT_TRIGGERS, TRIGGER_PLAIN } from "../lib/glossary.js";
+import { CTA } from "../lib/plain.js";
 import { Modal } from "./ui.jsx";
 
-// One tap to be told about a name. Arms the three default triggers over
-// email, the facts a newcomer most wants to hear about. The bell fills the
-// moment it is tapped (DESIGN_V5 §5) and goes back, with a card or a toast
-// that names the way out, if the API refuses. Every refusal (unverified
+// One tap to be told about a name ("Alert me"). Turns on the three default
+// facts over email, the ones a newcomer most wants to hear about. The bell
+// fills the moment it is tapped (DESIGN_V5 §5) and goes back, with a card or
+// a toast that names the way out, if the API refuses. Once any alert is on
+// for the name the button reads "Alerting me" and opens the name's alerts;
+// `manage` renders that state as the quiet "My alerts" link the Alerts
+// screen uses beside its own list (DESIGN_V6 §2 vocabulary, lib/plain CTA). Every refusal (unverified
 // email, a plan with no alerts, a plan at its quota) opens a short card
 // that says what we would watch and the way out, in that order; the price
 // is never the first sentence, and the paid way out opens the upgrade
@@ -61,7 +65,7 @@ function Bell({ on }) {
   );
 }
 
-export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, label = "Notify me", onLabel = "Notifying", compact = false, className = "" }) {
+export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, label = CTA.ALERT_ME, onLabel = CTA.ALERTING, manage = false, compact = false, className = "" }) {
   const { me } = useMe();
   const rules = useRulesFor(symbol, Boolean(me));
   const inflight = useRef(false);
@@ -100,7 +104,7 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
         await api("/me/alerts/rules", { method: "POST", json: { symbol, trigger_key: k, channels: ["email"] } });
         armed += 1;
       }
-      toast(`Watching ${symbol}. We'll email you on ${plainList.length} triggers.`);
+      toast(`Alerts on for ${symbol}: we'll email you on ${plainList.length} facts.`);
     } catch (err) {
       // roll back to what the server holds; the shared rules reload below
       setAssumed(false);
@@ -117,10 +121,14 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
 
   // In a list the button is quiet (tinted) so forty rows do not shout; as a
   // dossier's primary action it is the filled accent.
-  const cls = `btn ${on || compact ? "btn-secondary" : "btn-primary"} btn-notify ${on ? "on" : ""} ${compact ? "btn-sm" : ""} ${className}`;
-  const text = on ? onLabel : anyArmed && rules ? "Manage alerts" : label;
-  const title = on
-    ? `Alerts on for ${symbol}: ${plainList.join(", ")}. Tap to manage.`
+  // any alert on for the name reads as "Alerting me"; the exact facts are in
+  // the title and one tap away on the name's alerts
+  const lit = on || (anyArmed && Boolean(rules));
+  const cls = `btn ${lit || compact ? "btn-secondary" : "btn-primary"} btn-notify ${lit ? "on" : ""} ${compact ? "btn-sm" : ""} ${className}`;
+  const text = lit ? (manage && !on ? CTA.MY_ALERTS : onLabel) : label;
+  const armedPlain = [...armedKeys].map((k) => (TRIGGER_PLAIN[k] ? TRIGGER_PLAIN[k][0].toLowerCase() : k));
+  const title = lit
+    ? `Alerts on for ${symbol}: ${(on ? plainList : armedPlain).join(", ")}. Tap to change them.`
     : `Tell me when ${symbol} has a ${plainList.join(", a ")}.`;
 
   const seePlans = (reason) => {
@@ -130,8 +138,8 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
 
   return (
     <>
-      <button type="button" className={cls} aria-pressed={on} title={title} onClick={arm}>
-        <Bell on={on} />
+      <button type="button" className={cls} aria-pressed={lit} title={title} onClick={arm}>
+        <Bell on={lit} />
         <span>{text}</span>
       </button>
       {card && card.kind === "verify" && (
@@ -140,14 +148,14 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
           onClose={() => setCard(null)}
           actions={
             <Link to="/settings" className="btn btn-primary" onClick={() => setCard(null)}>
-              Open account settings
+              Open my account
             </Link>
           }
         >
           <p>
             We would watch {symbol} for a {plainList.join(", a ")} and email you the moment one prints. Alerts only go to a verified address.
           </p>
-          <p className="muted">Open the link we sent when you signed up, or request a new one from account settings.</p>
+          <p className="muted">Open the link we sent when you signed up, or request a new one from My account.</p>
         </Modal>
       )}
       {card && card.kind === "plan" && (
@@ -157,10 +165,10 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
           actions={
             <>
               <Link to="/watchlist" className="btn btn-secondary" onClick={() => setCard(null)}>
-                Pin it instead
+                Watch it for me instead
               </Link>
               <button type="button" className="btn btn-primary" onClick={() => seePlans("alerts")}>
-                See plans
+                {CTA.PLANS_WITH_ALERTS}
               </button>
             </>
           }
@@ -168,7 +176,7 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
           <p>
             Alerts start on the Basic plan. We would watch {symbol} for a {plainList.join(", a ")} and email you when one prints, with the fact that fired it.
           </p>
-          <p className="muted">On the free plan you can pin the name and it stays in view on your Home and Watchlist.</p>
+          <p className="muted">On the free plan you can watch the name and it stays in view on your Home and My watchlist.</p>
         </Modal>
       )}
       {card && card.kind === "quota" && (
@@ -178,17 +186,17 @@ export default function NotifyButton({ symbol, triggers = DEFAULT_TRIGGERS, labe
           actions={
             <>
               <Link to="/alerts" className="btn btn-secondary" onClick={() => setCard(null)}>
-                Manage alerts
+                {CTA.MY_ALERTS}
               </Link>
               <button type="button" className="btn btn-primary" onClick={() => seePlans("alerts")}>
-                See plans
+                {CTA.NEXT_PLAN}
               </button>
             </>
           }
         >
           <p>{card.message || "Your plan's alert limit is reached."}</p>
-          {card.armed > 0 && <p className="muted">{card.armed} of {triggers.length} triggers were armed on {symbol} before the limit.</p>}
-          <p className="muted">Disarm an alert you no longer need, or move to a plan that can watch this name as well.</p>
+          {card.armed > 0 && <p className="muted">{card.armed} of {triggers.length} facts were turned on for {symbol} before the limit.</p>}
+          <p className="muted">Turn off an alert you no longer need, or move to a plan that can watch this name as well.</p>
         </Modal>
       )}
     </>

@@ -4,14 +4,18 @@ import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { alertsLabel, dollars, industriesLabel, plural } from "../lib/fmt.js";
 import { EVIDENCE } from "../lib/evidence.js";
 import { beyondSentence, fetchRecord } from "../lib/record.js";
+import { CTA } from "../lib/plain.js";
+import { openUpgrade } from "../lib/upgrade.js";
 import { ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
 import FinePrint from "../components/FinePrint.jsx";
+import ScreenHead from "../components/ScreenHead.jsx";
 
-// Plans in the public voice (DESIGN_V6 §3, §6): one card per plan, each
-// leading with its one-sentence promise and the price, six facts as a short
-// list, one button. The same cards at every width; no matrix table. A plan
-// is described by what it watches and delivers; the numbers are the same on
-// every plan and nothing here is advice.
+// Plans in the public voice (DESIGN_V6 §3, §6): one line and one action,
+// then one card per plan, each leading with its one-sentence promise and
+// the price, six facts as a short list, one button. The same cards at every
+// width; no matrix table. Only the viewer's own plan is marked (§1: never
+// "most popular"). A plan is described by what it watches and delivers; the
+// numbers are the same on every plan and nothing here is advice.
 
 const CHANNEL_LABEL = { email: "email", push: "web push", sms: "SMS", webhook: "signed webhook" };
 
@@ -107,9 +111,7 @@ export default function Pricing() {
   if (!d) {
     return (
       <div className="wrap plans">
-        <div className="pagehead">
-          <h1>{title}</h1>
-        </div>
+        <ScreenHead title={title} line="Every plan watches your industries each morning and tells you the day a fact changes." />
         <Skeleton rows={4} height={240} />
       </div>
     );
@@ -148,9 +150,9 @@ export default function Pricing() {
 
   const action = (t) => {
     const isCurrent = signedIn && t.key === currentKey;
-    if (isCurrent) return <span className="chip chip-cal plan-current">My plan</span>;
+    if (isCurrent) return <span className="chip chip-cal plan-current">{CTA.MY_PLAN}</span>;
     const up = t.price_monthly_cents > currentPrice;
-    const label = !signedIn ? (t.price_monthly_cents === 0 ? "Start free" : `Start on ${t.label}`) : up ? `Switch me to ${t.label}` : `Move me down to ${t.label}`;
+    const label = !signedIn ? (t.price_monthly_cents === 0 ? CTA.START_FREE : CTA.START_ON(t.label)) : up ? CTA.MOVE_TO(t.label) : CTA.MOVE_DOWN_TO(t.label);
     return (
       <button className={`btn ${up || !signedIn ? "btn-primary" : "btn-secondary"} btn-block`} disabled={busy === t.key} onClick={() => choose(t.key)}>
         {busy === t.key ? "Opening…" : label}
@@ -167,22 +169,31 @@ export default function Pricing() {
     ["Delivery", deliveryText(t)],
   ];
 
+  const onTop = signedIn && d.current && !tiers.some((t) => t.price_monthly_cents > currentPrice);
+  const line = signedIn
+    ? beyondLine
+      ? `In the last ${rec.days} days, ${beyondLine}`
+      : "Pay for coverage and delivery, not for different numbers."
+    : "Every plan watches your industries each morning; pay for coverage and delivery.";
+
   return (
     <div className="wrap plans">
-      <div className="pagehead plans-head">
-        <div>
-          <h1>{title}</h1>
-          <p className="utility">
-            Every plan watches your industries each morning and tells you the day a fact changes. Pay for <b>coverage and delivery</b>, not for
-            different numbers.
-          </p>
-          {beyondLine && (
-            <p className="utility plans-beyond">
-              In the last {rec.days} days, {beyondLine}
-            </p>
-          )}
-        </div>
-      </div>
+      <ScreenHead
+        className="plans-head"
+        title={title}
+        line={line}
+        action={
+          !signedIn ? (
+            <Link to="/signup" className="btn btn-primary">
+              {CTA.START_FREE}
+            </Link>
+          ) : !onTop ? (
+            <button type="button" className="btn btn-primary" onClick={() => openUpgrade("general")}>
+              Watch more for me
+            </button>
+          ) : null
+        }
+      />
 
       {msg && <Notice tone="info">{msg}</Notice>}
 
@@ -211,12 +222,14 @@ export default function Pricing() {
         })}
       </div>
       <p className="plans-fine">A subscription buys coverage and delivery, not advice.</p>
+      <FinePrint className="plans-fineprint" />
 
       <div className="section">
         <h2>What a plan changes</h2>
         <p className="section-lead">
           You see the top-rated names in each industry you follow, plus any name you ask it to watch. Watching a name widens what you can see; it
-          never changes the report you get. A name outside your universe simply has no report page, the same as a name that doesn't exist.
+          never changes the report you get. A name outside your industries and watchlist simply has no report page, the same as a name that doesn't
+          exist.
         </p>
       </div>
 
@@ -255,7 +268,7 @@ export default function Pricing() {
         <details>
           <summary>How does cancellation work?</summary>
           <p>
-            Cancel any time from your account. Access continues to the end of the period you've paid for, then the account returns to Free with your
+            Cancel any time from My account. Access continues to the end of the period you've paid for, then the account returns to Free with your
             watched names and settings intact.
           </p>
         </details>
@@ -276,7 +289,6 @@ export default function Pricing() {
           Already have an account? <Link to="/login?next=%2Fpricing">Log in</Link> to change your plan.
         </p>
       )}
-      <FinePrint className="plans-fineprint" />
     </div>
   );
 }

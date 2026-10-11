@@ -48,7 +48,7 @@ export default function Reset() {
       <div className="card form-card">
         {!token && !sent && (
           <form onSubmit={request}>
-            <h1>Reset your password</h1>
+            <h1>Reset my password</h1>
             <p className="sub">We'll email you a link that works for one hour.</p>
             <div className="field">
               <label htmlFor="reset-email">Email</label>
@@ -60,7 +60,7 @@ export default function Reset() {
               </p>
             )}
             <button className="btn btn-primary btn-block" disabled={busy}>
-              {busy ? "Sending…" : "Send reset link"}
+              {busy ? "Sending…" : "Send me a reset link"}
             </button>
           </form>
         )}
@@ -88,7 +88,7 @@ export default function Reset() {
               </p>
             )}
             <button className="btn btn-primary btn-block" disabled={busy}>
-              {busy ? "Saving…" : "Set password"}
+              {busy ? "Saving…" : "Set my password"}
             </button>
           </form>
         )}

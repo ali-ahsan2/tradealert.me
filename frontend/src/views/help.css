@@ -376,6 +376,21 @@
   font-weight: 700;
 }
 
+/* what tends to fire here, said only once ten alerts have fired */
+.indcard .ind-fires {
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+
+/* the fine print sits under the footer's buttons, full width */
+.sticky-foot .ob-fine {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--fs-xs);
+}
+
 /* a card beyond the plan's limit opens the upgrade sheet instead of toggling */
 .indcard.locked {
   border-style: dashed;

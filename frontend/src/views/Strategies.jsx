@@ -5,6 +5,8 @@ import { useMe } from "../lib/me.jsx";
 import { dateTime, plural, shortDate } from "../lib/fmt.js";
 import { ErrorCard, Monogram, Notice, Skeleton } from "../components/ui.jsx";
 import { PlainStatusChip, RecordLine, StrategyPlainCard } from "../components/Plain.jsx";
+import ScreenHead from "../components/ScreenHead.jsx";
+import FinePrint from "../components/FinePrint.jsx";
 
 // The strategies in human terms (DESIGN_V6 §8). Each one is a plain card:
 // what it hunts, what it looks for, the move it tries to catch, what it
@@ -39,24 +41,21 @@ export default function Strategies() {
   const lead = list && (list.find((s) => statusOf(s) === "measured") || list.find((s) => statusOf(s) !== "not_running"));
   return (
     <div className="wrap">
-      <div className="pagehead">
-        <div>
-          <h1>Strategies</h1>
-          <div className="meta">What each one looks for, in plain words, and what its record is.</div>
-        </div>
-      </div>
+      <ScreenHead
+        title="How it hunts"
+        line={list ? openerLine(list) : "What each strategy looks for, in plain words, and its record."}
+        action={
+          lead ? (
+            <Link to={boardLink(lead.key)} className="btn btn-primary">
+              Show me {lead.label}'s names
+            </Link>
+          ) : null
+        }
+      />
       {err && <ErrorCard error={err} title="Couldn't load the strategies." onRetry={() => window.location.reload()} />}
       {!err && !list && <Skeleton rows={3} height={120} />}
       {list && (
         <>
-          <div className="plain-opener">
-            <p>{openerLine(list)}</p>
-            {lead && (
-              <Link to={boardLink(lead.key)} className="btn btn-primary">
-                Show me {lead.label}'s names
-              </Link>
-            )}
-          </div>
           <div className="plain-list">
             {list.map((s) => {
               const status = statusOf(s);
@@ -73,7 +72,7 @@ export default function Strategies() {
                   {s.plain && <RecordLine plain={s.plain} className="plain-note" />}
                   <div className="plain-row-actions">
                     <Link to={`/strategies/${s.key}`} className="btn btn-secondary btn-sm">
-                      How it looks
+                      How it hunts
                     </Link>
                     {status !== "not_running" && (
                       <Link to={boardLink(s.key)} className="btn btn-primary btn-sm">
@@ -95,6 +94,7 @@ export default function Strategies() {
       <p className="footnote">
         A record is measured, never predicted: whether a large move followed, not its direction, and no profit is claimed.
       </p>
+      <FinePrint short />
     </div>
   );
 }
@@ -148,32 +148,34 @@ export function StrategyDetail({ strategyKey }) {
 
   return (
     <div className="wrap wrap-narrow">
-      <Link to="/strategies" className="backlink">
-        ← Strategies
-      </Link>
-      <div className="pagehead">
-        <div>
-          <h1 className="row">
+      <ScreenHead
+        kicker={
+          <Link to="/strategies" className="backlink">
+            ← How it hunts
+          </Link>
+        }
+        title={
+          <span className="row">
             <Monogram size={28}>{d.monogram}</Monogram>
             {d.label}
             <PlainStatusChip status={status} />
-          </h1>
-          <div className="meta">
-            {status === "measured"
-              ? `Measured record${d.calibrated_at ? `, published ${shortDate(d.calibrated_at)}` : ""}`
-              : status === "not_running"
-                ? "Being built. Not scoring yet."
-                : "No measured record yet"}
-          </div>
-        </div>
-        <div className="actions">
-          {status !== "not_running" && (
+          </span>
+        }
+        line={
+          status === "measured"
+            ? `It has a measured record${d.calibrated_at ? `, published ${shortDate(d.calibrated_at)}` : ""}.`
+            : status === "not_running"
+              ? "Being built; it puts no score on any name yet."
+              : "No measured record yet; treat its names as candidates."
+        }
+        action={
+          status !== "not_running" ? (
             <Link to={boardLink(d.key)} className="btn btn-primary">
               Show me its names
             </Link>
-          )}
-        </div>
-      </div>
+          ) : null
+        }
+      />
 
       {d.publishing_paused && (
         <Notice tone="warn">
@@ -242,6 +244,7 @@ export function StrategyDetail({ strategyKey }) {
           </p>
         )}
       </div>
+      <FinePrint short />
     </div>
   );
 }

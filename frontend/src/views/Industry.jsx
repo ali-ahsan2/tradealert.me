@@ -4,17 +4,22 @@ import { Link, navigate } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { useMode } from "../lib/mode.js";
 import { coverage, dateTime, delta, industriesLabel, pct, plural, price, score as fmtScore, shortDate } from "../lib/fmt.js";
+import { CTA, firesSentence, firstSentence } from "../lib/plain.js";
+import { LIST_CARDS } from "../lib/caps.js";
+import { openUpgrade } from "../lib/upgrade.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import BandBar from "../components/BandBar.jsx";
+import ScreenHead from "../components/ScreenHead.jsx";
+import FinePrint from "../components/FinePrint.jsx";
 import { EVIDENCE } from "../lib/evidence.js";
 import { Empty, ErrorCard, Skeleton } from "../components/ui.jsx";
-import { IndustryPlainLine } from "../components/Plain.jsx";
 
-// One industry, plain first (DESIGN_V6 §8): what is in it, why it moves,
-// what tends to fire there (measured from the alert record, never written),
-// the month in numbers, then its top names on Fast Mover when the viewer's
-// plan follows it. Simple mode shows one sentence where Full shows a card.
-// Names in an industry outside the plan are never listed; only the count is.
+// One industry, plain first (DESIGN_V6 §7, §8): one line on why it moves
+// and one action (watch it for me), then what is in it, what tends to fire
+// there (measured from the alert record, never written), the month in
+// numbers, then its top names on Fast Mover when the viewer's plan follows
+// it. Simple mode shows one sentence where Full shows a card. Names in an
+// industry outside the plan are never listed; only the count is.
 export default function Industry({ industryKey }) {
   const { me, refresh } = useMe();
   const { simple } = useMode();
@@ -23,6 +28,8 @@ export default function Industry({ industryKey }) {
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
+  // Simple shows ten names before "Show all" (lib/caps.js); Full shows the list
+  const [allNames, setAllNames] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -65,7 +72,7 @@ export default function Industry({ industryKey }) {
     return (
       <div className="wrap wrap-narrow">
         <Link to="/board" className="backlink">
-          ← Board
+          ← Explore
         </Link>
         {err.status === 404 ? <Empty title="No such industry." /> : <ErrorCard error={err} onRetry={() => setReload((n) => n + 1)} />}
       </div>
@@ -83,55 +90,65 @@ export default function Industry({ industryKey }) {
   const dist = shape.distribution || {};
   const month = d.month || {};
   const whatIsInIt = (d.plain && d.plain.what_is_in_it) || d.description;
+  const why = d.plain && d.plain.why_it_moves ? firstSentence(d.plain.why_it_moves) : "";
   const rx = d.reactions;
 
   return (
     <div className="wrap">
-      <Link to="/board" className="backlink">
-        ← Board
-      </Link>
-      <div className="pagehead">
-        <div>
-          <h1 className="ind-head">
-            {d.label}
-            {d.benchmark && (
-              <span className="ind-bench" title={d.benchmark.label}>
-                <span className="mono">{d.benchmark.symbol}</span>
-                {d.benchmark.last_close != null && <span className="mono">{price(d.benchmark.last_close)}</span>}
-                {d.benchmark.chg_30d != null && (
-                  <span className={`mono ${d.benchmark.chg_30d > 0 ? "pos" : d.benchmark.chg_30d < 0 ? "neg" : ""}`}>{pct(d.benchmark.chg_30d)} 30d</span>
-                )}
-                {d.benchmark.chg_90d != null && (
-                  <span className={`mono ${d.benchmark.chg_90d > 0 ? "pos" : d.benchmark.chg_90d < 0 ? "neg" : ""}`}>{pct(d.benchmark.chg_90d)} 90d</span>
-                )}
-              </span>
-            )}
-          </h1>
-          <div className="meta">
-            {whatIsInIt ? `${whatIsInIt} ` : ""}
-            {plural(d.universe_count, "name")}, measured against {d.benchmark_etf}
-            {d.benchmark && d.benchmark.last_date ? ` (close ${shortDate(d.benchmark.last_date)})` : ""}.
-          </div>
-        </div>
-        <div className="actions">
+      <ScreenHead
+        kicker={
+          <Link to="/board" className="backlink">
+            ← Explore
+          </Link>
+        }
+        title={d.label}
+        line={why || firstSentence(whatIsInIt)}
+        action={
           <button className={`btn ${d.followed ? "btn-secondary" : "btn-primary"}`} disabled={busy || atLimit} onClick={toggleFollow}>
-            {busy ? "…" : d.followed ? "Stop following" : getToken() ? "Follow this for me" : "Sign in to follow"}
+            {busy ? "…" : d.followed ? CTA.STOP_WATCHING : getToken() ? "Watch this industry for me" : "Log in to watch it"}
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      <IndustryPlainLine industry={d} className="plain-opener-line" />
+      <p className="plain-note">
+        {whatIsInIt && why ? `${whatIsInIt} ` : ""}
+        {plural(d.universe_count, "name")}, measured against {d.benchmark_etf}
+        {d.benchmark && d.benchmark.last_date ? ` (close ${shortDate(d.benchmark.last_date)})` : ""}.
+        {d.benchmark && (d.benchmark.chg_30d != null || d.benchmark.chg_90d != null) && (
+          <span className="ind-bench" title={d.benchmark.label}>
+            {" "}
+            {d.benchmark.symbol}
+            {d.benchmark.last_close != null && ` ${price(d.benchmark.last_close)}`}
+            {d.benchmark.chg_30d != null && (
+              <>
+                {" "}
+                <span className={d.benchmark.chg_30d > 0 ? "pos" : d.benchmark.chg_30d < 0 ? "neg" : ""}>{pct(d.benchmark.chg_30d)}</span> in 30 days
+              </>
+            )}
+            {d.benchmark.chg_90d != null && (
+              <>
+                {", "}
+                <span className={d.benchmark.chg_90d > 0 ? "pos" : d.benchmark.chg_90d < 0 ? "neg" : ""}>{pct(d.benchmark.chg_90d)}</span> in 90 days
+              </>
+            )}
+            .
+          </span>
+        )}
+      </p>
       {month.fired > 0 && (
         <p className="plain-note" style={{ marginTop: 6 }}>
           The month in numbers: <b>{month.fired}</b> {month.fired === 1 ? "alert" : "alerts"} fired here, <b>{month.measured}</b> measured so far,{" "}
-          <b>{month.moved_10}</b> moved 10% or more within five sessions.
+          <b>{month.moved_10}</b> moved 10% or more within five sessions.{month.fired >= 10 ? ` ${firesSentence(month)}` : ""}
         </p>
       )}
 
       {atLimit && (
         <p className="small muted" style={{ marginTop: "var(--s-3)" }}>
-          Your plan follows {industriesLabel(limit)}. Drop one in <Link to="/settings#industries">your account</Link>, or{" "}
-          <Link to="/pricing">see plans</Link> that follow more.
+          Your plan watches {industriesLabel(limit)}. Stop watching one in <Link to="/settings#industries">My account</Link>, or{" "}
+          <button type="button" className="linkbtn" onClick={() => openUpgrade("industries", { key: d.key, label: d.label })}>
+            {CTA.NEXT_PLAN.toLowerCase()}
+          </button>
+          .
         </p>
       )}
 
@@ -245,12 +262,12 @@ export default function Industry({ industryKey }) {
                       Data
                     </th>
                     <th scope="col" className="num">
-                      Since last run
+                      Since the last scoring
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {d.names.map((r) => {
+                  {(simple && !allNames ? d.names.slice(0, LIST_CARDS) : d.names).map((r) => {
                     const cov = coverage(r.components_present, r.components_total);
                     return (
                       <tr key={r.symbol} className="rowlink" onClick={() => navigate(`/stock/${r.symbol}`)}>
@@ -273,7 +290,7 @@ export default function Industry({ industryKey }) {
                           </span>
                           {r.components_present}/{r.components_total}
                         </td>
-                        <td className="num c-delta" data-label="Since last run">
+                        <td className="num c-delta" data-label="Since the last scoring">
                           {delta(r.delta_1d)}
                         </td>
                       </tr>
@@ -281,27 +298,34 @@ export default function Industry({ industryKey }) {
                   })}
                 </tbody>
               </table>
+              {simple && d.names.length > LIST_CARDS && (
+                <button type="button" className="btn-quiet" style={{ margin: "var(--s-2) var(--s-3) var(--s-3)", minHeight: 44 }} onClick={() => setAllNames((a) => !a)} aria-expanded={allNames}>
+                  {allNames ? CTA.SHOW_FEWER : CTA.SHOW_ALL(d.names.length)}
+                </button>
+              )}
             </div>
           )}
           <p className="footnote">
-            Shown: the top {d.names_shown_limit} your plan includes. <Link to={`/board?industry=${d.key}`}>Open on the Board</Link> for every
-            strategy and sort, or <Link to={`/screen?industries=${d.key}`}>find names in this industry</Link> on the market data on file.
+            Shown: the top {d.names_shown_limit} your plan includes. <Link to={`/board?industry=${d.key}`}>{CTA.BOARD}</Link> for every strategy and
+            sort, or <Link to={`/screen?industries=${d.key}`}>find me names in this industry</Link> on the market data on file.
           </p>
         </>
       ) : (
         <div className="card locked-panel" style={{ marginTop: "var(--s-5)" }}>
-          <p className="state-title">{getToken() ? "Your plan does not follow this industry yet." : "Sign in to see this industry's names."}</p>
+          <p className="state-title">{getToken() ? "Your plan does not watch this industry yet." : "Log in to see this industry's names."}</p>
           <p className="muted">
-            {plural(d.universe_count, "name")} are rated here every morning. Follow it to put them on your Board
-            {me && me.tier && limit < 999 ? ` (your plan follows ${industriesLabel(limit)})` : ""}.
+            {plural(d.universe_count, "name")} are rated here every morning. Watch it for me and they join your Explore
+            {me && me.tier && limit < 999 ? ` (your plan watches ${industriesLabel(limit)})` : ""}.
           </p>
           {!getToken() && (
             <Link to={`/login?next=${encodeURIComponent(`/industries/${industryKey}`)}`} className="btn btn-primary">
-              Log in
+              Log in to watch it
             </Link>
           )}
         </div>
       )}
+
+      <FinePrint short />
 
       {all.length > 1 && (
         <div className="section">

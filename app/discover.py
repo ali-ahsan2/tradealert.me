@@ -969,10 +969,12 @@ def alert_outcomes(days: int = Query(365, ge=30, le=1095), trigger: str = "",
         out.append(ent)
     out.sort(key=lambda e: -e["n"])
     return {"days": days, "triggers": out, "events": events,
-            "method": "Each event is measured from the last daily close on or before it to "
-                      "the close five sessions later, and to the highest high inside those "
-                      "five sessions. Yahoo Finance adjusted bars. Rates are shown only once "
-                      "ten or more events have resolved."}
+            # the subscriber-facing sentence names no vendor; the source stays
+            # in its own field for Full mode and the Lab
+            "method": "Each event is measured from the last close on or before it to the "
+                      "close five sessions later, and to the highest high in between. Rates "
+                      "are shown only once ten or more events have resolved.",
+            "source": "Yahoo Finance adjusted daily bars"}
 
 
 # --------------------------------------------------------------------------

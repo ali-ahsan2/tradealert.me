@@ -2,17 +2,19 @@ import React, { useRef, useState } from "react";
 import { api, toast } from "../api.js";
 import { Link } from "../lib/router.jsx";
 import { openUpgrade } from "../lib/upgrade.js";
+import { CTA } from "../lib/plain.js";
 import { Modal } from "./ui.jsx";
 
-// A controlled pin toggle. The parent owns the pinned set so a board of
+// A controlled watch toggle ("Watch" / "Watching"; the API still calls a
+// watched name a pick). The parent owns the watched set so a board of
 // fifty rows makes one picks request, not fifty. The flip is optimistic
 // (DESIGN_V5 §5): the star fills the moment it is tapped and goes back,
 // with a toast that names the way out, if the request fails. A 403 at
 // quota opens the quota card with two ways out, one of which costs nothing;
 // the paid one opens the upgrade sheet in place.
 // `label` shows words beside the star; `labels` is [off, on], defaulting
-// to "Pin" / "Pinned" so a caller can ask "Watch this for me" / "Watching".
-export default function Pin({ symbol, pinned, onChange, label = false, labels = ["Pin", "Pinned"], className = "" }) {
+// to "Watch" / "Watching" so a caller can ask "Watch this for me" instead.
+export default function Pin({ symbol, pinned, onChange, label = false, labels = [CTA.WATCH, CTA.WATCHING], className = "" }) {
   const inflight = useRef(false);
   const [quota, setQuota] = useState(null);
 
@@ -26,17 +28,17 @@ export default function Pin({ symbol, pinned, onChange, label = false, labels = 
     try {
       if (next) {
         await api("/me/picks", { method: "POST", json: { symbol } });
-        toast(`Watching ${symbol} for you. It will be in your next digest.`);
+        toast(`Watching ${symbol}. It will be in your next brief.`);
       } else {
         await api(`/me/picks/${encodeURIComponent(symbol)}`, { method: "DELETE" });
-        toast(`Removed ${symbol} from your watchlist.`);
+        toast(`Stopped watching ${symbol}.`);
       }
     } catch (err) {
       // roll back to what the server still holds
       onChange(symbol, pinned);
-      if (err.status === 403 && next) setQuota(err.detail || "Your plan's pick limit is reached.");
-      else if (err.status === 0) toast(`${symbol} was ${next ? "not pinned" : "kept"}: you appear to be offline. Check your connection and tap again.`);
-      else toast(`${err.detail || `Couldn't ${next ? "pin" : "unpin"} ${symbol}.`} Tap again to retry.`);
+      if (err.status === 403 && next) setQuota(err.detail || "Your plan's limit on watched names is reached.");
+      else if (err.status === 0) toast(`${symbol} was ${next ? "not added" : "kept"}: you appear to be offline. Check your connection and tap again.`);
+      else toast(`${err.detail || `Couldn't ${next ? "watch" : "stop watching"} ${symbol}.`} Tap again to retry.`);
     } finally {
       inflight.current = false;
     }
@@ -48,8 +50,8 @@ export default function Pin({ symbol, pinned, onChange, label = false, labels = 
         type="button"
         className={`pin ${pinned ? "pinned" : ""} ${label ? "pin-labelled" : ""} ${className}`}
         aria-pressed={pinned}
-        aria-label={pinned ? `Remove ${symbol} from watchlist` : `Pin ${symbol} to watchlist`}
-        title={pinned ? "Remove from watchlist" : "Pin to watchlist"}
+        aria-label={pinned ? CTA.STOP_WATCHING_SYM(symbol) : CTA.WATCH_SYM_FOR_ME(symbol)}
+        title={pinned ? CTA.STOP_WATCHING : CTA.WATCH_FOR_ME}
         onClick={toggle}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
@@ -65,12 +67,12 @@ export default function Pin({ symbol, pinned, onChange, label = false, labels = 
       </button>
       {quota && (
         <Modal
-          title="Pick limit reached"
+          title="My watchlist is full"
           onClose={() => setQuota(null)}
           actions={
             <>
               <Link to="/watchlist" className="btn btn-secondary" onClick={() => setQuota(null)}>
-                Manage watchlist
+                {CTA.MY_WATCHLIST}
               </Link>
               <button
                 type="button"
@@ -80,13 +82,13 @@ export default function Pin({ symbol, pinned, onChange, label = false, labels = 
                   openUpgrade("picks", { symbol });
                 }}
               >
-                See plans
+                {CTA.NEXT_PLAN}
               </button>
             </>
           }
         >
           <p>{quota}</p>
-          <p className="muted">Unpin a name to make room, or move to a plan with more picks.</p>
+          <p className="muted">Stop watching a name to make room, or move to a plan that watches more names for you.</p>
         </Modal>
       )}
     </>

@@ -12,6 +12,7 @@ import Tour, { HOME_TOUR, restartTour } from "./Tour.jsx";
 import UpgradeSheet from "./UpgradeSheet.jsx";
 import FinePrint from "./FinePrint.jsx";
 import ExploreTabs, { isExplore } from "./ExploreTabs.jsx";
+import { CTA } from "../lib/plain.js";
 import Welcome from "../views/Welcome.jsx";
 
 // v6 shells (DESIGN_V6 §3, §10): the layout is chosen by the route, never
@@ -107,7 +108,7 @@ export function ModeControl({ className = "" }) {
   return (
     <div className={`seg seg-sm modeseg ${className}`} role="group" aria-label="Detail level">
       {MODES.map(([k]) => (
-        <button key={k} aria-pressed={mode === k} onClick={() => setMode(k)} title={k === "simple" ? "Cards and the essentials" : "Tables and every control"}>
+        <button key={k} aria-pressed={mode === k} onClick={() => setMode(k)} title={k === "simple" ? "Cards, plain words, three items before Show all" : "Every column and figure; nothing is removed either way"}>
           {MODE_LABEL[k] || k}
         </button>
       ))}
@@ -149,8 +150,8 @@ function AccountMenu({ me, align = "right" }) {
               {me.verified ? "Email verified" : "Email not verified"} · {me.tier ? me.tier.label : "Free"} plan
             </div>
           </div>
-          {item("/settings", "Account")}
-          {item("/pricing", "Plans")}
+          {item("/settings", "My account")}
+          {item("/pricing", CTA.MY_PLAN)}
           {item("/help", "Help")}
           <div className="acct-theme">
             <span className="xs faint">Detail</span>
@@ -168,7 +169,7 @@ function AccountMenu({ me, align = "right" }) {
               restartTour();
             }}
           >
-            Take the tour again
+            {CTA.TOUR_AGAIN}
           </button>
           {me.is_admin && (
             <a href="/lab" role="menuitem">
@@ -284,7 +285,7 @@ export function TopBar() {
         {signedIn ? (
           <>
             <Link to="/home" className="btn btn-primary btn-sm">
-              Open my Home
+              {CTA.OPEN_HOME}
             </Link>
             {me && <AccountMenu me={me} />}
           </>
@@ -294,7 +295,7 @@ export function TopBar() {
               Log in
             </Link>
             <Link to="/signup" className="btn btn-primary btn-sm">
-              Start free
+              {CTA.START_FREE}
             </Link>
           </>
         )}

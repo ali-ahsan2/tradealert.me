@@ -18,9 +18,9 @@ const ROWS = [
   ["g then c", "Explore · What changed"],
   ["g then l", "Explore · Coming up"],
   ["g then t", "Strategies"],
-  ["g then d", "Digests"],
-  ["g then s", "Account"],
-  ["j / k, ↵, p", "Move through a list, open the row, pin it"],
+  ["g then d", "My week, by email"],
+  ["g then s", "My account"],
+  ["j / k, ↵, p", "Move through a list, open the row, watch it"],
   ["?", "This sheet"],
   ["esc", "Close any dialog"],
 ];

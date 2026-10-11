@@ -218,8 +218,12 @@ html[data-mode="simple"] .brief {
   font-variant-numeric: tabular-nums;
 }
 
-.home-record .more-all {
+/* inline-block, not the .brief .more-all inline-flex: a flex container
+   drops the trailing space before the nowrap span ("Myrecord") */
+.brief .home-record .more-all {
+  display: inline-block;
   min-height: 32px;
+  line-height: 32px;
 }
 
 /* Sections: one card per topic ------------------------------------------ */

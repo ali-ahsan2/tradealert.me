@@ -73,8 +73,8 @@ function greeting(name) {
   return first ? `Good ${part}, ${first}.` : `Good ${part}.`;
 }
 
-// "this morning's run" / "yesterday's run" / "the run on Aug 9", by the
-// viewer's calendar day.
+// "this morning's scoring" / "yesterday's scoring" / "the scoring on Aug 9",
+// by the viewer's calendar day ("run" stays a Full-mode word).
 function runWhen(asOf, tz) {
   const day = (t) => {
     try {
@@ -84,9 +84,9 @@ function runWhen(asOf, tz) {
     }
   };
   const r = day(asOf);
-  if (r === day(Date.now())) return "this morning's run";
-  if (r === day(Date.now() - 864e5)) return "yesterday's run";
-  return `the run on ${dayMonth(asOf)}`;
+  if (r === day(Date.now())) return "this morning's scoring";
+  if (r === day(Date.now() - 864e5)) return "yesterday's scoring";
+  return `the scoring on ${dayMonth(asOf)}`;
 }
 
 // "today", "tomorrow", "in 3 days", "yesterday", "4 days ago"
@@ -246,10 +246,10 @@ function TheLine({ d, locked, tz }) {
     parts.push(
       moved > 0 ? (
         <>
-          <b>{moved}</b> {moved === 1 ? "name" : "names"} changed band
+          <b>{moved}</b> {moved === 1 ? "name" : "names"} changed rating
         </>
       ) : (
-        <>no band changes</>
+        <>no rating changes</>
       )
     );
   }
@@ -335,7 +335,7 @@ function ChangeRow({ r }) {
       </div>
       <span className="bandword simple-only">{r.now ? cap(r.now.band) : "Not scored"}</span>
       <div className="brow-act">
-        <NotifyButton symbol={r.symbol} compact label="Alert me" onLabel="Alerting you" />
+        <NotifyButton symbol={r.symbol} compact label="Alert me" onLabel="Alerting me" />
       </div>
     </li>
   );
@@ -388,7 +388,7 @@ function Hero() {
   const main = hasWatch ? d.watchlist.points : bench[0] ? bench[0].points : [];
   const chg = hasWatch ? d.watchlist.change_pct : bench[0] ? bench[0].change_pct : null;
   const ghost = hasWatch && bench[0] ? bench[0].points : null;
-  const title = hasWatch ? "My watchlist" : bench[0] ? bench[0].industry_label : "My universe";
+  const title = hasWatch ? "My watchlist" : bench[0] ? bench[0].industry_label : "My names";
   return (
     <section className="card hero" aria-labelledby="hero-h">
       <div className="hero-top">
@@ -409,7 +409,7 @@ function Hero() {
               </>
             ) : bench[0] ? (
               <span>
-                {bench[0].symbol} · {bench[0].label}. Pin names and this becomes your own list.
+                {bench[0].symbol} · {bench[0].label}. Watch names and this becomes your own list.
               </span>
             ) : (
               <span>No bars on file yet.</span>
@@ -430,7 +430,7 @@ function Hero() {
         </div>
       ) : (
         <p className="muted small" style={{ marginTop: "var(--s-4)" }}>
-          Nothing to chart yet. <Link to="/board">Pin a few names from the Board</Link> and this becomes your list.
+          Nothing to chart yet. <Link to="/board">Watch a few names from Explore</Link> and this becomes your list.
         </p>
       )}
       <div className="hero-foot">
@@ -693,7 +693,7 @@ function MoreOnMyNames({ d, record, recErr, onRecRetry, locked, tz, full, K, rel
             </p>
             <div className="actrow">
               <button type="button" className="btn btn-primary btn-sm" onClick={() => openUpgrade("alerts")}>
-                See plans with alerts
+                Show me plans with alerts
               </button>
             </div>
           </div>
@@ -710,12 +710,12 @@ function MoreOnMyNames({ d, record, recErr, onRecRetry, locked, tz, full, K, rel
             <div className="actrow">
               {topPinned ? (
                 <>
-                  <NotifyButton symbol={topPinned.symbol} compact label="Alert me" onLabel="Alerting you" />
+                  <NotifyButton symbol={topPinned.symbol} compact label="Alert me" onLabel="Alerting me" />
                   <span className="xs faint">{triggerSentence("catalyst_dated", topPinned.symbol)}</span>
                 </>
               ) : (
                 <Link to="/board" className="btn btn-secondary btn-sm">
-                  Pin a name to watch
+                  Watch a name for me
                 </Link>
               )}
             </div>
@@ -832,7 +832,7 @@ function MoreOnMyNames({ d, record, recErr, onRecRetry, locked, tz, full, K, rel
                   </div>
                   <p className="brow-say">
                     Earnings {inWords(r.days)}, {dayMonth(r.date)}.{r.armed ? " You asked to be alerted." : ""}
-                    {r.pinned ? " Pinned." : ""}
+                    {r.pinned ? " Watching." : ""}
                     {r.confidence ? <span className="full-only"> Date {r.confidence}.</span> : null}
                   </p>
                 </div>
@@ -875,7 +875,7 @@ function MoreOnMyNames({ d, record, recErr, onRecRetry, locked, tz, full, K, rel
         ) : picks.length === 0 ? (
           <div className="brief-empty">
             <p>
-              Nothing pinned yet. A pinned name stays on this page and in your digest.
+              Nothing watched yet. A watched name stays on this page and in your weekly brief.
               {w.limit != null ? ` Your plan holds ${plural(w.limit, "pin")}.` : ""}
             </p>
             <div className="actrow">
@@ -931,7 +931,7 @@ function MoreOnMyNames({ d, record, recErr, onRecRetry, locked, tz, full, K, rel
                   </div>
                   <span className="bandword simple-only">{p.band ? cap(p.band) : "No score"}</span>
                   <div className="brow-act">
-                    <NotifyButton symbol={p.symbol} compact label="Alert me" onLabel="Alerting you" />
+                    <NotifyButton symbol={p.symbol} compact label="Alert me" onLabel="Alerting me" />
                   </div>
                 </li>
               );
@@ -1204,7 +1204,7 @@ export default function Overview() {
       <Section
         id="changed"
         title="What changed"
-        note={c && c.prev_as_of ? `since the run on ${dayMonth(c.prev_as_of)}` : null}
+        note={c && c.prev_as_of ? `since the scoring on ${dayMonth(c.prev_as_of)}` : null}
         more={
           changeTotal > changeRows.length ? (
             <Link to="/changes" className="more-all">
@@ -1216,8 +1216,8 @@ export default function Overview() {
         {!c && <p className="brief-line">Only one run is on record. Changes appear once a second run completes.</p>}
         {c && changeRows.length === 0 && (
           <p className="brief-line">
-            No name changed band since the last run.
-            {c.summary ? ` ${c.summary.up} scores went up and ${c.summary.down} went down without crossing a band line.` : ""}
+            No name changed rating since the last scoring.
+            {c.summary ? ` ${c.summary.up} scores went up and ${c.summary.down} went down without changing rating.` : ""}
           </p>
         )}
         {changeRows.length > 0 && (
@@ -1276,12 +1276,12 @@ export default function Overview() {
 
       <div className="footnote">
         <p>
-          Scores from the run at {dateTime(run.as_of, tz)}; price moves from daily closes.{" "}
+          Rated at {dateTime(run.as_of, tz)}; price moves from daily closes.{" "}
           {d.digest && (
             <>
               {d.digest.enabled
-                ? `Weekly digest: ${DAYS[d.digest.day]} at ${String(d.digest.hour).padStart(2, "0")}:00 ${d.digest.timezone}.`
-                : "Weekly digest is off."}{" "}
+                ? `Weekly brief: ${DAYS[d.digest.day]} at ${String(d.digest.hour).padStart(2, "0")}:00 ${d.digest.timezone}.`
+                : "Weekly brief is off."}{" "}
               <Link to="/digests">Preview</Link> · <Link to="/settings#digest">Change</Link>.
             </>
           )}

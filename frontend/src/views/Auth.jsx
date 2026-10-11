@@ -4,6 +4,7 @@ import { Link, navigate, safeNext, useQuery } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
 import { CONSENT_LABEL } from "../lib/legal.js";
 import { fetchPulse, leadPhrase } from "../lib/record.js";
+import { plainTriggerFromLabel } from "../lib/plain.js";
 import { useCountUp, useReveal } from "../lib/motion.js";
 import { pct, plural, shortDate } from "../lib/fmt.js";
 import FinePrint from "../components/FinePrint.jsx";
@@ -50,7 +51,7 @@ function Example({ e }) {
   const lead = leadPhrase(e);
   return (
     <p className="auth-pulse-ex">
-      <b>{e.industry_label}</b> · {e.trigger} on {shortDate(e.date)} ·{" "}
+      <b>{e.industry_label}</b> · {plainTriggerFromLabel(e.trigger)} on {shortDate(e.date)} ·{" "}
       <span className={e.max_5d >= 0 ? "pos" : "neg"}>{pct(e.max_5d)}</span> at the high within five sessions
       {e.chg_5d != null && (
         <>
@@ -72,7 +73,7 @@ function PulsePanel({ pulse }) {
   const ex = pulse && pulse.examples ? pulse.examples[0] : null;
   return (
     <aside ref={ref} className={`auth-pulse reveal ${seen ? "in" : ""}`} aria-label={`What fired across every industry in the last ${days} days`}>
-      <p className="auth-pulse-k">Last {days} days, every industry</p>
+      <p className="auth-pulse-k">It tells you before the move is over. Last {days} days, every industry:</p>
       {pulse === false ? (
         <p className="auth-pulse-empty">
           Every alert we send is a recorded event: the trigger, the date, and what the price did in the five sessions after.
@@ -153,10 +154,8 @@ export default function Auth({ mode }) {
   return (
     <div className="auth">
       <div className="card form-card">
-        <h1>{isSignup ? "Create your account" : "Welcome back"}</h1>
-        <p className="sub">
-          {isSignup ? "Email and a password. Then pick what I should watch." : "Log in to my Home, watchlist and alerts."}
-        </p>
+        <h1>{isSignup ? "Create my account" : "Welcome back"}</h1>
+        <p className="sub">{isSignup ? "Email, a password, one tick. Then pick what I should watch." : "Log in to my Home, watchlist and alerts."}</p>
         <button
           type="button"
           className="btn btn-google"
@@ -221,6 +220,7 @@ export default function Auth({ mode }) {
               <b>Free plan, no card.</b> Your Home is one industry away.
             </p>
           )}
+          <FinePrint short links={false} className="auth-legal" />
         </form>
         <p className="small muted auth-links">
           {isSignup ? (
@@ -229,12 +229,11 @@ export default function Auth({ mode }) {
             </>
           ) : (
             <>
-              New here? <Link to={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}>Create an account</Link> ·{" "}
+              New here? <Link to={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}>Create my account</Link> ·{" "}
               <Link to="/reset">Forgot password</Link>
             </>
           )}
         </p>
-        <FinePrint short className="auth-legal" />
       </div>
       <PulsePanel pulse={pulse} />
     </div>

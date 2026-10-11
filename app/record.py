@@ -230,10 +230,9 @@ def compute_record(conn, uid, keys, picks, vis, vis_params, k, days=30):
         "beyond": {"summary": beyond_tally,
                    # labels of industries not followed, never tickers
                    "industries": sorted(beyond_inds.values())},
-        "method": "Measured from the last daily close on or before each alert to the close "
-                  "five sessions later and the highest high inside those sessions. "
-                  "'Told' means a delivery left for your account; 'missed' means the alert "
-                  "fired on a name in your universe with no rule armed.",
+        "method": "Measured from the last close on or before each alert to the close five "
+                  "sessions later and the highest high in between. 'Told' means we sent it "
+                  "to you; 'missed' means it fired on a name you were not watching.",
     }
 
 

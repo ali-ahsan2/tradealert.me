@@ -75,7 +75,7 @@ export const GLOSSARY = {
     short: "The lead strategy and the only one with a measured record: small, tightly held names a crowd is betting against, with a date coming. In the backtest, 26 of the 32 events that passed its must-pass rules moved 20% or traded 3x volume.",
   },
   lane: {
-    term: "Stage",
+    term: "A date set, or not yet (stage)",
     short: "No date set yet, or a date is set. With no date the engine assumes one further out, so the name is scored down, not dropped.",
     see: ["lane_early", "lane_event", "catalyst"],
   },
@@ -104,12 +104,12 @@ export const GLOSSARY = {
     short: "A sub-theme inside an industry, used to sort the board so similar names sit together.",
   },
   delta_run: {
-    term: "Since last run",
-    short: "How much a score moved since the previous morning's scoring. A plus or minus number of points, or 'new' when the name was not scored before.",
+    term: "Change since the last scoring",
+    short: "How much a score moved since the previous morning's scoring. A plus or minus number of points, or 'new' when the name was not rated before.",
   },
   run: {
     term: "This morning's scoring (run)",
-    short: "One pass of the engine over every stock in your industries. Runs happen each morning, and every figure on screen is stamped with the run it came from.",
+    short: "One pass of the engine over every stock in your industries. It happens each morning, and every figure on screen is stamped with the morning it came from.",
   },
   catalyst: {
     term: "A dated event that can move the price (catalyst)",
@@ -147,7 +147,7 @@ export const GLOSSARY = {
   },
   pin: {
     term: "Watch",
-    short: "Add a name to your watchlist. Watched names appear in your digest and stay visible even if they drop off the board.",
+    short: "Add a name to your watchlist. Watched names appear in your weekly brief and stay visible even if they drop off the board.",
   },
   alert: {
     term: "Alert",
@@ -159,7 +159,7 @@ export const GLOSSARY = {
     short: "The specific fact an alert waits for: the cost to borrow doubling, volume at three times normal, a dated event landing in range, and so on.",
   },
   digest: {
-    term: "Digest",
+    term: "My week, by email (digest)",
     short: "The emailed summary of what changed in your industries and watchlist since the last one.",
   },
   benchmark: {
@@ -175,8 +175,8 @@ export const GLOSSARY = {
     short: "One of the sectors you follow. Your plan sets how many you can follow at once; the engine scores every stock inside them.",
   },
   universe: {
-    term: "Your universe",
-    short: "Every stock in the industries you follow plus your watched names. Screens, boards and search only ever look inside it.",
+    term: "The names in your industries (universe)",
+    short: "Every stock in the industries you follow plus your watched names. Find, Explore and search only ever look inside it.",
   },
   names_shown: {
     term: "Names shown",
@@ -200,7 +200,7 @@ export const TRIGGER_PLAIN = {
   volume_3x: ["Unusual volume", "a day trades at three times its normal volume"],
   catalyst_dated: ["A dated event ahead", "a dated event such as earnings or a regulator's decision lands inside the next window"],
   s3_424b: ["A share-sale filing", "the company files to sell more shares (an S-3 or 424B)"],
-  band_change: ["The rating word changes", "the score moves to a different rating word between runs"],
+  band_change: ["The rating word changes", "the score moves to a different rating word between mornings"],
   insider_buying: ["Insiders buying", "insiders report open-market buys after a stretch of selling"],
   social_surge: ["Social chatter spikes", "the social feed prints 20 or more messages in a day"],
   contract_award: ["A contract award", "a government or corporate contract with a dollar figure is announced"],
@@ -267,7 +267,7 @@ export const FIELD_TERM = {
 
 // The status words for a strategy's plain.status.
 export const STRATEGY_STATUS = {
-  measured: { chip: "Measured record", title: "Its setups were checked against what happened next" },
-  provisional: { chip: "No record yet", title: "Its setups have not been checked against what happened next" },
+  measured: { chip: "Measured record", title: "Its setups were checked against what happened next (calibrated)" },
+  provisional: { chip: "No record yet", title: "Its setups have not been checked against what happened next (provisional)" },
   not_running: { chip: "Not running yet", title: "It puts no score on any name this morning" },
 };

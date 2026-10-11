@@ -191,6 +191,7 @@ details.acc > .acc-body .tscroll { max-width: 100%; }
 .sheet .plan-row .pprice { margin-left: auto; font-family: var(--font-mono); font-weight: 600; white-space: nowrap; }
 .sheet .acts { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: center; }
 .sheet .fine { margin: var(--s-3) 0 0; font-size: var(--fs-xs); color: var(--ink-faint); line-height: 1.45; }
+.sheet .fineprint.fine { margin-top: 4px; }
 
 /* route transition */
 .page-enter { animation: page-in .22s ease; }
@@ -201,3 +202,6 @@ details.acc > .acc-body .tscroll { max-width: 100%; }
 .linkbtn { all: unset; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; font: inherit; }
 .linkbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .tierchip-btn { cursor: pointer; border: 0; font: inherit; }
+
+/* v6 voice sweep: the fine print under the consent tick on /welcome */
+.welcome-card .welcome-fine { margin: 0 0 var(--s-3); }

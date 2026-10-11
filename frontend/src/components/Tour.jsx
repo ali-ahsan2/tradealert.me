@@ -34,28 +34,25 @@ export function restartTour(storageKey = DEFAULT_KEY) {
   window.dispatchEvent(new CustomEvent(EVENT, { detail: storageKey }));
 }
 
-// Four steps on Home. Each body is two sentences and names what the product
-// does for you, never what a price will do.
+// Three steps on Home, titled with the three sentences (DESIGN_V6 §1). Each
+// body is two short sentences naming what the product does for you and
+// where in the four destinations (Home, Alerts, Watchlist, Explore) it
+// lives; never what a price will do.
 export const HOME_TOUR = [
   {
-    title: "Home",
+    title: "It watches my industries",
     body:
-      "Home opens with what happened for you since the last run: the alerts you were sent, what moved on names you were not watching, and the dates ahead.",
+      "You pick the industries; every morning it rates every name in them. Explore holds the ranking, the search, what changed and the dates coming up.",
   },
   {
-    title: "Explore and the rating word",
+    title: "It tells me before the move is over",
     body:
-      "Explore ranks every name in your industries by how well its setup fits the strategy today. The rating word is the claim: strong, elevated, neutral or weak; the number beside it is detail.",
+      "Tap Alert me on a name and you are emailed the day a fact changes on it: a date set, the cost to borrow doubling, volume at three times normal. Alerts lists what you were told; Watchlist keeps your names in view.",
   },
   {
-    title: "A name and its Why",
+    title: "Measured, not predicted",
     body:
-      "Open any name and the first line says where it landed, in plain words. Why lists the inputs behind it and which ones had no data.",
-  },
-  {
-    title: "Alerts: one tap",
-    body:
-      "Tap Alert me on a name and you are emailed when a fact prints: a dated catalyst, a borrow fee that doubled, volume at three times normal. Every alert names the fact that fired it.",
+      "Every number is a count with a date behind it, and the record keeps score of how early you were told. Nothing here is a recommendation; you decide.",
   },
 ];
 

@@ -5,14 +5,14 @@ import { useMe } from "../lib/me.jsx";
 import { alertsLabel, industriesLabel, plural, tzGuess } from "../lib/fmt.js";
 import { useMode } from "../lib/mode.js";
 import { DEFAULT_TRIGGERS, TRIGGER_PLAIN } from "../lib/glossary.js";
-import { verdict } from "../lib/plain.js";
+import { CTA, firesSentence, verdict } from "../lib/plain.js";
 import { fetchPulse, tallySentence } from "../lib/record.js";
 import { openUpgrade } from "../lib/upgrade.js";
 import Explain from "../components/Explain.jsx";
 import NotifyButton from "../components/NotifyButton.jsx";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Pin from "../components/Pin.jsx";
-import { IndustryPlainLine } from "../components/Plain.jsx";
+import FinePrint from "../components/FinePrint.jsx";
 import { Empty, ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
 import "./help.css";
 
@@ -21,8 +21,9 @@ import "./help.css";
 // happens. Everything shown is live: the industries and their plain words
 // come from the API, each industry's month from the public pulse (counts
 // only, no tickers), the names from the board for the industry just chosen,
-// clamped by the plan exactly as Explore is. Benchmark and band counts sit
-// behind More detail. Timezone and channels live in Account. A plan limit
+// clamped by the plan exactly as Explore is. An industry card is its label,
+// one line of what is in it and the measured month (DESIGN_V6 §3, §7); the
+// benchmark and the rating counts sit behind More detail. Timezone and channels live in Account. A plan limit
 // opens the upgrade sheet in place. Every exit goes through finish(): `next`
 // if the visitor arrived with one, else Home with the welcome flag.
 
@@ -120,8 +121,8 @@ function WatchForMe({ symbol, pinned, onPin }) {
     if (!armNext || !pinned) return;
     setArmNext(false);
     const b = notifyRef.current && notifyRef.current.querySelector("button");
-    // only the untouched state arms; "Notifying" and "Manage alerts" navigate
-    if (b && b.getAttribute("aria-pressed") !== "true" && !/manage/i.test(b.textContent || "")) b.click();
+    // only the untouched state turns alerts on; "Alerting me" navigates
+    if (b && b.getAttribute("aria-pressed") !== "true") b.click();
   }, [armNext, pinned]);
 
   const go = async (e) => {
@@ -151,7 +152,7 @@ function WatchForMe({ symbol, pinned, onPin }) {
         title={`Keep ${symbol} on my watchlist and tell me when it has a ${plainList.join(", a ")}.`}
       >
         <Bell />
-        <span>{busy ? "One moment…" : "Watch this for me"}</span>
+        <span>{busy ? "One moment…" : CTA.WATCH_FOR_ME}</span>
       </button>
     );
   }
@@ -159,7 +160,7 @@ function WatchForMe({ symbol, pinned, onPin }) {
     <>
       <Pin symbol={symbol} pinned onChange={onPin} label />
       <span className="pn-notify" ref={notifyRef}>
-        <NotifyButton symbol={symbol} compact label="Alert me" onLabel="Alerting" />
+        <NotifyButton symbol={symbol} compact />
       </span>
     </>
   );
@@ -171,22 +172,26 @@ function tallyLower(t) {
   return s.charAt(0) === "N" ? s.charAt(0).toLowerCase() + s.slice(1) : s;
 }
 
-// The industry's month, in numbers, from the public pulse: counts, never
-// tickers. "12 alerts fired here in the last 30 days; 2 moved 10%+."
+// The industry's month, in numbers: counts, never tickers. "12 alerts fired
+// here in the last 30 days; 2 moved 10%+." What tends to fire is said only
+// once ten alerts have fired (firesSentence).
 function PulseLine({ p, pulse, days }) {
-  if (pulse === null) return null; // still loading: no figure is guessed
+  if (pulse === null && !p) return null; // still loading: no figure is guessed
   if (!p || !p.fired) return <span className="ind-pulse">No alerts fired here in the last {days} days.</span>;
   return (
-    <span className="ind-pulse">
-      <span className="n">{p.fired}</span> {p.fired === 1 ? "alert" : "alerts"} fired here in the last {days} days;{" "}
-      {p.measured ? (
-        <>
-          <span className="n">{p.moved_10}</span> moved 10%+.
-        </>
-      ) : (
-        "five-session windows still open."
-      )}
-    </span>
+    <>
+      <span className="ind-pulse">
+        <span className="n">{p.fired}</span> {p.fired === 1 ? "alert" : "alerts"} fired here in the last {p.days || days} days;{" "}
+        {p.measured ? (
+          <>
+            <span className="n">{p.moved_10}</span> moved 10%+.
+          </>
+        ) : (
+          "five-session windows still open."
+        )}
+      </span>
+      {p.fired >= 10 && <span className="ind-fires">{firesSentence(p)}</span>}
+    </>
   );
 }
 
@@ -393,7 +398,14 @@ export default function Onboarding() {
   const t1 = pulse && pulse.alerts;
   const utility1 = t1 ? (
     <>
-      Across every industry in the last {days} days, {tallyLower(t1)} Your plan watches <b>{industriesLabel(limit)}</b>
+      {t1.fired ? (
+        <>
+          Last {days} days: <b>{plural(t1.fired, "alert")}</b> fired on {plural(t1.names, "name")}; <b>{t1.moved_10 || 0}</b> moved 10%+.
+        </>
+      ) : (
+        <>No alerts fired in the last {days} days.</>
+      )}{" "}
+      Your plan watches <b>{industriesLabel(limit)}</b>
       {limit < 999 ? " at a time" : ""}.
     </>
   ) : (
@@ -461,7 +473,8 @@ export default function Onboarding() {
                 const on = picked.includes(i.key);
                 const s = shape[i.key];
                 const dist = (s && s.distribution) || {};
-                const p = pulseFor(i.key);
+                const p = i.month && i.month.fired != null ? i.month : pulseFor(i.key);
+                const oneLine = (i.plain && i.plain.what_is_in_it) || i.description;
                 // beyond the plan's limit the card opens the upgrade sheet in
                 // place instead of toggling; with no bigger plan it is inert
                 const blocked = !on && atLimit;
@@ -482,6 +495,7 @@ export default function Onboarding() {
                     className={`indcard ${blocked ? "locked" : ""}`}
                     aria-pressed={on}
                     aria-disabled={disabled || undefined}
+                    title={i.plain && i.plain.why_it_moves ? i.plain.why_it_moves : undefined}
                     onClick={act}
                     onKeyDown={(e) => {
                       if (e.target !== e.currentTarget) return;
@@ -498,8 +512,7 @@ export default function Onboarding() {
                         </span>
                       )}
                     </b>
-                    {i.description && <span className="desc">{i.description}</span>}
-                    <IndustryPlainLine industry={i} className="ind-plain" />
+                    {oneLine && <span className="desc">{oneLine}</span>}
                     <PulseLine p={p} pulse={pulse} days={days} />
                     {full && (
                       <span className="facts">
@@ -527,7 +540,7 @@ export default function Onboarding() {
                       <span className="ind-lock">
                         {canUpgrade ? (
                           <>
-                            Your plan watches {industriesLabel(limit)}; see what {nextTier.label} would watch
+                            Your plan watches {industriesLabel(limit)}; {nextTier.label} watches {industriesLabel(nextTier.industries_limit)}. {CTA.NEXT_PLAN}
                           </>
                         ) : (
                           <>Your plan watches {industriesLabel(limit)}.</>
@@ -555,7 +568,7 @@ export default function Onboarding() {
               </span>
               {atLimit && nextTier && (
                 <button type="button" className="btn-quiet" onClick={() => openUpgrade("industries")}>
-                  See what {nextTier.label} would watch
+                  {CTA.NEXT_PLAN}
                 </button>
               )}
             </span>
@@ -564,7 +577,7 @@ export default function Onboarding() {
                 Skip for now
               </button>
               <button type="button" className="btn btn-primary" disabled={picked.length === 0} onClick={() => setStep(2)}>
-                Continue
+                Watch these for me
               </button>
             </span>
           </StickyFoot>
@@ -599,12 +612,12 @@ export default function Onboarding() {
               icon="board"
               title={`No rated names in ${focusLabel || "this industry"} yet.`}
               steps={[
-                "Take me home; it fills in after the next morning run.",
+                "Open my Home; it fills in after the next morning's scoring.",
                 "Watch names from Explore once the ratings land.",
                 "Tap Alert me on any name to be emailed when a fact prints.",
               ]}
             >
-              Ratings appear after the first run completes; it runs each morning.
+              Ratings appear after the first morning's scoring.
             </Empty>
           ) : (
             <ul className="picklist">
@@ -623,7 +636,7 @@ export default function Onboarding() {
                   <div className="pick-act">
                     <WatchForMe symbol={r.symbol} pinned={pins.has(r.symbol)} onPin={onPin} />
                     <Link to={`/stock/${r.symbol}`} className="btn-quiet">
-                      Why →
+                      Tell me why →
                     </Link>
                   </div>
                 </li>
@@ -631,7 +644,7 @@ export default function Onboarding() {
             </ul>
           )}
           <p className="muted small ob-tz">
-            Digests arrive in your morning ({tzGuess()}); change the zone and where alerts reach you in <Link to="/settings">Account</Link>.
+            Your weekly brief arrives in your morning ({tzGuess()}); change the zone and where alerts reach you in <Link to="/settings">My account</Link>.
           </p>
           <StickyFoot onHeight={setFootH}>
             <button type="button" className="btn-quiet" onClick={() => setStep(1)}>
@@ -642,9 +655,10 @@ export default function Onboarding() {
                 Skip for now
               </button>
               <button type="button" className="btn btn-primary" disabled={busy} onClick={finish}>
-                {busy ? "One moment…" : "Take me home"}
+                {busy ? "One moment…" : CTA.OPEN_HOME}
               </button>
             </span>
+            <FinePrint short links={false} className="ob-fine" />
           </StickyFoot>
         </div>
       )}
