@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+import os
+import zlib
 import subprocess
 import sys
 import time
 from urllib import error, request
 
-BASE = "http://127.0.0.1:8000/api"
-POSTGRES = "docker compose exec -T postgres psql -U tradealert -d tradealert"
+BASE = os.environ.get("API_BASE", "http://127.0.0.1:8000/api")
+POSTGRES = os.environ.get(
+    "POSTGRES_CMD", "docker compose exec -T postgres psql -U tradealert -d tradealert")
 
 ADMIN_EMAIL = "tester@example.com"
 ADMIN_PASS = "password123"
@@ -15,6 +18,11 @@ ADMIN_PASS = "password123"
 
 def _raw(method, path, body=None, token=None):
     headers = {"Accept": "application/json"}
+    if path == "/signup" and isinstance(body, dict) and body.get("email"):
+        # the signup limiter is five per hour per client IP; each test user
+        # presents its own address so the suite runs in one go
+        h = zlib.crc32(body["email"].encode())
+        headers["X-Forwarded-For"] = f"10.8.{(h >> 8) & 255}.{h & 255}"
     data = None
     if body is not None:
         data = json.dumps(body).encode()
