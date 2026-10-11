@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from app import email as emailer, legal, plain_copy, record
 from app import security
-from app import (account, admin, alerts, billing, context, discover, dossier, lab,
+from app import (account, admin, alerts, billing, context, discover, dossier, lab, lab_engine,
                  lab_regression, lab_release, oauth, product, reporting, scope)
 from app.db import _load_env, get_conn
 
@@ -51,6 +51,7 @@ app.include_router(admin.router)
 app.include_router(billing.router)
 app.include_router(discover.router)
 app.include_router(lab.router)
+app.include_router(lab_engine.router)
 app.include_router(lab_regression.router)
 app.include_router(lab_release.router)
 app.include_router(oauth.router)

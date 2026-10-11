@@ -56,8 +56,35 @@ stay empty until a real event ingest has run. Nothing in the fixture is
 market data.
 
 Real data paths: `python ingest.py` and `python refresh.py` for snapshots,
-`python -m app.market_data` for daily bars, `python -m app.events_ingest
-earnings` for dated events, `python -m app.worker` for the scheduled loop.
+`python -m app.market_data` for daily bars (Tiingo when `TIINGO_TOKEN` is
+set, Yahoo otherwise), `python -m app.events_ingest earnings` for dated
+events, `python -m app.filings_ingest` for EDGAR filings and ticker
+identity, `python -m app.worker` for the scheduled loop.
+
+## The engine
+
+`app/engine.py` scores every active instrument from stored data (latest
+snapshots, momentum from the bars, the operator's research inputs in
+`instrument_research`) with `app/engine_core.py`, the scorer ported from the
+workbench; a band change against the previous run fires `band_change`.
+`app/triggers.py` evaluates the sourced triggers (volume, borrow fee, short
+interest print, dated catalyst, S-3/424B filing) on a date and writes
+`alert_events`; its registry states, per trigger, the source and whether it
+can fire live or be replayed, and the Lab shows that verbatim. The worker
+runs both once a day after the price pass (`ENGINE_HOUR_UTC`, default 11).
+
+`app/replay.py` runs the same trigger code over a span of stored history,
+resolves every firing against the bars that followed (close and largest
+move over 5 and 14 sessions, volume spike, peak session) beside a matched
+random-day baseline, and writes `replay_runs` / `replay_alerts`, which no
+subscriber surface reads. The Lab's Engine tab runs replays, shows the
+per-trigger table with intervals and p-values, and can publish a replay
+over real bars as a strategy's record with the replay named as the source.
+
+`app/universe.py` builds the universe by rule: SEC-listed companies whose
+SIC code maps to an industry (`SIC_MAP`), inside a market-cap band. Plan
+first (counts, no writes), then apply; workbench rows keep `origin =
+'workbench'` and are never deleted.
 
 ## Hosted preview
 
@@ -85,7 +112,7 @@ Run them with pytest, so `tests/conftest.py` can give each test its own
 client address (the sign-up and log-in limiters are per address):
 
 ```sh
-pytest -q tests          # 86 passed, 1 skipped on a fresh `db/bootstrap.py --fixture` database
+pytest -q tests          # 108 passed, 1 skipped on a fresh `db/bootstrap.py --fixture` database
 ```
 
 The Lab suite signs in as `LAB_ADMIN_EMAIL` / `LAB_ADMIN_PASSWORD`, falling

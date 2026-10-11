@@ -43,7 +43,8 @@ for k in STRIPE_SECRET_KEY STRIPE_PRICE_ID_free STRIPE_PRICE_ID_basic \
          STRIPE_PRICE_ID_pro STRIPE_PRICE_ID_investor STRIPE_WEBHOOK_SECRET \
          PULSE_CACHE_SECONDS VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT \
          TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_FROM WEBHOOK_SECRET_KEY \
-         BILLING_DEV_MODE OAUTH_DEV_MODE GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET OPS_EMAIL; do
+         BILLING_DEV_MODE OAUTH_DEV_MODE GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET OPS_EMAIL \
+         TIINGO_TOKEN; do
   grep -q "^$k=" .env || echo "$k=" >> .env
 done
 ```
@@ -56,6 +57,8 @@ Then set, by hand:
 - `PULSE_CACHE_SECONDS=300`, `VAPID_SUBJECT=mailto:alerts@tradealert.me`.
 - `OPS_EMAIL` to the address that should get the worker's disk and
   failure notices.
+- `TIINGO_TOKEN` to a Tiingo API token so daily bars come from a licensed
+  feed; empty keeps Yahoo's unofficial endpoint, with no fallback.
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` only when the Google button
   should work; the redirect URI to register is
   `https://tradealert.me/api/oauth/callback/google`.
@@ -93,11 +96,22 @@ does housekeeping, and writes its notices to `./logs/alerts.log`.
 
 `db/seed.sql` holds industries, strategies, triggers and tiers as upserts
 and has changed since the first deploy (plain-language names and
-descriptions). It is not in the image, so apply it from the checkout:
+descriptions). Apply it from the checkout (it is also in the image now):
 
 ```sh
 docker compose exec -T postgres psql -U tradealert -d tradealert -v ON_ERROR_STOP=1 < db/seed.sql
 docker compose exec -T app python db/seed_benchmarks.py      # reference ETFs, idempotent, no network
+```
+
+The operator research inputs the engine reads (heat, quality, haircuts)
+are written by `db/seed_universe.py`, which is not in the image. Run it
+once from the checkout, against the compose database, if the Lab's engine
+status shows the latest run with a mean coverage far below the seeded run:
+
+```sh
+DATABASE_URL=postgresql://tradealert:<POSTGRES_PASSWORD>@localhost:5432/tradealert \
+  PGCLIENTENCODING=UTF8 python3 db/bootstrap.py --skip-universe && \
+  PGCLIENTENCODING=UTF8 python3 -c 'import sys; sys.path.insert(0, "db"); import bootstrap; bootstrap._seed_universe()'
 ```
 
 Do not run `seed_dev.py`, `seed_demo.py` or `seed_lab.py` on this box:
@@ -127,7 +141,28 @@ sudo cp deploy/crontab /etc/crontab      # only if you have not edited it by han
 sudo cp deploy/logrotate /etc/logrotate.d/tradealert
 ```
 
-## 8. Check
+## 8. Start the engine
+
+Migration 014 and the worker's new steps give the product its first live
+loop: a scored run every morning from stored data, the five sourced
+triggers evaluated every day, EDGAR filings ingested. The first pass on a
+box is best run by hand so you can read it:
+
+```sh
+docker compose exec -T app python -m app.market_data            # bars for every name (minutes)
+docker compose exec -T app python -m app.filings_ingest         # two years of EDGAR filings (minutes)
+docker compose exec -T app python -m app.engine                 # today's run
+docker compose exec -T app python -m app.triggers               # today's alert events
+```
+
+Then open `/lab`, Engine tab: the status page shows the run, the data
+freshness and every trigger's source. Run a replay over the last year to
+read what would have fired and what followed; a replay over real bars with
+ten or more resolved alerts can be published as the strategy's record from
+its own page, with the replay named as the source. The Universe tab builds
+the rule-based universe from the SEC listing (plan first, then apply).
+
+## 9. Check
 
 ```sh
 curl -sSI https://tradealert.me/api/openapi.json | head -1      # the compose healthcheck's own probe
@@ -140,7 +175,7 @@ Then, in a browser: the landing loads, log in with an existing account,
 the consent screen appears once for accounts created before the terms
 version and lands on Home after the tick, `/lab` opens for an admin.
 
-## 9. If something is wrong
+## 10. If something is wrong
 
 - **App container restarting.** `docker compose logs app`. A migration
   error names the file; fix it or restore the backup from step 1 and

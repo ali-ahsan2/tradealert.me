@@ -35,6 +35,7 @@ import { createRoot } from "react-dom/client";
 import "./lab.css";
 import { api, login, getToken, logout } from "../api.js";
 import ReportsScreen from "./Reports.jsx";
+import EngineScreen from "./Engine.jsx";
 import {
   LabUI,
   withFloors,
@@ -270,7 +271,11 @@ const SCREEN_INTROS = {
   findings: "What the backtests have shown, and the runs that back it.",
   log: "Every run, in order.",
   reports: "Where the data comes from, and what it shows at every level.",
+  engine: "Is it watching. The universe, the data, the latest run, and which triggers can fire.",
+  engine_replay: "Run the triggers over stored history and read what followed. Months of watching in seconds.",
+  engine_universe: "The rule that admits a name, and what it would admit.",
 };
+const ENGINE_SCREENS = ["engine", "engine_replay", "engine_universe"];
 
 const WALKTHROUGH_STEPS = [
   {
@@ -1719,6 +1724,12 @@ function LabApp() {
           >
             Strategies
           </button>
+          <button
+            className={ENGINE_SCREENS.includes(screen) ? "active" : ""}
+            onClick={() => navTo("engine")}
+          >
+            Engine
+          </button>
           {tab("Reports", "reports")}
           {tab("Findings", "findings")}
           {tab("Log", "log")}
@@ -1807,6 +1818,7 @@ function LabApp() {
           <FindingsScreen key={citeQueryId || "none"} citeQueryId={citeQueryId} />
         )}
         {screen === "reports" && <ReportsScreen />}
+        {ENGINE_SCREENS.includes(screen) && <EngineScreen sub={screen} onSub={navTo} />}
         {screen === "log" && <LogScreen />}
       </div>
       <div className="labstatus" role="status" aria-label="Engine status">

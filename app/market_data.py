@@ -21,6 +21,7 @@ import urllib.request
 from datetime import date, datetime, timedelta, timezone
 
 from app.db import get_conn
+from app.providers import fetch_daily_bars
 
 CHART_URL = ("https://query1.finance.yahoo.com/v8/finance/chart/{sym}"
              "?range={rng}&interval=1d")
@@ -109,10 +110,11 @@ def fetch_bars(symbol, rng="2y"):
     return rows
 
 
-def store_bars(conn, ticker_id, rows):
+def store_bars(conn, ticker_id, rows, source=None):
     """Upsert bars. Returns the number written."""
     if not rows:
         return 0
+    src = source or SOURCE
     with conn.cursor() as cur:
         cur.executemany(
             "INSERT INTO price_bars "
@@ -122,12 +124,12 @@ def store_bars(conn, ticker_id, rows):
             " open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low, "
             " close=EXCLUDED.close, raw_close=EXCLUDED.raw_close, "
             " volume=EXCLUDED.volume, source=EXCLUDED.source, fetched_at=now()",
-            [(ticker_id, r[0], r[1], r[2], r[3], r[4], r[5], r[6], SOURCE) for r in rows],
+            [(ticker_id, r[0], r[1], r[2], r[3], r[4], r[5], r[6], src) for r in rows],
         )
     return len(rows)
 
 
-def _mark_ok(conn, ticker_id, last_bar):
+def _mark_ok(conn, ticker_id, last_bar, source=None):
     with conn.cursor() as cur:
         cur.execute(
             "INSERT INTO ingest_state (source, ticker_id, last_ok_at, last_bar_date, "
@@ -136,7 +138,7 @@ def _mark_ok(conn, ticker_id, last_bar):
             "ON CONFLICT (source, ticker_id) DO UPDATE SET "
             " last_ok_at=now(), last_bar_date=EXCLUDED.last_bar_date, "
             " last_error=NULL, last_error_at=NULL, attempts=0",
-            (SOURCE, ticker_id, last_bar),
+            (source or SOURCE, ticker_id, last_bar),
         )
 
 
@@ -199,7 +201,7 @@ def refresh_all(rng="2y", stale_only=False, limit=None, pace=PACE_SECONDS, verbo
     errors = []
     run_id = None
     try:
-        run_id = start_run(conn, "yahoo_prices")
+        run_id = start_run(conn, "prices")
         targets = _targets(conn, stale_only=stale_only, limit=limit)
         total = len(targets)
         if verbose:
@@ -207,9 +209,9 @@ def refresh_all(rng="2y", stale_only=False, limit=None, pace=PACE_SECONDS, verbo
         started = time.time()
         for n, (tid, sym) in enumerate(targets, 1):
             try:
-                rows = fetch_bars(sym, rng=rng)
-                written = store_bars(conn, tid, rows)
-                _mark_ok(conn, tid, rows[-1][0])
+                rows, src = fetch_daily_bars(sym, rng=rng)
+                written = store_bars(conn, tid, rows, source=src)
+                _mark_ok(conn, tid, rows[-1][0], source=src)
                 conn.commit()
                 ok += 1
                 bars += written

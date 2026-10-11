@@ -21,6 +21,7 @@ COPY db/migrations/ db/migrations/
 COPY db/seed_lab.py db/seed_lab.py
 COPY db/seed_oauth_test.py db/seed_oauth_test.py
 COPY db/seed_benchmarks.py db/seed_benchmarks.py
+COPY db/seed.sql db/seed.sql
 COPY refresh.py ingest.py ./
 COPY static/ static/
 RUN python -c "from app.main import app"

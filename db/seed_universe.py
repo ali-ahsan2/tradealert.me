@@ -324,6 +324,33 @@ def main():
         instrument_id = cur.fetchone()[0]
         n_instruments += 1
 
+        # Operator research inputs beside the score, so the live engine
+        # (app/engine.py) reproduces this run from stored data.
+        ql = meta["QUAL"].get(t)
+        hc = meta["HAIRCUTS"].get(t)
+        gr_row = meta["GROWTH"].get(t)
+        heat_v = r.get("heat")
+        if heat_v is None:
+            for pat, v in meta["HEAT_RULES"]:
+                if re.search(pat, r.get("theme", ""), re.I):
+                    heat_v = v
+                    break
+        cur.execute("""
+            INSERT INTO instrument_research (instrument_id, heat, qual, qual_note, haircut_points,
+                                             haircut_note, prerev, pre_flags_json, growth_pct)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (instrument_id) DO UPDATE SET
+              heat = EXCLUDED.heat, qual = EXCLUDED.qual, qual_note = EXCLUDED.qual_note,
+              haircut_points = EXCLUDED.haircut_points, haircut_note = EXCLUDED.haircut_note,
+              prerev = EXCLUDED.prerev, pre_flags_json = EXCLUDED.pre_flags_json,
+              growth_pct = EXCLUDED.growth_pct, updated_at = now()
+        """, (instrument_id, heat_v,
+              (sum(v[0] for v in ql.values()) / len(ql)) if ql else None,
+              f"{len(ql)} of 5 known" if ql else "",
+              hc[0] if hc else 0, hc[1] if hc else "",
+              t in set(meta["PREREV"]), json.dumps(r.get("preFlags") or []),
+              gr_row[0] if gr_row else None))
+
         if not active:
             continue
 

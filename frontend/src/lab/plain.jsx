@@ -522,6 +522,60 @@ export function Help({ text, g }) {
 
 // Copy per panel id (reader's report, drafts.panel_headers), lightly edited.
 export const PANELS = {
+  engine_run: {
+    plain: "did it score the universe this morning",
+    shows: "The newest scored run: when, how many names, how many in the top bands.",
+    why: "Until a run exists for today, every score a subscriber sees is yesterday's or older.",
+    read: "Score now makes a run from stored data; a band change against the previous run fires an alert unless more than a quarter of names moved, which is a change of data, not news.",
+  },
+  engine_universe: {
+    plain: "what it watches",
+    shows: "Active names per industry, split by how they got in: the operator's workbench or the rule.",
+    why: "'Every name in my industries' is only true when the rule column carries the weight.",
+    read: "Build the rule-based universe on the Universe tab; workbench rows stay and are never deleted here.",
+  },
+  engine_data: {
+    plain: "what the triggers can read today",
+    shows: "How fresh and how wide each stored source is: bars, snapshots, EDGAR filings, and the last passes.",
+    why: "A trigger with no data fires nothing and says nothing; this is where silence is explained.",
+    read: "Fresh tickers should equal the universe. A dev_fixture source means synthetic rows; nothing measured on them may be published.",
+  },
+  engine_triggers: {
+    plain: "which facts it can notice, and from where",
+    shows: "Every trigger the product defines, its data source, whether it fires live, whether it replays, and how often it fired.",
+    why: "A trigger listed on the product that cannot fire is a promise with nothing behind it.",
+    read: "'No' under Fires live means no source exists yet; the note says what would be needed.",
+  },
+  engine_record: {
+    plain: "the number subscribers read",
+    shows: "The record each strategy publishes and where that number came from, plus recent replays.",
+    why: "Measured, not predicted: the source must be named.",
+    read: "A replay over real bars with ten or more resolved alerts can be published as the record from its own page.",
+  },
+  engine_replay: {
+    plain: "what would have fired, and what followed",
+    shows: "A form to run the live trigger code over a span of stored history.",
+    why: "Measuring the product live takes months; a replay measures the same rules on the same data in seconds.",
+    read: "Pick a span and the triggers. Each firing is resolved against the bars that followed and compared with random sessions for the same names.",
+  },
+  engine_replay_result: {
+    plain: "one replay, in full",
+    shows: "Per trigger: how many alerts, how many moved, the interval, the median largest move, the peak session, and the lift over random days.",
+    why: "'It tells me before the move is over' is this table or nothing.",
+    read: "Below the floor of ten alerts a row proves nothing. p under 0.05 counts. 'Peak session' is when the largest move landed: lower means earlier.",
+  },
+  engine_universe_rule: {
+    plain: "how a name gets in",
+    shows: "The exchanges, SIC codes and market-cap band that admit a name to each industry.",
+    why: "A universe built by rule can be checked and widened; a shortlist cannot.",
+    read: "Codes are SEC Standard Industrial Classification; each appears under one industry only.",
+  },
+  engine_universe_build: {
+    plain: "see what the rule admits, then write it",
+    shows: "A dry run of the rule against the SEC listing, then the write.",
+    why: "Plan first: the counts say whether the map is sane before anything changes.",
+    read: "'Unknown' companies have no SIC stored yet; ticking identity fetches it from EDGAR at ten calls a second.",
+  },
   strategies: {
     plain: "the recipes",
     shows: "Every scoring strategy the product runs, its live version and whether its weights rest on measured results.",
