@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from app import context, discover, scope, security
+from app import context, discover, plain_copy, scope, security
 from app.db import get_conn
 
 router = APIRouter()
@@ -249,6 +249,7 @@ def strategy_detail(key: str):
         "key": s[1], "label": s[2], "monogram": s[3], "calibrated": bool(s[4]),
         "calibrated_at": s[5].isoformat() if s[5] else None,
         "resolved_outcomes_count": s[6], "description": s[7] or "",
+        "plain": plain_copy.strategy_plain(s[1], bool(s[4]), int(hits or 0), int(n or 0)),
         "score_evidence_note": s[9] or "",
         "publishing_paused": bool(s[11]), "publishing_paused_reason": s[12] or "",
         "band_cutoffs": (version[5] if version else None) or s[8],
@@ -418,6 +419,7 @@ def industry_detail(key: str,
         conn.close()
     return {
         "key": ind[1], "label": ind[2], "benchmark_etf": ind[3], "description": ind[4] or "",
+        "plain": plain_copy.industry_plain(ind[1]),
         "universe_count": ind[5], "benchmark": benchmark,
         "followed": followed, "in_scope": in_scope, "names_shown_limit": k,
         "names": names, "run_as_of": run_as_of,

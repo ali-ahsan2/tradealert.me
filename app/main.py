@@ -16,7 +16,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from app import email as emailer, record
+from app import email as emailer, plain_copy, record
 from app import security
 from app import (account, admin, alerts, billing, discover, dossier, lab, lab_regression,
                  lab_release, oauth, product, reporting, scope)
@@ -343,17 +343,29 @@ def strategies(response: Response):
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT key, label, monogram, calibrated, calibrated_at, "
-                "resolved_outcomes_count "
+                "resolved_outcomes_count, id "
                 "FROM strategies ORDER BY sort_order",
             )
             rows = cur.fetchall()
+            # the measured record behind the plain card: aggregates only
+            cur.execute(
+                "SELECT strategy_id, COUNT(*), "
+                "COALESCE(SUM(CASE WHEN hit THEN 1 ELSE 0 END), 0) "
+                "FROM calibration_outcomes GROUP BY strategy_id",
+            )
+            tally = {r[0]: (int(r[2]), int(r[1])) for r in cur.fetchall()}
     finally:
         conn.close()
-    return {"strategies": [
-        {"key": r[0], "label": r[1], "monogram": r[2], "calibrated": bool(r[3]),
-         "calibrated_at": r[4].isoformat() if r[4] else None,
-         "resolved_outcomes_count": r[5]} for r in rows
-    ]}
+    out = []
+    for r in rows:
+        hits, n = tally.get(r[6], (None, None))
+        out.append({
+            "key": r[0], "label": r[1], "monogram": r[2], "calibrated": bool(r[3]),
+            "calibrated_at": r[4].isoformat() if r[4] else None,
+            "resolved_outcomes_count": r[5],
+            "plain": plain_copy.strategy_plain(r[0], bool(r[3]), hits, n),
+        })
+    return {"strategies": out}
 
 
 @app.get("/api/industries")
@@ -373,7 +385,8 @@ def industries(response: Response):
         conn.close()
     return {"industries": [
         {"key": r[0], "label": r[1], "benchmark_etf": r[2],
-         "description": r[3], "universe_count": r[5]} for r in rows
+         "description": r[3], "universe_count": r[5],
+         "plain": plain_copy.industry_plain(r[0])} for r in rows
     ]}
 
 

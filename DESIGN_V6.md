@@ -214,3 +214,74 @@ it merges.
 ## 11. The code map
 
 Appended from the understand pass.
+
+## 10. Packages, ownership and contracts
+
+Six packages run in parallel worktrees (wave 1), then one sweep (wave 2).
+Each owns its files; nobody edits a file another package owns. Shared
+pieces were committed to the branch before the worktrees were cut:
+`app/plain_copy.py` (+ `plain` on `/api/strategies`, `/api/industries` and
+both detail endpoints), `frontend/src/components/Plain.jsx`,
+`frontend/src/components/FinePrint.jsx`, `frontend/src/lib/legal.js`,
+`frontend/src/lib/caps.js`.
+
+Decisions that bind every package:
+
+- Routes: `/home` replaces `/overview` (permanent client redirect kept).
+  Nav is four items on every device: **Home** (`/home`), **Alerts**,
+  **Watchlist**, **Explore** (`/board`, with a tab strip Ranked · Find ·
+  What changed · Coming up over the existing Board, Find, Changes and
+  Calendar pages; their URLs keep working). Account menu: Account, Plans,
+  Help, Sign out (+ Lab for admins). The command palette keeps every screen.
+- Layouts by route: public (`/`, `/pricing`, `/help`, `/strategies*`,
+  `/industries/*`, `/legal/*`, `/login`, `/signup`, `/reset`, `/verified`,
+  `/unsubscribe`, `/about`), bare (`/onboarding`, `/welcome`), app (all
+  else). Signed-in `/` → `/home`; the landing stays reachable at `/about`.
+- Simple is the structural default (cards, caps, one column); the table
+  exists only in Full. The switch is labelled "Detail: Simple / More" and
+  lives in the account menu and at the top of Explore and the dossier.
+- Consent contract: `POST /api/signup` requires `accept_terms: true` (422
+  otherwise); `GET /api/me` returns `accepted_terms_at` and
+  `accepted_terms_version`; `POST /api/me/consent {version}` records them.
+  `TERMS_VERSION = "2026-10-11"` in `app/legal.py` and
+  `frontend/src/lib/legal.js`. A signed-in user without consent for the
+  current version is shown `/welcome` (bare layout, one tick, one button)
+  before any app screen; `/legal/*` stays readable from it.
+- Verify: `GET /api/verify?token=` redirects to `/verified?ok=1|0`; the
+  client page offers "Open my Home" (Home when a session exists, else log
+  in). `POST /api/me/verify/resend` is rate-limited.
+- Email links point at `/home`, `/stock/{sym}`, `/settings`, and
+  `/unsubscribe?token=…&channel=…`, which is a client page that calls
+  `GET /api/unsubscribe`.
+- The recipe stays private: no weights, thresholds or filter values on any
+  subscriber surface, Full mode included. Inputs may be named and marked
+  "had data / lifted / weighed"; rules may be named and marked pass / fail.
+
+| Package | Owns | Must not touch |
+| --- | --- | --- |
+| P1 Journey & shell | `main.jsx`, `lib/router.jsx`, `lib/me.jsx`, `components/Shell.jsx`, `components/CommandPalette.jsx`, `components/Shortcuts.jsx`, `components/Tour.jsx`, `views/Auth.jsx`, `views/Onboarding.jsx`, `views/Pricing.jsx`, `views/Landing.jsx` (routing hooks only), `views/Reset.jsx`, new `views/Welcome.jsx`, `views/Verified.jsx`, `views/Unsubscribe.jsx`, `components/ExploreTabs.jsx`, `app/oauth.py`, `frontend/index.html`, shell regions of `styles.css` / `assist.css` | `Overview.jsx`, Board/Screen/StockReport/Watchlist, `app/main.py`, `app/jobs.py`, `Legal.jsx` |
+| P2 Home | `views/Overview.jsx`, `views/overview.css`, `components/RecordCard.jsx`, `components/upgrade.css`, `lib/record.js` | everything else |
+| P3 Lightness | `public/tokens.css`, type/table/badge/chip regions of `styles.css`, `views/Board.jsx`, `board.css`, `views/Screen.jsx`, `views/StockReport.jsx`, `stock.css`, `views/Watchlist.jsx`, `tools.css`, `components/ScoreBadge.jsx`, `components/ui.jsx`, `components/Spark.jsx`, new `components/NameCard.jsx` | `Overview.jsx`, shell files, `Shell.jsx` |
+| P4 Plain words | `app/product.py`, `app/plain_copy.py`, `views/Strategies.jsx`, `views/Industry.jsx`, `views/Help.jsx`, `lib/glossary.js`, `lib/plain.js`, `components/Explain.jsx`, `components/Plain.jsx`, `db/seed*.py` strategy copy | Board/StockReport (P3 places the cards), `Onboarding.jsx` (P1 places the industry line) |
+| P5 Legal | new `app/legal.py`, `app/main.py`, `app/account.py`, `app/jobs.py`, `app/email.py`, `db/migrations/012_consent.sql`, `views/Legal.jsx`, `components/FinePrint.jsx`, `lib/legal.js`, `tests/test_v6_legal.py` | `Auth.jsx` (P1 renders the tick), `oauth.py` |
+| P7 Lab | `frontend/src/lab/*`, `frontend/lab.html`, `app/lab.py` (read-only copy fields only) | everything outside the Lab |
+| P6 Sweep (wave 2) | every user-facing string: voice, the three sentences, jargon table, one line + one action per screen, landing copy | backend |
+
+## 11. The code map (from the understand pass)
+
+The readers' full reports are in the session scratchpad
+(`v6/journey.json`, `v6/density.json`, …); the points that shaped §10:
+
+- The chrome is chosen by `me`, not by the route (Shell.jsx:356-368), so
+  the landing wears the rail for subscribers and every signed-in page load
+  flashes the visitor bar first. Route-chosen layouts fix both.
+- Three doors, three first screens: email sign-up → onboarding, Google →
+  `/board` (empty for a newcomer), log in → `/overview`. One door, one first
+  screen.
+- The digest's unsubscribe link has no page behind it (jobs.py:232).
+- Consent is a passive sentence; nothing is stored (main.py:85-87).
+- Simple mode is a visibility toggle: Board Simple is still an 8-column
+  table, Find a 16-column one with a "swipe sideways" hint, Home six equal
+  cards of 5-6 rows fed by nine requests, the dossier's chart is the ninth
+  block. Monospace appears in 33 rules and five uppercase microlabel
+  styles coexist. The lightness pass replaces structure, not just colour.
