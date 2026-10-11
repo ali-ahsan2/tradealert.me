@@ -301,7 +301,8 @@ Alerts, Watchlist, Explore (a tab strip over Ranked, Find, What changed and
 Coming up). One door: email sign-up, Google and log in all reach the same
 first screen; the verify link lands on a page with "Open my Home"; the
 digest's unsubscribe link has a page behind it; verification can be re-sent.
-Onboarding is two steps in the bare layout.
+Onboarding is three steps in the bare layout: pick what I should watch,
+pick names, choose how to tell me.
 
 **Home.** A greeting, one sentence of today's counts, one button chosen by
 urgency; three cards (Told me, I'd have known, Coming up) with a number that
@@ -347,12 +348,45 @@ diffs in words with raw values behind a toggle, the floors stated where
 decisions are made and served from the API, and the server's own
 one-sentence verdict at the top of Versions. Nothing moved.
 
-**Verification.** 77 backend and vocabulary tests pass; the Playwright pass
+**Verification.** 78 backend and vocabulary tests pass; the Playwright pass
 over nineteen screens in four contexts reports no console errors and no
 horizontal overflow; the consent journey was walked end to end; five
 adversarial reviews (journey, lightness, voice, legal, recipe) ran against
 this document and the honesty rules, and their confirmed findings were
 fixed before the pull request was updated.
+
+**Review fixes, stated.** The five reviews returned 95 findings; all but
+one were applied (the landing's "How it works" quotes stay hard-coded
+beside the static screenshots they describe, and change when the shots are
+re-captured). The ones that changed a §10 decision or a shipped claim:
+- Consent is enforced server-side, not only in the client. Every
+  authenticated endpoint answers 403 `consent_required` until the account
+  has ticked the current terms version; `/api/me`, the consent and
+  verification-resend calls, the data export and account deletion stay
+  open so the person can always see, tick, take their data or leave; admin
+  accounts are exempt so the Lab is never blocked; the client sends that
+  403 to `/welcome`.
+- Google sign-up no longer records consent from a query parameter the
+  person may never have seen; Google accounts tick on `/welcome`, where an
+  authenticated POST records it.
+- The operator notes (hook, thesis) leave the subscriber product entirely:
+  the dossier API sends them empty to non-admins, the board rows no longer
+  carry them, and onboarding's one-line "why" is the plain verdict.
+- The recipe is shut tighter: hard filters are named in plain words with no
+  value, score components carry no weight, penalty points and the neutral
+  cutoff left the payloads, missing inputs sort by name rather than by
+  weight.
+- The plain layer was corrected where it overstated the engine: large
+  companies and undated names are scored down, not dropped; a share-sale
+  filing fires an alert and costs no points; the record counts moves up,
+  from two trading days before the event to five after; the 26 of 32
+  record is the backtest's six filters, and four run today.
+- The consent gate is the bare `/welcome` screen (the app shell redirects
+  to it rather than rendering it inside the rail); a third onboarding step
+  chooses the channel; Help and Strategies have one name each; the detail
+  switch reads Simple / More.
+- The not-running strategies disappear from Simple pickers and lists and
+  are never counted as "provisional"; rates print only at ten or more.
 
 **Deviations, stated.**
 - The account menu reads My account, My plan, Help rather than §10's
@@ -362,8 +396,9 @@ fixed before the pull request was updated.
 - Find's ready-made screens state their own limits ("more than 15% sold
   short"): those are the user's screen parameters, not the recipe.
 - The Board card's sentence is the change sentence, because the board
-  payload carries no ranked inputs; the operator's shorthand hook appears
-  only in the dossier's notes.
+  payload carries no ranked inputs; the operator's shorthand hook and
+  thesis are Lab-only and never reach a subscriber surface (see the review
+  fixes below).
 - An account-level detail preference did not ship; Simple stays the default
   per browser.
 - The legal pages carry visible placeholders for the operating entity,
