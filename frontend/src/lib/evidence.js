@@ -103,9 +103,3 @@ function fmtCap(m) {
   return Math.abs(m) >= 1000 ? `$${(m / 1000).toFixed(1)}B` : `$${Math.round(m)}M`;
 }
 
-export const HARD_FILTER_FORMAT = {
-  cap: (v) => (typeof v === "number" ? fmtCap(v) : String(v)),
-  float: (v) => (typeof v === "number" ? `${v}M shares` : String(v)),
-  si: (v) => (typeof v === "number" ? `${v}% of float` : String(v)),
-  growth: (v) => (typeof v === "number" ? `${v > 0 ? "+" : ""}${v}% y/y` : String(v)),
-};

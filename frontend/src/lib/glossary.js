@@ -226,10 +226,6 @@ export const PLAIN_COMPONENT = {
   qual: "company quality (an operator's reading)",
 };
 
-export function plainComponent(key, fallback) {
-  return PLAIN_COMPONENT[key] || fallback || key;
-}
-
 // Plain column and field labels for Simple mode. Keys match snapshot fields.
 export const PLAIN_FIELD = {
   px: "Price",

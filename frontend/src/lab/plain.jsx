@@ -167,11 +167,6 @@ export function warnPlain(code, floors) {
   }
 }
 
-export const WARN_PLAIN = Object.fromEntries(
-  ["GROUP_TOO_SMALL", "SMALL_SAMPLE", "FEW_INSTRUMENTS", "SYNTHETIC_DATA", "ASSUMED_VERSION"]
-    .map((c) => [c, warnPlain(c, DEFAULT_FLOORS)]),
-);
-
 /** "held up on new data (held_up)"; the stored value stays visible. */
 export function plainTech(map, value) {
   if (value == null || value === "") return "—";

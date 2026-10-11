@@ -1,10 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Link } from "../lib/router.jsx";
 import { openUpgrade } from "../lib/upgrade.js";
 import { age, shortDate } from "../lib/fmt.js";
 import { CTA } from "../lib/plain.js";
 import Icon from "./Icons.jsx";
-import { PlainStatusChip } from "./Plain.jsx";
 
 // Small shared primitives. Each one exists because a screen spec names a
 // state (loading, empty, error, locked) and every screen should render it
@@ -115,14 +113,6 @@ export function Monogram({ children, size = 24 }) {
   );
 }
 
-// Whether a strategy has a measured record (DESIGN_V6 §7: "calibrated" is
-// the technical word, "has a measured record" the plain one). One chip, one
-// vocabulary: this is the PlainStatusChip ("Measured record" / "No record
-// yet" / "Not running yet"), kept under its old name for existing callers.
-// Pass `status` when the strategy's plain copy carries one.
-export function StatusChip({ calibrated, status, className = "" }) {
-  return <PlainStatusChip status={status} calibrated={calibrated} className={className} />;
-}
 
 // `words` spells the age out ("61 days old") where a bare "61d" would read
 // like a code; `suffix` lets a caller write "checked 3d ago".

@@ -33,6 +33,18 @@ log = logging.getLogger("tradealert")
 
 app = FastAPI(title="tradealert.me", docs_url="/api/docs",
               openapi_url="/api/openapi.json")
+
+
+@app.middleware("http")
+async def _no_store_for_authenticated(request: Request, call_next):
+    """Anything answered to a bearer token is per-account and plan-scoped:
+    never cacheable by a browser or an intermediate."""
+    response = await call_next(request)
+    if request.headers.get("authorization") and "cache-control" not in response.headers:
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 app.include_router(account.router)
 app.include_router(alerts.router)
 app.include_router(admin.router)
@@ -717,6 +729,13 @@ def search(q: str = "", creds: HTTPAuthorizationCredentials | None = Depends(bea
         tier = _tier_for_user(conn, user_id)
         keys, _scope_label, picks = scope.user_scope(conn, user_id, tier[3] if tier else 1)
         vis, vis_params = scope.visible_sql_and_params(keys, picks, "i")
+        # the operator's hook and thesis are Lab-only (DESIGN_V6 §12): a
+        # subscriber's search must not be an oracle over them
+        match = "s.symbol ILIKE %s OR i.theme ILIKE %s OR ind.label ILIKE %s"
+        match_params = [q + "%", "%" + q + "%", "%" + q + "%"]
+        if bool(user_row[4]):
+            match += " OR i.hook ILIKE %s OR i.thesis ILIKE %s"
+            match_params += ["%" + q + "%", "%" + q + "%"]
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT s.symbol, i.theme, ind.key, sc.value, sc.band, "
@@ -726,13 +745,10 @@ def search(q: str = "", creds: HTTPAuthorizationCredentials | None = Depends(bea
                 "JOIN industries ind ON ind.id = i.industry_id "
                 "LEFT JOIN scores sc ON sc.instrument_id = i.id "
                 "  AND sc.run_id = %s "
-                f"WHERE (s.symbol ILIKE %s OR i.theme ILIKE %s "
-                f"OR ind.label ILIKE %s OR i.hook ILIKE %s OR i.thesis ILIKE %s) AND {vis} "
+                f"WHERE ({match}) AND {vis} "
                 "ORDER BY (s.symbol = %s) DESC, sc.value DESC NULLS LAST "
                 "LIMIT 12",
-                tuple([run[0], q + "%", "%" + q + "%", "%" + q + "%",
-                       "%" + q + "%", "%" + q + "%"] +
-                      vis_params + [q.upper()]),
+                tuple([run[0]] + match_params + vis_params + [q.upper()]),
             )
             rows = cur.fetchall()
     finally:

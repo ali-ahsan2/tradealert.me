@@ -168,12 +168,13 @@ def _get_json(url, bearer):
         raise HTTPException(502, "provider profile fetch failed") from None
 
 
-def _profile_from_provider(conf, code):
+def _profile_from_provider(conf, code, code_verifier):
     cid, secret = _client_creds("google", conf)
     token = _post_form(conf["token_uri"], {
         "client_id": cid,
         "client_secret": secret,
         "code": code,
+        "code_verifier": code_verifier,
         "grant_type": "authorization_code",
         "redirect_uri": _redirect_uri("google"),
     })
@@ -302,7 +303,7 @@ def oauth_start(provider: str, next: str = "", screen: str = ""):
     state = _store_state(provider, next)
     if _DEV:
         return RedirectResponse(
-            f"/api/oauth/callback/{provider}?state={state}&dev=1",
+            f"/api/oauth/callback/{provider}?state={state}",
             status_code=302,
         )
     cid, _secret = _client_creds(provider, conf)
@@ -326,22 +327,24 @@ def oauth_start(provider: str, next: str = "", screen: str = ""):
 
 
 @router.get("/api/oauth/callback/{provider}")
-def oauth_callback(provider: str, code: str = "",
-                   state: str = "", dev: str | None = None):
+def oauth_callback(provider: str, code: str = "", state: str = ""):
     provider, conf = _provider(provider)
     entry = _pop_state(provider, state)
-    if not entry.get("code_verifier") and not (_DEV or dev == "1"):
-        raise HTTPException(400, "missing pkce verifier")
-    if _DEV or dev == "1":
+    # The fixed dev profile is a server-side switch (OAUTH_DEV_MODE=1), never
+    # something a caller can ask for: outside it every sign-in goes through
+    # the provider with the PKCE verifier stored at /start.
+    if _DEV:
         profile = dict(_DEV_PROFILES[provider])
     else:
+        if not entry.get("code_verifier"):
+            raise HTTPException(400, "missing pkce verifier")
         if not code:
             raise HTTPException(400, "missing authorization code")
-        profile = _profile_from_provider(conf, code)
+        profile = _profile_from_provider(conf, code, entry["code_verifier"])
     uid, created = _upsert_user(provider, profile)
     token = security.make_token(uid)
     log.info("oauth %s sign-in: user %s (new=%s, dev=%s)", provider, uid,
-             created, _DEV or dev == "1")
+             created, _DEV)
     return _store_token_page(provider, token, profile.get("name"),
                              created=created,
                              next_path=entry.get("next", ""))

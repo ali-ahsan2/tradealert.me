@@ -24,11 +24,4 @@ export const CONSENT_LABEL =
   "I understand tradealert.me sends information and alerts, not financial advice, " +
   "and that my decisions and their results are my own.";
 
-// Does this account still owe a tick for the current version? The server
-// sends terms_version_current with /api/me so a stale client bundle never
-// decides on its own; the local constant is the fallback.
-export function needsConsent(me) {
-  if (!me) return false;
-  const current = me.terms_version_current || TERMS_VERSION;
-  return me.accepted_terms_version !== current;
-}
+

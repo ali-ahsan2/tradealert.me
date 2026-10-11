@@ -215,15 +215,18 @@ def strategy_detail(key: str):
             # rates only at n >= 10 (DESIGN_V5 §2): below that a count, never a rate
             by_band = {r[0]: {"n": r[1], "hits": r[2],
                               "hit_rate": round(r[2] / r[1], 3) if r[1] and r[1] >= 10 else None,
-                              "mean_return_pct": _f(r[3])} for r in cur.fetchall()}
+                              "mean_return_pct": _f(r[3]) if r[1] and r[1] >= 10 else None}
+                       for r in cur.fetchall()}
             cur.execute(
-                "SELECT event_type, created_at, resolved_outcomes_at_event, reason "
+                "SELECT event_type, created_at, resolved_outcomes_at_event "
                 "FROM calibration_events WHERE strategy_id = %s "
                 "ORDER BY created_at DESC LIMIT 20",
                 (sid,),
             )
+            # the operator's reason text stays on the Lab audit; the public
+            # page gets the event and its date only
             timeline = [{"type": r[0], "at": r[1].isoformat(),
-                         "resolved_outcomes": r[2], "reason": r[3] or ""}
+                         "resolved_outcomes": r[2], "reason": ""}
                         for r in cur.fetchall()]
             run = _latest_run(cur)
             distribution, scored, mean_cov = {}, 0, None
@@ -260,7 +263,7 @@ def strategy_detail(key: str):
         "calibration": {
             "resolved": n, "hits": hits,
             "hit_rate": round(hits / n, 3) if n and n >= 10 else None,
-            "mean_return_pct": _f(mean_ret), "by_band": by_band,
+            "mean_return_pct": _f(mean_ret) if n and n >= 10 else None, "by_band": by_band,
         },
         "timeline": timeline,
         "latest_run": None if not run else {
@@ -404,7 +407,8 @@ def industry_detail(key: str,
             by_kind = [
                 {"kind": r[0], "n": r[1], "hits": r[2],
                  "hit_rate": round(r[2] / r[1], 3) if r[1] >= 10 else None,
-                 "mean_max_move_pct": _f(r[3]), "mean_close_move_pct": _f(r[4]),
+                 "mean_max_move_pct": _f(r[3]) if r[1] >= 10 else None,
+                 "mean_close_move_pct": _f(r[4]) if r[1] >= 10 else None,
                  "names": r[5]}
                 for r in cur.fetchall()
             ]

@@ -246,8 +246,10 @@ def test_shared_pieces_use_the_plain_words():
     evidence = _read("lib/evidence.js")
     assert '"Events that passed every must-pass rule"' in evidence
     assert "cleared the screen" not in evidence.lower()
+    plain = _read("components/Plain.jsx")
+    assert "export function PlainStatusChip" in plain, "the status chip is the plain one"
     ui = _read("components/ui.jsx")
-    assert "<PlainStatusChip" in ui, "ui.jsx StatusChip renders the plain chip"
+    assert "StatusChip" not in ui, "ui.jsx keeps no second status chip"
     chart = _read("components/PriceChart.jsx")
     assert "TRIGGER_PLAIN" in chart and "B borrow, SI short interest" not in chart
     search = _read("components/SearchBar.jsx")

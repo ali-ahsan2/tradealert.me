@@ -179,14 +179,6 @@ function byRank(a, b) {
   return (b.score ?? 0) - (a.score ?? 0);
 }
 
-// The inputs that did most to lift the score, in plain words, for a "Why" line.
-export function topInputs(components, n = 3) {
-  return [...(components || [])]
-    .filter((c) => c.score != null && c.backed !== false)
-    .sort(byRank)
-    .slice(0, n)
-    .map(inputName);
-}
 
 // Inputs that scored below the halfway mark of their 0-1 scale: they weighed
 // on the number rather than lifting it.
@@ -202,25 +194,6 @@ export function missingInputs(components) {
   return (components || []).filter((c) => c.score == null || c.backed === false).map(inputName);
 }
 
-// "Lifted by heavy short interest and a dated event ahead; held back by thin
-// data on few shares available to trade." Facts about the inputs, no weights.
-export function whySentence(components) {
-  const lifted = [...(components || [])]
-    .filter((c) => c.score != null && c.backed !== false && Number(c.score) >= 0.5)
-    .sort(byRank)
-    .slice(0, 2)
-    .map(inputName);
-  const held = heldBackInputs(components);
-  const missing = missingInputs(components).slice(0, 2);
-  const drag = [];
-  if (held.length) drag.push(list(held));
-  if (missing.length) drag.push(`thin data on ${list(missing)}`);
-  const parts = [];
-  if (lifted.length) parts.push(`Lifted by ${list(lifted)}`);
-  if (drag.length) parts.push(`${lifted.length ? "held" : "Held"} back by ${drag.join(" and ")}`);
-  if (!parts.length) return "";
-  return `${parts.join("; ")}.`;
-}
 
 export function list(items) {
   const a = items.filter(Boolean);

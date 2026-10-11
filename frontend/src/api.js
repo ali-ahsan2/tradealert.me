@@ -129,10 +129,6 @@ export function consent(version) {
   return api("/me/consent", { method: "POST", json: { version } });
 }
 
-// Sends the verification email again; {sent, verified} either way.
-export function resendVerification() {
-  return api("/me/verify/resend", { method: "POST" });
-}
 
 export async function login(email, password) {
   const { token } = await api("/login", { method: "POST", json: { email, password } });

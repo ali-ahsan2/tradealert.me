@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api, cached, toast } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
-import { coverage, dateTime, delta, inDays, pct, plural, price as fmtPrice, score as fmtScore, shortDate, signed, tone } from "../lib/fmt.js";
+import { coverage, dateTime, delta, pct, plural, price as fmtPrice, score as fmtScore, shortDate, signed, tone } from "../lib/fmt.js";
 import { EVIDENCE, SNAPSHOT_LABELS, SNAPSHOT_ORDER } from "../lib/evidence.js";
 import { FIELD_TERM, GLOSSARY, PLAIN_FIELD } from "../lib/glossary.js";
 import { CTA, bandWord, changeSentence, list as plainList, nextStep, triggerLabel } from "../lib/plain.js";

@@ -259,8 +259,9 @@ Decisions that bind every package:
 
 ## 11. The code map (from the understand pass)
 
-The readers' full reports are in the session scratchpad
-(`v6/journey.json`, `v6/density.json`, …); the points that shaped §10:
+Six readers (journey, density, strategies, legal, Lab, attention) mapped
+the v5 code against the critique before this plan was written; the points
+that shaped §10:
 
 - The chrome is chosen by `me`, not by the route (Shell.jsx:356-368), so
   the landing wears the rail for subscribers and every signed-in page load

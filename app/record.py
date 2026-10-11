@@ -24,7 +24,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app import scope
 from app.db import get_conn
-from app.discover import _f, _iso, _pct, _viewer
+from app.discover import _iso, _pct, _viewer
 
 log = logging.getLogger("tradealert.record")
 router = APIRouter()
