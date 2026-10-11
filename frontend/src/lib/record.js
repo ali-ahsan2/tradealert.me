@@ -33,7 +33,7 @@ export function leadPhrase(e) {
 // "+13.9% within 5 sessions (closed +8.8%)"
 export function movePhrase(e) {
   if (!e || e.max_5d == null) return e && e.pending ? "five-session window still open" : "not yet measured";
-  const peak = `${e.max_5d >= 0 ? "+" : ""}${pct(e.max_5d)} at the high within five sessions`;
+  const peak = `${pct(e.max_5d)} at the high within five sessions`;
   return e.chg_5d != null ? `${peak}, closed ${pct(e.chg_5d)}` : peak;
 }
 
@@ -76,5 +76,5 @@ export function toldHeadline(told) {
   const best = (told.events || []).filter((e) => e.max_5d != null).sort((a, b) => b.max_5d - a.max_5d)[0];
   if (!best) return `You were told about ${plural(s.fired, "alert")}; the windows are still open.`;
   const lead = best.peak_after_sessions ? ` ${SESSIONS(best.peak_after_sessions)} before` : "";
-  return `You were told${lead} ${best.symbol} peaked ${best.max_5d >= 0 ? "+" : ""}${pct(best.max_5d)}.`;
+  return `You were told${lead} ${best.symbol} peaked ${pct(best.max_5d)}.`;
 }
