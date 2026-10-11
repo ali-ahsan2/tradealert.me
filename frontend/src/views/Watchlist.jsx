@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api, cached, toast } from "../api.js";
 import { Link } from "../lib/router.jsx";
 import { useMe } from "../lib/me.jsx";
-import { DAYS, delta, dollars, downloadText, inDays, plural, score as fmtScore, shortDate, signed, toCsv, tone } from "../lib/fmt.js";
+import { DAYS, delta, dollars, downloadText, inDays, pct, plural, score as fmtScore, shortDate, signed, toCsv, tone } from "../lib/fmt.js";
 import { GLOSSARY } from "../lib/glossary.js";
 import { bandWord } from "../lib/plain.js";
 import { useMode } from "../lib/mode.js";
+import { fetchRecord } from "../lib/record.js";
+import { openUpgrade } from "../lib/upgrade.js";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Spark, { Move } from "../components/Spark.jsx";
 import NotifyButton from "../components/NotifyButton.jsx";
@@ -54,6 +56,44 @@ function sincePinSentence(p) {
   const dlt = Math.round(p.value) - Math.round(p.score_at_pin);
   if (dlt === 0) return `Same score as when you pinned it, ${now}.`;
   return `Score ${dlt > 0 ? "up" : "down"} ${Math.abs(dlt)} point${Math.abs(dlt) === 1 ? "" : "s"} since you pinned it, from ${was} to ${now}.`;
+}
+
+// The lead fact on a pinned name from the subscriber's record (DESIGN_V5
+// §5): of the alerts that fired on it in the window, the one with the
+// biggest measured move (else the latest), said as what they were told or
+// what fired while they were not watching. One record request per page,
+// never one per card.
+function pickLead(a, b) {
+  if (!a) return b;
+  const am = a.max_5d != null;
+  const bm = b.max_5d != null;
+  if (am !== bm) return am ? a : b;
+  if (am && b.max_5d !== a.max_5d) return b.max_5d > a.max_5d ? b : a;
+  return b.date > a.date ? b : a;
+}
+
+function leadsBySymbol(rec) {
+  const m = {};
+  if (!rec) return m;
+  const all = [...((rec.told && rec.told.events) || []), ...((rec.missed && rec.missed.events) || [])];
+  for (const e of all) m[e.symbol] = pickLead(m[e.symbol], e);
+  return m;
+}
+
+// Red and green only on the price move itself.
+function LeadFact({ e }) {
+  if (!e) return null;
+  const peak = e.max_5d != null ? <span className={`num ${tone(e.max_5d)}`}>{pct(e.max_5d)}</span> : null;
+  let words;
+  if (e.told) {
+    if (peak && e.peak_after_sessions) words = <>You were told {plural(e.peak_after_sessions, "session")} before a {peak} peak.</>;
+    else if (peak) words = <>You were told; it moved {peak} at the high within five sessions.</>;
+    else if (e.pending) words = <>You were told on {shortDate(e.date)}; the five-session window is still open.</>;
+    else words = <>You were told on {shortDate(e.date)}; the move after is not measured yet.</>;
+  } else if (peak) words = <>An alert fired on it while you were not watching: {peak} at the high within five sessions.</>;
+  else if (e.pending) words = <>An alert fired on it on {shortDate(e.date)} while you were not watching; the five-session window is still open.</>;
+  else words = <>An alert fired on it on {shortDate(e.date)} while you were not watching.</>;
+  return <p className="rec-say tl-lead">{words}</p>;
 }
 
 // The badge, only with the coverage it can prove. ScoreBadge draws a full
@@ -126,6 +166,8 @@ export default function Watchlist() {
   const [reload, setReload] = useState(0);
   const [stats, setStats] = useState(null);
   const [sort, setSort] = useState("order");
+  const [record, setRecord] = useState(null);
+  const signedIn = Boolean(me);
 
   useEffect(() => {
     let alive = true;
@@ -146,6 +188,20 @@ export default function Watchlist() {
       alive = false;
     };
   }, [reload]);
+
+  // One record request for the whole page: which pinned names an alert
+  // fired on in the last 90 days, and what followed.
+  useEffect(() => {
+    if (!signedIn) return undefined;
+    let alive = true;
+    fetchRecord(90)
+      .then((d) => alive && setRecord(d))
+      .catch(() => alive && setRecord(null));
+    return () => {
+      alive = false;
+    };
+  }, [signedIn, reload]);
+  const leads = useMemo(() => leadsBySymbol(record), [record]);
 
   // A Notify button on a card changes the armed count the stats carry;
   // refresh them when any button on the page arms or disarms.
@@ -341,7 +397,9 @@ export default function Watchlist() {
             <>
               {" "}
               Unpin one, or {nextTier.label} follows {plural(nextTier.picks_limit, "name")} for you for {dollars(nextTier.price_monthly_cents)}/mo.{" "}
-              <Link to="/pricing">See plans</Link>
+              <button type="button" className="tl-linkbtn" onClick={() => openUpgrade("picks")}>
+                See plans
+              </button>
             </>
           ) : (
             " Unpin one to make room."
@@ -389,6 +447,7 @@ export default function Watchlist() {
                     </span>
                   </div>
                   <p className="tl-sent">{sincePinSentence(p)}</p>
+                  <LeadFact e={leads[p.symbol]} />
                   <p className="tl-meta">
                     {st && st.earnings ? (
                       <>
@@ -472,6 +531,7 @@ export default function Watchlist() {
                     <Link to={`/industries/${p.industry.key}`}>{p.industry.label}</Link> · {p.industry.benchmark_etf}
                     {p.lane ? ` · lane ${p.lane}` : ""}
                   </span>
+                  <LeadFact e={leads[p.symbol]} />
                 </div>
                 <div className="act">
                   {st && st.closes && st.closes.length > 1 && (

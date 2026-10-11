@@ -1,34 +1,42 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { api, toast } from "../api.js";
 import { Link } from "../lib/router.jsx";
+import { openUpgrade } from "../lib/upgrade.js";
 import { Modal } from "./ui.jsx";
 
 // A controlled pin toggle. The parent owns the pinned set so a board of
-// fifty rows makes one picks request, not fifty. A 403 at quota opens the
-// quota modal with two ways out, one of which costs nothing.
+// fifty rows makes one picks request, not fifty. The flip is optimistic
+// (DESIGN_V5 §5): the star fills the moment it is tapped and goes back,
+// with a toast that names the way out, if the request fails. A 403 at
+// quota opens the quota card with two ways out, one of which costs nothing;
+// the paid one opens the upgrade sheet in place.
 export default function Pin({ symbol, pinned, onChange, label = false, className = "" }) {
-  const [busy, setBusy] = useState(false);
+  const inflight = useRef(false);
   const [quota, setQuota] = useState(null);
 
   const toggle = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    setBusy(true);
+    if (inflight.current) return;
+    inflight.current = true;
+    const next = !pinned;
+    onChange(symbol, next);
     try {
-      if (pinned) {
-        await api(`/me/picks/${encodeURIComponent(symbol)}`, { method: "DELETE" });
-        onChange(symbol, false);
-        toast(`Removed ${symbol} from your watchlist.`);
-      } else {
+      if (next) {
         await api("/me/picks", { method: "POST", json: { symbol } });
-        onChange(symbol, true);
         toast(`Pinned ${symbol}. It will be in your next digest.`);
+      } else {
+        await api(`/me/picks/${encodeURIComponent(symbol)}`, { method: "DELETE" });
+        toast(`Removed ${symbol} from your watchlist.`);
       }
     } catch (err) {
-      if (err.status === 403) setQuota(err.detail || "Your plan's pick limit is reached.");
-      else toast(err.detail || "That didn't work. Try again.");
+      // roll back to what the server still holds
+      onChange(symbol, pinned);
+      if (err.status === 403 && next) setQuota(err.detail || "Your plan's pick limit is reached.");
+      else if (err.status === 0) toast(`${symbol} was ${next ? "not pinned" : "kept"}: you appear to be offline. Check your connection and tap again.`);
+      else toast(`${err.detail || `Couldn't ${next ? "pin" : "unpin"} ${symbol}.`} Tap again to retry.`);
     } finally {
-      setBusy(false);
+      inflight.current = false;
     }
   };
 
@@ -40,7 +48,6 @@ export default function Pin({ symbol, pinned, onChange, label = false, className
         aria-pressed={pinned}
         aria-label={pinned ? `Remove ${symbol} from watchlist` : `Pin ${symbol} to watchlist`}
         title={pinned ? "Remove from watchlist" : "Pin to watchlist"}
-        disabled={busy}
         onClick={toggle}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
@@ -63,9 +70,16 @@ export default function Pin({ symbol, pinned, onChange, label = false, className
               <Link to="/watchlist" className="btn btn-secondary" onClick={() => setQuota(null)}>
                 Manage watchlist
               </Link>
-              <Link to="/pricing" className="btn btn-primary" onClick={() => setQuota(null)}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setQuota(null);
+                  openUpgrade("picks", { symbol });
+                }}
+              >
                 See plans
-              </Link>
+              </button>
             </>
           }
         >

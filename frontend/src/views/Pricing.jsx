@@ -3,6 +3,7 @@ import { api, cached, getToken } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
 import { alertsLabel, dollars, industriesLabel, plural } from "../lib/fmt.js";
 import { EVIDENCE } from "../lib/evidence.js";
+import { beyondSentence, fetchRecord } from "../lib/record.js";
 import { ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
 
 const CHANNEL_LABEL = { email: "email", push: "web push", sms: "SMS", webhook: "signed webhook" };
@@ -46,6 +47,22 @@ export default function Pricing() {
     if (prov === 0) return "Every strategy is calibrated.";
     return `${prov} of the ${strats.length} strategies ${prov === 1 ? "is" : "are"} provisional.`;
   })();
+
+  // The viewer's own record frames the comparison (DESIGN_V5 §4.6): what
+  // fired beyond the industries they follow, as counts, never tickers.
+  // Visitors get nothing here; the plans speak for themselves.
+  const [rec, setRec] = useState(null);
+  useEffect(() => {
+    if (!getToken()) return undefined;
+    let alive = true;
+    fetchRecord(30)
+      .then((x) => alive && setRec(x))
+      .catch(() => alive && setRec(null));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const beyondLine = rec && getToken() ? beyondSentence(rec.beyond) : null;
 
   const q = useQuery();
   const [d, setD] = useState(null);
@@ -157,6 +174,11 @@ export default function Pricing() {
             Every plan sees the same scores and the same reports. Plans differ only in how much of the
             universe you follow, how many names you pin, and how alerts reach you.
           </div>
+          {beyondLine && (
+            <p className="utility" style={{ margin: "var(--s-2) 0 0" }}>
+              In the last {rec.days} days, {beyondLine}
+            </p>
+          )}
         </div>
       </div>
 

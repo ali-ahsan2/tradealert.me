@@ -23,6 +23,7 @@ import { EVIDENCE, nounFor } from "../lib/evidence.js";
 import { useRowNav } from "../lib/rownav.js";
 import { useMode } from "../lib/mode.js";
 import { changeSentence } from "../lib/plain.js";
+import { openUpgrade } from "../lib/upgrade.js";
 import SearchBar from "../components/SearchBar.jsx";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Pin from "../components/Pin.jsx";
@@ -997,9 +998,9 @@ export default function Board() {
                 )}
               </div>
               <div className="actions">
-                <Link to="/pricing" className="btn btn-primary btn-sm">
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => openUpgrade("names")}>
                   See plans — {dollars(nextTier.price_monthly_cents)}/mo
-                </Link>
+                </button>
                 <span>
                   Currently on {me.tier.label}, {dollars(me.tier.price_monthly_cents)}/mo
                 </span>

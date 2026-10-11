@@ -5,8 +5,10 @@ import { useMe } from "../lib/me.jsx";
 import { coverage, dateTime, delta, inDays, pct, plural, price as fmtPrice, score as fmtScore, shortDate, signed, tone } from "../lib/fmt.js";
 import { EVIDENCE, HARD_FILTER_FORMAT, SNAPSHOT_LABELS, SNAPSHOT_ORDER, nounFor } from "../lib/evidence.js";
 import { FIELD_TERM, GLOSSARY, PLAIN_FIELD } from "../lib/glossary.js";
-import { changeSentence, nextStep, verdict, whySentence } from "../lib/plain.js";
+import { changeSentence, nextStep, triggerLabel, verdict, whySentence } from "../lib/plain.js";
 import { useMode } from "../lib/mode.js";
+import { useReveal } from "../lib/motion.js";
+import { fetchSymbolRecord, leadPhrase, movePhrase } from "../lib/record.js";
 import SearchBar from "../components/SearchBar.jsx";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Pin from "../components/Pin.jsx";
@@ -119,6 +121,116 @@ function FieldLabel({ k, simple }) {
   return term && GLOSSARY[term] ? <Explain term={term}>{text}</Explain> : <>{text}</>;
 }
 
+// What you'd have known (DESIGN_V5 §5): every alert that fired on this name
+// in the last year, whether this account was told, and the measured move
+// after each. Facts only: fired, told, moved, peaked, N sessions before.
+function knownHeadline(rec, symbol, best) {
+  const fired = rec.summary.fired;
+  const toldN = rec.told ? rec.told.fired : 0;
+  let toldWord;
+  if (toldN === 0) toldWord = fired === 1 ? "you were not told about it" : "you were told about none of them";
+  else if (toldN === fired) toldWord = fired === 1 ? "you were told about it" : "you were told about all of them";
+  else toldWord = `you were told about ${toldN}`;
+  const first = `${plural(fired, "alert")} fired on ${symbol} in the last year; ${toldWord}.`;
+  if (!best) return (rec.events || []).some((e) => e.pending) ? `${first} The five-session windows are still open.` : first;
+  const lead = leadPhrase(best);
+  return `${first} The biggest: ${moveText(best)}${lead ? `, ${lead}` : ""}.`;
+}
+
+// "+13.9% at the high within five sessions, closed +8.8%": the same words as
+// record.js movePhrase, with pct() carrying the sign once.
+function moveText(e) {
+  if (e.max_5d == null) return movePhrase(e);
+  const peak = `${pct(e.max_5d)} at the high within five sessions`;
+  return e.chg_5d != null ? `${peak}, closed ${pct(e.chg_5d)}` : peak;
+}
+
+// The move after an alert; red and green on the price numbers only.
+function MoveWords({ e }) {
+  if (!e || e.max_5d == null) return <>{movePhrase(e)}</>;
+  return (
+    <>
+      <span className={`num ${tone(e.max_5d)}`}>{pct(e.max_5d)}</span> at the high within five sessions
+      {e.chg_5d != null && (
+        <>
+          , closed <span className={`num ${tone(e.chg_5d)}`}>{pct(e.chg_5d)}</span>
+        </>
+      )}
+    </>
+  );
+}
+
+function plainTrigger(e, simple) {
+  const l = triggerLabel(e.trigger_key);
+  return simple && l !== e.trigger_key ? l : e.trigger;
+}
+
+// rec: undefined while loading, null when there is no record to show (a
+// name outside the universe answers 404 exactly like the dossier).
+function KnownCard({ rec, symbol, simple, full }) {
+  const [ref, seen] = useReveal();
+  const [all, setAll] = useState(false);
+  if (rec === null) return null;
+  const events = rec ? rec.events || [] : [];
+  const fired = rec ? (rec.summary ? rec.summary.fired : events.length) : 0;
+  const missedAny = events.some((e) => !e.told);
+  const best = events.filter((e) => e.max_5d != null).sort((a, b) => b.max_5d - a.max_5d)[0];
+  const shown = all ? events : events.slice(0, 6);
+  return (
+    <section ref={ref} className={`card sr-known reveal ${seen ? "in" : ""}`} aria-labelledby="known-h">
+      <div className="card-title">
+        <h2 id="known-h">What you'd have known</h2>
+        {rec && missedAny && <NotifyButton symbol={symbol} compact />}
+      </div>
+      {!rec ? (
+        <Skeleton rows={2} height={36} />
+      ) : fired === 0 ? (
+        <p className="sr-known-empty">No alerts have fired on {symbol} in the last year.</p>
+      ) : (
+        <>
+          <p className="sr-known-h">{knownHeadline(rec, symbol, best)}</p>
+          <div className="sr-known-rows">
+            {shown.map((e, i) => {
+              const lead = leadPhrase(e);
+              return (
+                <div className="rec-row" key={`${e.trigger_key}-${e.date}-${i}`}>
+                  <div className="rec-main">
+                    <div className="rec-top">
+                      <span className="trig" title={e.detail || undefined}>
+                        {plainTrigger(e, simple)}
+                      </span>
+                      <span className="when">{shortDate(e.date)}</span>
+                      <span className={`sr-known-tag ${e.told ? "told" : ""}`}>{e.told ? "sent to you" : "not watching"}</span>
+                    </div>
+                    <p className="rec-say">
+                      <MoveWords e={e} />
+                    </p>
+                    {full && e.detail && <p className="rec-detail">{e.detail}</p>}
+                  </div>
+                  {lead && (
+                    <div className="rec-act">
+                      <span className={`lead-chip ${e.pending ? "open" : ""}`}>{lead}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {events.length > shown.length && (
+            <button type="button" className="btn-quiet sr-known-more" onClick={() => setAll(true)}>
+              Show {events.length - shown.length} more
+            </button>
+          )}
+          <p className="hint">
+            Measured from the last daily close on or before each alert to the close five sessions later and the highest high inside those sessions. “Sent to
+            you” means a delivery left for your account for that alert; “not watching” means none did.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
 export default function StockReport({ symbol }) {
   const { me } = useMe();
   const { simple, full } = useMode();
@@ -197,6 +309,23 @@ export default function StockReport({ symbol }) {
       alive = false;
     };
   }, [symbol, pinned]);
+
+  // The record on this name: every alert that fired in the last year, told
+  // or not, with the measured move after. Needs an account; a 404 (outside
+  // the universe) or any other failure hides the card.
+  const signedIn = Boolean(me);
+  const [rec, setRec] = useState(undefined);
+  useEffect(() => {
+    if (!signedIn) return undefined;
+    let alive = true;
+    setRec(undefined);
+    fetchSymbolRecord(sym, 365)
+      .then((x) => alive && setRec(x))
+      .catch(() => alive && setRec(null));
+    return () => {
+      alive = false;
+    };
+  }, [sym, signedIn, reload]);
 
   const history = d ? d.history || [] : [];
   const bandChanges = useMemo(() => {
@@ -613,6 +742,8 @@ export default function StockReport({ symbol }) {
               </section>
             )}
           </section>
+
+          {signedIn && <KnownCard key={d.symbol} rec={rec} symbol={d.symbol} simple={simple} full={full} />}
 
           {s && (
             <section className="card" aria-labelledby="chg-h">

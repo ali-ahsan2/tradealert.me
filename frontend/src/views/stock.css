@@ -322,3 +322,77 @@
 .lens-card .lc-top {
   flex-wrap: wrap;
 }
+
+/* What you'd have known (DESIGN_V5 §5): the record on this name. The rows
+   are the shared .rec-row primitives from assist.css; only the price
+   numbers carry colour. Every control is a thumb's height. */
+.sr-known .card-title {
+  align-items: center;
+}
+
+.sr-known .card-title .btn {
+  min-height: 44px;
+}
+
+.sr-known-h {
+  margin: 0 0 var(--s-2);
+  line-height: 1.55;
+  max-width: 72ch;
+}
+
+.sr-known-empty {
+  margin: 0;
+  color: var(--ink-muted);
+  line-height: 1.55;
+}
+
+.sr-known-rows {
+  margin-top: var(--s-2);
+}
+
+.sr-known .rec-top .trig {
+  font-weight: 600;
+}
+
+.sr-known-tag {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+}
+
+.sr-known-tag.told {
+  color: var(--accent);
+}
+
+.sr-known .rec-say .num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.sr-known .rec-detail {
+  margin: 2px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.sr-known .lead-chip {
+  min-height: 28px;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.3;
+}
+
+.sr-known-more {
+  min-height: 44px;
+  margin-top: var(--s-2);
+}
+
+.sr-known .hint {
+  margin-top: var(--s-3);
+  max-width: 72ch;
+}

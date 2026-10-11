@@ -7,6 +7,8 @@ import { DILUTION_TRIGGERS, TRIGGERS } from "../lib/evidence.js";
 import { DEFAULT_TRIGGERS, GLOSSARY } from "../lib/glossary.js";
 import { triggerLabel, triggerSentence } from "../lib/plain.js";
 import { useMode } from "../lib/mode.js";
+import { beyondSentence, fetchRecord, leadPhrase, movePhrase, tallySentence } from "../lib/record.js";
+import { openUpgrade } from "../lib/upgrade.js";
 import SearchBar from "../components/SearchBar.jsx";
 import NotifyButton, { invalidateRules } from "../components/NotifyButton.jsx";
 import Explain from "../components/Explain.jsx";
@@ -161,6 +163,126 @@ function PlainEvent({ ev, tz, onRead, full = false }) {
   );
 }
 
+// A link that opens the upgrade sheet in place instead of leaving for the
+// plans page (DESIGN_V5 §4.6).
+function PlanLink({ reason, ctx, children }) {
+  return (
+    <button type="button" className="tl-linkbtn" onClick={() => openUpgrade(reason, ctx)}>
+      {children}
+    </button>
+  );
+}
+
+// The move after an alert; red and green on the price numbers only.
+function MoveWords({ e }) {
+  if (!e || e.max_5d == null) return <>{movePhrase(e)}</>;
+  return (
+    <>
+      <span className={`num ${tone(e.max_5d)}`}>{pct(e.max_5d)}</span> at the high within five sessions
+      {e.chg_5d != null && (
+        <>
+          , closed <span className={`num ${tone(e.chg_5d)}`}>{pct(e.chg_5d)}</span>
+        </>
+      )}
+    </>
+  );
+}
+
+// "You were told 1 session before LEU peaked +13.5%." The biggest measured
+// move among the alerts delivered to this account; pct() carries the sign.
+function toldLine(told) {
+  if (!told || !told.summary || !told.summary.fired) return null;
+  const best = (told.events || []).filter((e) => e.max_5d != null).sort((a, b) => b.max_5d - a.max_5d)[0];
+  if (!best) return `You were told about ${plural(told.summary.fired, "alert")}; the five-session windows are still open.`;
+  const lead = best.peak_after_sessions ? ` ${plural(best.peak_after_sessions, "session")} before` : "";
+  return `You were told${lead} ${best.symbol} peaked ${pct(best.max_5d)}.`;
+}
+
+// The trigger in plain words where the glossary has them, else as recorded.
+function plainTrigger(e, simple) {
+  const l = triggerLabel(e.trigger_key);
+  return simple && l !== e.trigger_key ? l : e.trigger;
+}
+
+// The subscriber's own record (DESIGN_V5 §3): what they were told and what
+// followed, what fired on names in their universe while they were not
+// watching (tickers clamped to the plan, the rest counted), and what fired
+// beyond the industries they follow, as counts only. Every line is a
+// recorded fact; the one button opens the upgrade sheet in place.
+function RecordBlock({ rec, allIndTier, simple }) {
+  if (rec === undefined) return <Skeleton rows={2} height={44} />;
+  if (!rec) return null;
+  const told = rec.told || { summary: null, events: [] };
+  const missed = rec.missed || { summary: null, events: [] };
+  const headline = toldLine(told) || `Nothing was sent to you in the last ${rec.days} days.`;
+  const rows = [];
+  const seen = new Set();
+  for (const e of missed.events || []) {
+    if (seen.has(e.symbol)) continue;
+    seen.add(e.symbol);
+    rows.push(e);
+    if (rows.length === 5) break;
+  }
+  const hiddenNames = Math.max(0, (missed.names_total || 0) - (missed.names_shown || 0));
+  const beyondLine = beyondSentence(rec.beyond);
+  return (
+    <section className="card tl-rec" aria-labelledby="rec-h">
+      <div className="card-title">
+        <h2 id="rec-h">Your record</h2>
+        <span className="muted small">last {rec.days} days</span>
+      </div>
+      <p className="tl-rec-h">{headline}</p>
+      {told.summary && told.summary.fired > 0 && <p className="tl-rec-sub">{tallySentence(told.summary, { subject: "alerts you were told about" })}</p>}
+
+      <h3 className="tl-rec-sec">Fired while you were not watching</h3>
+      <p className="tl-rec-sub">{tallySentence(missed.summary)}</p>
+      {rows.length > 0 && (
+        <div className="tl-rec-rows">
+          {rows.map((e) => {
+            const lead = leadPhrase(e);
+            return (
+              <div className="rec-row" key={`${e.symbol}-${e.trigger_key}-${e.date}`}>
+                <div className="rec-main">
+                  <div className="rec-top">
+                    <Link className="sym" to={`/stock/${e.symbol}`}>
+                      {e.symbol}
+                    </Link>
+                    <span className="when">
+                      {plainTrigger(e, simple)} · {shortDate(e.date)}
+                    </span>
+                    {lead && <span className={`lead-chip ${e.pending ? "open" : ""}`}>{lead}</span>}
+                  </div>
+                  <p className="rec-say">
+                    <MoveWords e={e} />
+                  </p>
+                </div>
+                <div className="rec-act">
+                  <NotifyButton symbol={e.symbol} compact />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {hiddenNames > 0 && (
+        <p className="tl-rec-sub tl-rec-more">
+          Alerts fired on {plural(hiddenNames, "more name")} than your plan lists. <PlanLink reason="names">See more names</PlanLink>
+        </p>
+      )}
+      {beyondLine && (
+        <>
+          <h3 className="tl-rec-sec">Beyond the industries you follow</h3>
+          <p className="tl-rec-sub">{beyondLine}</p>
+          <button type="button" className="btn-quiet tl-rec-btn" onClick={() => openUpgrade("beyond")}>
+            See what {allIndTier ? allIndTier.label : "Investor"} follows
+          </button>
+        </>
+      )}
+      {rec.method && <p className="hint">{rec.method}</p>}
+    </section>
+  );
+}
+
 export default function Alerts() {
   const { me } = useMe();
   const { simple, full } = useMode();
@@ -194,10 +316,26 @@ export default function Alerts() {
   const [formErr, setFormErr] = useState(null); // {kind, text}
   const [outcomes, setOutcomes] = useState(null);
   const [outErr, setOutErr] = useState(null);
+  // undefined while loading, null when it could not be loaded
+  const [record, setRecord] = useState(undefined);
   const formRef = useRef(null);
   const oDays = [90, 365, 730].includes(Number(q.get("odays"))) ? Number(q.get("odays")) : 365;
 
   const locked = Boolean(me && me.tier && me.tier.alerts_limit === 0);
+  const signedIn = Boolean(me);
+
+  // The subscriber's own record: the top of "Your record" / Outcomes, and
+  // the lead of the Free-plan lock screen.
+  useEffect(() => {
+    if (!signedIn || (tab !== "outcomes" && !locked)) return undefined;
+    let alive = true;
+    fetchRecord(90)
+      .then((d) => alive && setRecord(d))
+      .catch(() => alive && setRecord(null));
+    return () => {
+      alive = false;
+    };
+  }, [signedIn, tab, locked, reload]);
 
   useEffect(() => {
     if (tab !== "outcomes" || locked) return undefined;
@@ -299,6 +437,7 @@ export default function Alerts() {
   const [othersShown, setOthersShown] = useState(OTHERS_PAGE);
   useEffect(() => setOthersShown(OTHERS_PAGE), [events]);
   const firstAlertTier = tiers && [...tiers].sort((a, b) => a.price_monthly_cents - b.price_monthly_cents).find((t) => t.alerts_limit !== 0);
+  const allIndTier = tiers && [...tiers].sort((a, b) => a.price_monthly_cents - b.price_monthly_cents).find((t) => t.industries_limit >= 999);
   const extraChannels = CHANNELS.filter(([k]) => k !== "email" && hasChannel(me, k));
   const restTriggers = TRIGGERS.filter(([k]) => !DEFAULT_TRIGGERS.includes(k));
   const groups = useMemo(() => {
@@ -422,6 +561,11 @@ export default function Alerts() {
   );
 
   if (locked) {
+    // Lead with the viewer's own missed count when the record is in.
+    const lm = record && record.missed ? record.missed.summary : null;
+    const missedLead = lm && lm.fired ? `${plural(lm.fired, "alert")} fired on ${plural(lm.names, "name")} in your industries in the last ${record.days} days.` : null;
+    const missedMoved = lm && lm.measured ? ` ${lm.moved_10} of the ${lm.measured} measured moved 10%+ within five sessions.` : "";
+    const fromLabel = firstAlertTier ? firstAlertTier.label : "Basic";
     return (
       <div className="wrap">
         <div className="pagehead">
@@ -448,7 +592,12 @@ export default function Alerts() {
           <div className="panel">
             <div className="card">
               <p className="eyebrow">Example shown behind</p>
-              <h2>Alerts are included from {firstAlertTier ? firstAlertTier.label : "Basic"}.</h2>
+              <h2>{missedLead || `Alerts are included from ${fromLabel}.`}</h2>
+              {missedLead && (
+                <p className="muted">
+                  You were told about none of them.{missedMoved} Alerts are included from {fromLabel}.
+                </p>
+              )}
               <p className="muted">{GLOSSARY.alert.short} The facts we watch for: a borrow fee doubling, a short-interest print crossing a line, a day at three times normal volume, a dated event coming up, a filing to sell more shares.</p>
               {firstAlertTier && (
                 <p className="muted">
@@ -456,9 +605,9 @@ export default function Alerts() {
                   {firstAlertTier.channels.map(channelWord).join(", ")}, {dollars(firstAlertTier.price_monthly_cents)}/mo.
                 </p>
               )}
-              <Link to="/pricing" className="btn btn-primary">
+              <button type="button" className="btn btn-primary" onClick={() => openUpgrade("alerts")}>
                 See plans
-              </Link>
+              </button>
               <p className="xs faint" style={{ marginTop: "var(--s-3)", marginBottom: 0 }}>
                 Currently on {me.tier.label}.
               </p>
@@ -550,12 +699,13 @@ export default function Alerts() {
           {rules ? ` · ${simple ? names : rules.length}` : ""}
         </button>
         <button role="tab" className="tab" aria-selected={tab === "outcomes"} onClick={() => setTab("outcomes")}>
-          {simple ? "What followed" : "Outcomes"}
+          {simple ? "Your record" : "Outcomes"}
         </button>
       </div>
 
       {tab === "outcomes" && (
         <>
+          <RecordBlock rec={record} allIndTier={allIndTier} simple={simple} />
           <div className="filters-row">
             <span className="muted small">What price did after each kind of alert fired on the names you can see, measured on end-of-day price bars.</span>
             <span className="spacer" />
@@ -858,7 +1008,7 @@ export default function Alerts() {
               <span>
                 Alerts: <b>{limit == null ? `${used} on · unlimited` : `${used} of ${limit} used`}</b> · {me && me.tier ? me.tier.label : ""}
               </span>
-              {atQuota && <Link to="/pricing">See plans</Link>}
+              {atQuota && <PlanLink reason="alerts">See plans</PlanLink>}
             </div>
             {!rules && <Skeleton rows={4} height={44} />}
             {rules && rules.length === 0 && (
@@ -998,7 +1148,11 @@ export default function Alerts() {
                 )}
                 {remaining !== Infinity && picked.size > remaining && (
                   <p className="hint">
-                    That is {plural(picked.size, "alert")} and your plan has {remaining} left. Untick {picked.size - remaining}, turn one off, or <Link to="/pricing">move to a plan that can watch this name as well</Link>.
+                    That is {plural(picked.size, "alert")} and your plan has {remaining} left. Untick {picked.size - remaining}, turn one off, or{" "}
+                    <PlanLink reason="alerts" ctx={symbol ? { symbol } : {}}>
+                      move to a plan that can watch this name as well
+                    </PlanLink>
+                    .
                   </p>
                 )}
               </div>
@@ -1033,7 +1187,10 @@ export default function Alerts() {
                           {k === "email" && <span className="lock-note">Required</span>}
                           {!allowed && (
                             <span className="lock-note">
-                              Not in your plan · <Link to="/pricing">See plans</Link>
+                              Not in your plan ·{" "}
+                              <PlanLink reason="channels" ctx={{ channel: k }}>
+                                See plans
+                              </PlanLink>
                             </span>
                           )}
                         </span>
@@ -1050,9 +1207,18 @@ export default function Alerts() {
                       <Link to="/settings">Open account settings</Link>
                     </p>
                   )}
-                  {(formErr.kind === "quota" || formErr.kind === "channel") && (
+                  {formErr.kind === "quota" && (
                     <p style={{ margin: "var(--s-2) 0 0" }}>
-                      <Link to="/pricing">See plans</Link>
+                      <PlanLink reason="alerts" ctx={symbol ? { symbol } : {}}>
+                        See plans
+                      </PlanLink>
+                    </p>
+                  )}
+                  {formErr.kind === "channel" && (
+                    <p style={{ margin: "var(--s-2) 0 0" }}>
+                      <PlanLink reason="channels" ctx={{ channel: channels.find((c) => c !== "email" && !hasChannel(me, c)) || channels.find((c) => c !== "email") }}>
+                        See plans
+                      </PlanLink>
                     </p>
                   )}
                 </Notice>
@@ -1062,7 +1228,11 @@ export default function Alerts() {
               </button>
               {atQuota && (
                 <p className="help" style={{ marginTop: "var(--s-2)" }}>
-                  You're using all {limit} alerts on {me.tier.label}. Turn one off, or <Link to="/pricing">move to a plan that can watch this name as well</Link>.
+                  You're using all {limit} alerts on {me.tier.label}. Turn one off, or{" "}
+                  <PlanLink reason="alerts" ctx={symbol ? { symbol } : {}}>
+                    move to a plan that can watch this name as well
+                  </PlanLink>
+                  .
                 </p>
               )}
             </form>
