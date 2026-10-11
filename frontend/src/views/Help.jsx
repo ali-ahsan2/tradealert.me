@@ -7,6 +7,8 @@ import { EVIDENCE } from "../lib/evidence.js";
 import { alertsLabel, industriesLabel, plural } from "../lib/fmt.js";
 import { KeyValue, Steps } from "../components/ui.jsx";
 import { restartTour } from "../components/Tour.jsx";
+import { PlainStatusChip, StrategyPlainCard } from "../components/Plain.jsx";
+import { cached } from "../api.js";
 import "./help.css";
 
 // /help: how the product works in five steps, whether any of it is advice
@@ -46,8 +48,8 @@ const HOW = [
     screen is stamped with the run it came from.
   </>,
   <>
-    <b>We score every name on each strategy.</b> A score is a 0 to 100 fit to the strategy's setup on that run, grouped into a band word
-    you can read at a glance.
+    <b>We score every name on Fast Mover each morning; four more strategies are being built.</b> A score is a 0 to 100 fit to the
+    strategy's setup that morning, with a rating word you can read at a glance.
   </>,
   <>
     <b>We explain the number in plain words.</b> Each name opens with what its score is, which inputs drove it and which inputs had no
@@ -141,15 +143,75 @@ function TriggersCard() {
   );
 }
 
+// The strategies in plain words: the one with a measured record as its full
+// card, the ones being built as one line each behind a closed drawer, so the
+// section stays within three items (DESIGN_V6 §7).
+function StrategiesSection() {
+  const [list, setList] = useState(null);
+  useEffect(() => {
+    cached("/strategies")
+      .then((d) => setList(d.strategies))
+      .catch(() => setList([]));
+  }, []);
+  if (!list || list.length === 0) return null;
+  const status = (s) => (s.plain && s.plain.status) || (s.calibrated ? "measured" : "provisional");
+  const lead = list.filter((s) => status(s) === "measured");
+  const rest = list.filter((s) => status(s) !== "measured");
+  return (
+    <section aria-labelledby="h-strategies">
+      <h2 id="strategies">
+        <span id="h-strategies">The strategies, in plain words</span>
+      </h2>
+      <div className="plain-list">
+        {lead.map((s) => (
+          <article key={s.key} className="plain-row" aria-labelledby={`hs-${s.key}`}>
+            <div className="plain-row-top">
+              <h3 id={`hs-${s.key}`}>
+                <Link to={`/strategies/${s.key}`}>{s.label}</Link>
+              </h3>
+              <PlainStatusChip status={status(s)} />
+            </div>
+            <StrategyPlainCard strategy={s} className="plain-flat" />
+          </article>
+        ))}
+        {rest.length > 0 && (
+          <details className="plain-more">
+            <summary>
+              {rest.length === 1 ? "One more strategy is" : `${rest.length} more strategies are`} being built
+            </summary>
+            <div className="plain-list">
+              {rest.map((s) => (
+                <article key={s.key} className="plain-row" aria-labelledby={`hs-${s.key}`}>
+                  <div className="plain-row-top">
+                    <h3 id={`hs-${s.key}`}>
+                      <Link to={`/strategies/${s.key}`}>{s.label}</Link>
+                    </h3>
+                    <PlainStatusChip status={status(s)} />
+                  </div>
+                  <StrategyPlainCard strategy={{ ...s, label: null }} compact />
+                  {s.plain && <p className="plain-note">{s.plain.record}</p>}
+                </article>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
+      <p className="help-see" style={{ marginTop: "var(--s-3)" }}>
+        <Link to="/strategies">Every strategy and its record</Link>
+      </p>
+    </section>
+  );
+}
+
 function EvidenceCard() {
   return (
     <article className="help-term" id="evidence">
       <h3>The evidence</h3>
       <p>
-        Fast Mover is the one calibrated strategy. On {EVIDENCE.events} events across {EVIDENCE.tickers} names, the names that cleared every
-        hard filter moved {EVIDENCE.hitRate}% of the time ({EVIDENCE.hits} of {EVIDENCE.events}), against {EVIDENCE.earningsRate}% for
-        earnings events generally and {EVIDENCE.randomRate}% on a random day. A move is {EVIDENCE.hitDefinition}, measured from{" "}
-        {EVIDENCE.window}.
+        Fast Mover is the one strategy with a measured record. On {EVIDENCE.events} events across {EVIDENCE.tickers} names, the names that
+        passed every must-pass rule moved {EVIDENCE.hitRate}% of the time ({EVIDENCE.hits} of {EVIDENCE.events}), against{" "}
+        {EVIDENCE.earningsRate}% for earnings events generally and {EVIDENCE.randomRate}% on a random day. A move is {EVIDENCE.hitDefinition},
+        measured from {EVIDENCE.window}.
       </p>
       <ul>
         <li>It measures whether a large move happened, not its direction.</li>
@@ -244,6 +306,7 @@ export default function Help() {
 
       <nav className="help-toc" aria-label="Sections">
         <a href="#how">How it works</a>
+        <a href="#strategies">The strategies</a>
         <a href="#advice">Is this advice?</a>
         {groups.map((g) => (
           <a key={g.id} href={`#${g.id}`}>
@@ -262,16 +325,18 @@ export default function Help() {
           Replay the welcome tour
         </button>
         <Link to="/strategies" className="btn btn-secondary btn-sm">
-          Strategies and evidence
+          The strategies and their record
         </Link>
       </div>
 
+      <StrategiesSection />
+
       <h2 id="advice">Is this advice?</h2>
       <p className="help-lead">
-        No. Everything on a screen is a recorded fact, stated with its source and date: a score from a named run, a short-interest
-        figure from a FINRA print, a catalyst from a filing or a company calendar. The product ranks and explains; it does not
-        recommend a trade and it makes no prediction about price. When a number is approximate it carries a ~, and when a strategy has
-        not yet been measured against outcomes its output is called a candidate, not a signal.
+        No. Everything on a screen is a recorded fact, stated with its source and date: a score from a named morning's scoring, a
+        short-interest figure from a FINRA print, a dated event from a filing or a company calendar. The product ranks and explains; it
+        does not recommend a trade and it makes no prediction about price. When a number is approximate it carries a ~, and when a
+        strategy has no measured record yet its output is called a candidate, not a signal.
       </p>
 
       {groups.map((g) => (

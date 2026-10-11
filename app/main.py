@@ -335,35 +335,23 @@ def unsubscribe(token: str, channel: str = "email"):
 @app.get("/api/strategies")
 def strategies(response: Response):
     response.headers["Cache-Control"] = "public, max-age=300"
-    """Public list: what the screen is called and whether it is calibrated.
-    Only the name and track record leave the server; the inputs and cutoffs
-    stay internal."""
+    """Public list: what each strategy is called, its plain card and its
+    measured record. The inputs, weights and cutoffs stay internal; the
+    status says whether it scored anything on the latest run."""
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT key, label, monogram, calibrated, calibrated_at, "
-                "resolved_outcomes_count, id "
-                "FROM strategies ORDER BY sort_order",
-            )
-            rows = cur.fetchall()
-            # the measured record behind the plain card: aggregates only
-            cur.execute(
-                "SELECT strategy_id, COUNT(*), "
-                "COALESCE(SUM(CASE WHEN hit THEN 1 ELSE 0 END), 0) "
-                "FROM calibration_outcomes GROUP BY strategy_id",
-            )
-            tally = {r[0]: (int(r[2]), int(r[1])) for r in cur.fetchall()}
+            facts = dossier.strategy_facts(cur)
     finally:
         conn.close()
     out = []
-    for r in rows:
-        hits, n = tally.get(r[6], (None, None))
+    for f in sorted(facts.values(), key=lambda f: f["sort_order"]):
         out.append({
-            "key": r[0], "label": r[1], "monogram": r[2], "calibrated": bool(r[3]),
-            "calibrated_at": r[4].isoformat() if r[4] else None,
-            "resolved_outcomes_count": r[5],
-            "plain": plain_copy.strategy_plain(r[0], bool(r[3]), hits, n),
+            "key": f["key"], "label": f["label"], "monogram": f["monogram"],
+            "calibrated": f["calibrated"], "calibrated_at": f["calibrated_at"],
+            "resolved_outcomes_count": f["resolved"],
+            "scored_on_latest_run": f["scored"],
+            "plain": dossier.plain_for(f),
         })
     return {"strategies": out}
 
@@ -383,10 +371,13 @@ def industries(response: Response):
             rows = cur.fetchall()
     finally:
         conn.close()
+    # what tends to fire in each industry is measured from the alert record
+    month = product.industry_month_map()
     return {"industries": [
         {"key": r[0], "label": r[1], "benchmark_etf": r[2],
          "description": r[3], "universe_count": r[5],
-         "plain": plain_copy.industry_plain(r[0])} for r in rows
+         "plain": plain_copy.industry_plain(r[0]),
+         "month": month.get(r[0]) or product.empty_month()} for r in rows
     ]}
 
 
@@ -438,7 +429,8 @@ def _strategy_by_key(conn, key):
 
 def _strategy_payload(strat):
     return {"key": strat[1], "label": strat[2], "monogram": strat[3],
-            "calibrated": bool(strat[4]), "resolved_outcomes_count": strat[5]}
+            "calibrated": bool(strat[4]), "resolved_outcomes_count": strat[5],
+            "plain": dossier.plain_brief_cached(strat[1], bool(strat[4]), strat[5])}
 
 
 @app.get("/api/board")

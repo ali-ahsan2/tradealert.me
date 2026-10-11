@@ -1,17 +1,18 @@
 import { coverage } from "./fmt.js";
-import { GLOSSARY, TRIGGER_PLAIN } from "./glossary.js";
+import { GLOSSARY, PLAIN_COMPONENT, TRIGGER_PLAIN } from "./glossary.js";
 
 // Plain-English sentences built from the engine's own fields. Every sentence
-// states a recorded fact (PRODUCT_DESIGN §2): the score, its band, how many
-// inputs had data, whether shrinkage moved it, which filters failed. None of
-// them says what the price will do.
+// states a recorded fact (PRODUCT_DESIGN §2): the score, its rating word,
+// how many inputs had data, whether missing data pulled it toward neutral,
+// which must-pass rules failed. None of them says what the price will do,
+// and none of them quotes a weight: the API orders inputs by rank.
 
 const BAND_PHRASE = {
-  strong: "near the top of the strategy's range this run",
-  elevated: "above the strategy's typical range",
-  neutral: "inside the typical range, so nothing stands out",
-  weak: "below the typical range",
-  excluded: "excluded",
+  strong: "near the top of the strategy's range this morning",
+  elevated: "above the strategy's usual range",
+  neutral: "inside the usual range, so nothing stands out",
+  weak: "below the usual range",
+  excluded: "set aside",
 };
 
 export function bandPhrase(band) {
@@ -24,7 +25,7 @@ export function bandWord(band) {
 }
 
 function filterName(f) {
-  return f.label || f.name || f.key || "a hard filter";
+  return f.label || f.name || f.key || "a must-pass rule";
 }
 
 // { headline, detail[] } for a score object as the dossier and board carry it:
@@ -34,17 +35,17 @@ export function verdict(score, strategy, symbol) {
   const sym = symbol || "This name";
   const stratLabel = strategy ? strategy.label : "this strategy";
   if (!score || (score.value == null && score.band !== "excluded")) {
-    return { headline: `No score for ${sym} on this run.`, detail: ["The engine had no inputs for it yet."] };
+    return { headline: `No score for ${sym} this morning.`, detail: ["The engine had no inputs for it yet."] };
   }
   const detail = [];
   const failed = (score.hard_filters || []).filter((f) => f.pass === false);
   if (score.band === "excluded") {
     const why = failed.length
-      ? `it failed ${failed.length === 1 ? "a hard filter" : `${failed.length} hard filters`} (${failed.map(filterName).join(", ")})`
-      : "it carries a disqualifying haircut";
+      ? `it failed ${failed.length === 1 ? "a must-pass rule" : `${failed.length} must-pass rules`} (${failed.map(filterName).join(", ")})`
+      : "it carries a penalty large enough to set it aside";
     return {
-      headline: `${sym} is excluded on ${stratLabel} because ${why}.`,
-      detail: ["Excluded names are not scored, whatever their other inputs say."],
+      headline: `${sym} is set aside on ${stratLabel} because ${why}.`,
+      detail: ["A name set aside is not rated, whatever its other inputs say."],
     };
   }
   const n = Math.round(score.value);
@@ -57,38 +58,79 @@ export function verdict(score, strategy, symbol) {
   }
   if (score.shrinkage_applied != null && Math.abs(score.shrinkage_applied) >= 0.5) {
     const from = Math.round(score.shrinkage_from != null ? score.shrinkage_from : score.value + score.shrinkage_applied);
-    detail.push(`Missing data pulled it toward a neutral 40, from ${from} to ${n}.`);
+    detail.push(`Missing data pulled it toward neutral, from ${from} to ${n}.`);
   }
   if (score.haircuts && score.haircuts.length) {
     const pts = score.haircuts.reduce((a, h) => a + Math.abs(Number(h.points) || 0), 0);
     detail.push(`${Math.round(pts)} points were taken off for ${score.haircuts.map((h) => h.label || h.key).join(", ")}.`);
   }
-  if (strategy && strategy.calibrated === false) {
-    detail.push(`${stratLabel} is provisional, so this is a candidate rather than a signal.`);
+  if (failed.length) {
+    detail.push(`Flagged FAIL on ${failed.length === 1 ? "a must-pass rule" : `${failed.length} must-pass rules`} (${failed.map(filterName).join(", ")}) and still rated.`);
+  }
+  const status = strategy && strategy.plain ? strategy.plain.status : strategy && strategy.calibrated === false ? "provisional" : null;
+  if (status === "provisional") {
+    detail.push(`${stratLabel} has no measured record yet, so this is a candidate, not a signal.`);
   }
   return { headline, detail };
 }
 
-// The inputs that did most to lift the score, by name, for a "Why" line.
+// An input's plain name: the PLAIN_COMPONENT phrase for its key, else the
+// label the engine stored.
+export function inputName(c) {
+  if (!c) return "";
+  return PLAIN_COMPONENT[c.key] || c.label || c.key;
+}
+
+// Rank as the API sends it (1 did most to lift the score). Older payloads
+// without a rank fall back to the input's own 0-1 score.
+function byRank(a, b) {
+  const ra = a.rank != null ? a.rank : Infinity;
+  const rb = b.rank != null ? b.rank : Infinity;
+  if (ra !== rb) return ra - rb;
+  return (b.score ?? 0) - (a.score ?? 0);
+}
+
+// The inputs that did most to lift the score, in plain words, for a "Why" line.
 export function topInputs(components, n = 3) {
   return [...(components || [])]
-    .filter((c) => c.score != null && c.weight != null && c.backed !== false)
-    .sort((a, b) => b.score * b.weight - a.score * a.weight)
+    .filter((c) => c.score != null && c.backed !== false)
+    .sort(byRank)
     .slice(0, n)
-    .map((c) => c.label || c.key);
+    .map(inputName);
+}
+
+// Inputs that scored below the halfway mark of their 0-1 scale: they weighed
+// on the number rather than lifting it.
+export function heldBackInputs(components, n = 2) {
+  return [...(components || [])]
+    .filter((c) => c.score != null && c.backed !== false && Number(c.score) < 0.5)
+    .sort((a, b) => Number(a.score) - Number(b.score))
+    .slice(0, n)
+    .map(inputName);
 }
 
 export function missingInputs(components) {
-  return (components || []).filter((c) => c.score == null || c.backed === false).map((c) => c.label || c.key);
+  return (components || []).filter((c) => c.score == null || c.backed === false).map(inputName);
 }
 
+// "Lifted by heavy short interest and a dated event ahead; held back by thin
+// data on few shares available to trade." Facts about the inputs, no weights.
 export function whySentence(components) {
-  const top = topInputs(components);
-  const missing = missingInputs(components);
+  const lifted = [...(components || [])]
+    .filter((c) => c.score != null && c.backed !== false && Number(c.score) >= 0.5)
+    .sort(byRank)
+    .slice(0, 2)
+    .map(inputName);
+  const held = heldBackInputs(components);
+  const missing = missingInputs(components).slice(0, 2);
+  const drag = [];
+  if (held.length) drag.push(list(held));
+  if (missing.length) drag.push(`thin data on ${list(missing)}`);
   const parts = [];
-  if (top.length) parts.push(`Driven mostly by ${list(top)}.`);
-  if (missing.length) parts.push(`No data yet for ${list(missing)}.`);
-  return parts.join(" ");
+  if (lifted.length) parts.push(`Lifted by ${list(lifted)}`);
+  if (drag.length) parts.push(`${lifted.length ? "held" : "Held"} back by ${drag.join(" and ")}`);
+  if (!parts.length) return "";
+  return `${parts.join("; ")}.`;
 }
 
 export function list(items) {
@@ -98,9 +140,9 @@ export function list(items) {
   return `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`;
 }
 
-// Plain change line for a Δ run value.
+// Plain change line for a since-last-run value.
 export function changeSentence(delta, band, prevBand) {
-  if (delta == null) return "New on the board this run.";
+  if (delta == null) return "New on the board this morning.";
   const r = Math.round(delta);
   if (r === 0) return "Unchanged since the last run.";
   const dir = r > 0 ? "up" : "down";
@@ -121,17 +163,27 @@ export function triggerLabel(key) {
   return t ? t[0] : key;
 }
 
+// The record sentence for an industry's month, from /api/industries[].month:
+// measured from the alert record, written only when there is enough of it.
+export function firesSentence(month, min = 10) {
+  if (!month || !month.fired || month.fired < min) return "Too few alerts here yet to say what tends to fire.";
+  const top = (month.top_triggers || []).slice(0, 2).map((t) => triggerLabel(t.key).toLowerCase());
+  const days = month.days || 30;
+  if (!top.length) return `${month.fired} alerts in the last ${days} days.`;
+  return `What tends to fire here: ${list(top)} (${month.fired} alerts in the last ${days} days).`;
+}
+
 // One suggested next step for a name, given what the subscriber already did.
 export function nextStep({ pinned, armed, band, verified, alertsLimit, armedKeys }) {
-  if (!pinned) return { text: "Pin it to keep it in view and in your digest.", kind: "pin" };
+  if (!pinned) return { text: "Watch it to keep it in view and in your digest.", kind: "pin" };
   const canAlert = alertsLimit !== 0 && verified !== false;
   if (!armed && canAlert) return { text: "Turn on alerts so you hear the moment something changes.", kind: "notify" };
   if (band === "strong" || band === "elevated") return { text: "Read the Why section before you rely on the number: it lists the inputs behind it.", kind: "why" };
-  if (!canAlert) return { text: "Nothing to do. Your digest carries its latest band.", kind: "wait" };
+  if (!canAlert) return { text: "Nothing to do. Your digest carries its latest rating word.", kind: "wait" };
   // Unknown rules (still loading): say only what is always true.
-  if (!armedKeys) return { text: "Nothing to do. We keep watching; your digest carries its latest band.", kind: "wait" };
-  if (!armedKeys.has("band_change")) return { text: "Nothing to do. Add the 'Score changes band' trigger if you want to hear when it moves band.", kind: "wait" };
-  return { text: "Nothing to do. We keep watching and will tell you when it changes band.", kind: "wait" };
+  if (!armedKeys) return { text: "Nothing to do. We keep watching; your digest carries its latest rating word.", kind: "wait" };
+  if (!armedKeys.has("band_change")) return { text: "Nothing to do. Add the 'rating word changes' trigger if you want to hear when it moves.", kind: "wait" };
+  return { text: "Nothing to do. We keep watching and will tell you when its rating word changes.", kind: "wait" };
 }
 
 function capital(s) {

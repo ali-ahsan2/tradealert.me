@@ -36,36 +36,40 @@ ON CONFLICT (key) DO UPDATE SET
 -- "What's been tested"). Its cutoffs are the 25-point scorecard's
 -- A/B/pass thresholds scaled x4 to 0-100: strong >= 72 (A-setup,
 -- >= 18/25), elevated >= 52 (B, 13-17), neutral >= 40 (pass,
--- 10-12), weak >= 25 (below 10), hard-filter fail forces 'excluded'.
+-- 10-12), weak >= 25 (below 10); a hard-filter fail is flagged FAIL and
+-- the name is still rated.
 -- The other four ship provisional with evenly spaced placeholders
 -- (BUILD_SPEC 4.1).
 -- ------------------------------------------------------------
 INSERT INTO strategies (id, key, label, monogram, calibrated, calibrated_at,
                         resolved_outcomes_count, description,
-                        band_cutoffs_json, sort_order)
+                        band_cutoffs_json, sort_order,
+                        record_hits, record_n, record_source)
 VALUES
+  -- description is the plain one-liner (app/plain_copy.py); the recipe
+  -- (filters, weights, cutoffs) lives in strategy_versions for the Lab.
+  -- record_* is the published backtest, read until calibration_outcomes
+  -- holds thirty rows.
   (1, 'fast_mover', 'Fast Mover', 'FM', TRUE, '2026-09-18T00:00:00Z', 32,
-      'Short-squeeze screener: floating supply, crowding, and a dated catalyst. '
-      'Hard filters (cap $300M-$3B, float <50M, SI >10%, revenue growth >40%, catalyst within 14 days) '
-      'are the evidenced claim -- 81.2% hit rate on 32 filter-passing events vs 58.6% for earnings '
-      'generally vs 36.6% on a random day. The scorecard ranks, the filters carry the evidence.',
-      '{"strong": 72, "elevated": 52, "neutral": 40, "weak": 25}', 1),
+      'Small, tightly held names a crowd is betting against, with a date coming.',
+      '{"strong": 72, "elevated": 52, "neutral": 40, "weak": 25}', 1,
+      26, 32, 'test_results.md, Fast Mover backtest 2026-09-11'),
   (2, 'market_shift', 'Market Shift', 'MS', FALSE, NULL, 0,
-      'Relative strength versus a sector benchmark, trend, volume, breadth, and rate sensitivity. '
-      'Provisional: weights not backed by resolved outcomes.',
-      '{"strong": 75, "elevated": 50, "neutral": 25, "weak": 0}', 2),
+      'Names pulling ahead of their own sector, with volume behind the move.',
+      '{"strong": 75, "elevated": 50, "neutral": 25, "weak": 0}', 2,
+      NULL, NULL, ''),
   (3, 'geopolitics', 'GeoPolitics', 'GP', FALSE, NULL, 0,
-      'Government revenue exposure, strategic supply-chain position, policy events, and region risk. '
-      'Provisional: weights not backed by resolved outcomes.',
-      '{"strong": 75, "elevated": 50, "neutral": 25, "weak": 0}', 3),
+      'Companies whose fortunes turn on government budgets, trade policy and supply chains.',
+      '{"strong": 75, "elevated": 50, "neutral": 25, "weak": 0}', 3,
+      NULL, NULL, ''),
   (4, 'industry_restructure', 'Industry Restructure', 'IR', FALSE, NULL, 0,
-      'Deal size band, SC 13D activist filings, Form 4 insider direction, and net cash position. '
-      'Provisional: weights not backed by resolved outcomes.',
-      '{"strong": 75, "elevated": 50, "neutral": 25, "weak": 0}', 4),
+      'Names where the owners are moving: activists, insiders buying, deals in the air.',
+      '{"strong": 75, "elevated": 50, "neutral": 25, "weak": 0}', 4,
+      NULL, NULL, ''),
   (5, 'monetary_shifts', 'Monetary Shifts', 'MN', FALSE, NULL, 0,
-      'Rate and dollar beta, funding runway, cash burn duration, and FOMC/CPI event timing. '
-      'Provisional: weights not backed by resolved outcomes.',
-      '{"strong": 75, "elevated": 50, "neutral": 25, "weak": 0}', 5)
+      'Names most exposed to rates and the dollar, timed to the central bank''s calendar.',
+      '{"strong": 75, "elevated": 50, "neutral": 25, "weak": 0}', 5,
+      NULL, NULL, '')
 ON CONFLICT (key) DO UPDATE SET
   label = EXCLUDED.label,
   monogram = EXCLUDED.monogram,
@@ -74,7 +78,10 @@ ON CONFLICT (key) DO UPDATE SET
   resolved_outcomes_count = EXCLUDED.resolved_outcomes_count,
   description = EXCLUDED.description,
   band_cutoffs_json = EXCLUDED.band_cutoffs_json,
-  sort_order = EXCLUDED.sort_order;
+  sort_order = EXCLUDED.sort_order,
+  record_hits = EXCLUDED.record_hits,
+  record_n = EXCLUDED.record_n,
+  record_source = EXCLUDED.record_source;
 
 -- ------------------------------------------------------------
 -- Industries. The ten names a subscriber follows. Derived from
@@ -86,25 +93,25 @@ ON CONFLICT (key) DO UPDATE SET
 INSERT INTO industries (id, key, label, benchmark_etf, description, sort_order)
 VALUES
   (1,  'semiconductors',     'Semiconductors & Hardware', 'SMH',
-      'Chips, power semis, semi IP, memory, optics, and the equipment feeding data centers.', 1),
+      'Chip makers, memory, optics and the equipment that feeds data centers.', 1),
   (2,  'defense_space',      'Defense, Drones & Space',   'ITA',
-      'Defense electronics and munitions, drones, satellites, and space infrastructure.', 2),
+      'Defense electronics, munitions, drones, satellites and space infrastructure.', 2),
   (3,  'quantum_compute',    'Quantum & Emerging Compute', 'QTUM',
-      'Quantum hardware and software, and adjacent emergent computing plays.', 3),
+      'Quantum hardware and software, and other early computing companies.', 3),
   (4,  'biotech_pharma',     'Biotech & Pharma',          'XBI',
-      'Drug discovery, gene editing, PDUFA- dated plays, and medical devices.', 4),
+      'Drug developers, gene editing, dated regulator decisions and medical devices.', 4),
   (5,  'energy_nuclear',     'Nuclear, Uranium & Critical Minerals', 'URA',
-      'Uranium and fuel enrichment, nuclear components, rare earths, and critical minerals.', 5),
+      'Uranium and fuel enrichment, nuclear components, rare earths and critical minerals.', 5),
   (6,  'battery_clean_energy', 'Battery & Clean Energy',  'TAN',
-      'Energy storage, battery chemistry, solar, and grid decarbonization.', 6),
+      'Energy storage, battery chemistry, solar and the grid.', 6),
   (7,  'ai_software_data',   'AI Software & Data Centers', 'IGV',
-      'AI and analytics software, cloud infrastructure, and data-center compute demand.', 7),
+      'AI and analytics software, cloud infrastructure and data-center compute.', 7),
   (8,  'fintech_payments',   'Fintech & Payments',        'IPAY',
-      'Payments, digital banking, and emerging-market financial infrastructure.', 8),
+      'Payments, digital banking and financial infrastructure in emerging markets.', 8),
   (9,  'consumer_ecom',      'Consumer & E-commerce',     'XRT',
-      'E-commerce, homebuilders, specialty retail, and consumer discretionary.', 9),
+      'Online retail, homebuilders, specialty retail and consumer discretionary names.', 9),
   (10, 'media_adtech',       'Media, AdTech & Social',    'XLC',
-      'Social platforms, adtech, streaming, and digital media squeezes.', 10)
+      'Social platforms, advertising technology, streaming and digital media.', 10)
 ON CONFLICT (key) DO UPDATE SET
   label = EXCLUDED.label,
   benchmark_etf = EXCLUDED.benchmark_etf,

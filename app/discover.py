@@ -222,8 +222,11 @@ def _strategy(cur, key):
 
 
 def _strategy_payload(s):
+    from app import dossier
+
     return {"key": s[1], "label": s[2], "monogram": s[3], "calibrated": bool(s[4]),
-            "resolved_outcomes_count": s[5]}
+            "resolved_outcomes_count": s[5],
+            "plain": dossier.plain_brief_cached(s[1], bool(s[4]), s[5])}
 
 
 def _viewer(conn, creds):
@@ -1031,14 +1034,14 @@ def stock_fields(symbol: str, days: int = Query(365, ge=30, le=1500),
                 vrow = cur.fetchone()
                 weights = dict((vrow[0] or {}) if vrow else {})
             labels = _component_labels(cur, strat[0])
-            total_w = sum(float(w) for w in weights.values()) or 0.0
-            missing = sorted(
-                [{"key": kk, "label": labels.get(kk) or COMPONENT_LABELS.get(kk, kk),
-                  "weight": float(w),
-                  "share": round(float(w) / total_w, 4) if total_w else None,
-                  "source": COMPONENT_SOURCE.get(kk, "")}
-                 for kk, w in weights.items() if kk not in present_keys],
-                key=lambda c: -c["weight"])
+            # ordered by the declared weight, which stays on the server: a
+            # subscriber sees which inputs lacked data, not what they weigh
+            missing = [
+                {"key": kk, "label": labels.get(kk) or COMPONENT_LABELS.get(kk, kk),
+                 "source": COMPONENT_SOURCE.get(kk, "")}
+                for kk, _w in sorted(weights.items(), key=lambda kv: -float(kv[1]))
+                if kk not in present_keys
+            ]
             # price since pinned, against the industry benchmark
             since_pin = None
             cur.execute(
@@ -1077,7 +1080,7 @@ def stock_fields(symbol: str, days: int = Query(365, ge=30, le=1500),
         "present_keys": present_keys,
         "components_present": score_row[1] if score_row else None,
         "components_total": score_row[2] if score_row else None,
-        "missing_components": missing, "declared_weight_total": total_w,
+        "missing_components": missing,
         "since_pin": since_pin,
     }
 

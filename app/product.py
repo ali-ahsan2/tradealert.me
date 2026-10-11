@@ -8,7 +8,10 @@ rule in BUILD_SPEC section 5). Strategy and industry pages are public in the
 sense /api/strategies already is: they describe the product, never a
 subscriber's view of it."""
 import json
+import os
 import re
+import threading
+import time
 from datetime import datetime, timezone
 
 import psycopg2
@@ -18,7 +21,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from app import context, discover, plain_copy, scope, security
+from app import context, discover, dossier, plain_copy, record, scope, security
 from app.db import get_conn
 
 router = APIRouter()
@@ -160,14 +163,18 @@ def _component_labels(cur, strategy_id):
 
 @router.get("/api/strategies/{key}")
 def strategy_detail(key: str):
+    """The public page for a strategy without its recipe: the plain card,
+    the measured record, calibration aggregates, the history and the latest
+    run's band counts. Weights, thresholds, cutoffs and the hit definition's
+    numbers stay in the Lab (/api/admin/lab/strategies/{key}/versions),
+    DESIGN_V6 §10."""
     conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT id, key, label, monogram, calibrated, calibrated_at, "
-                "resolved_outcomes_count, description, band_cutoffs_json, "
-                "score_evidence_note, live_version_id, publishing_paused, "
-                "publishing_paused_reason, sort_order "
+                "resolved_outcomes_count, live_version_id, publishing_paused, "
+                "publishing_paused_reason "
                 "FROM strategies WHERE key = %s",
                 (key.strip().lower(),),
             )
@@ -176,32 +183,22 @@ def strategy_detail(key: str):
                 _not_found()
             sid = s[0]
             version = None
-            if s[10]:
+            if s[7]:
                 cur.execute(
-                    "SELECT version_number, state, effective_from, component_weights_json, "
-                    "hard_filters_json, band_cutoffs_json, hit_definition_json, "
-                    "live_outcomes_count FROM strategy_versions WHERE id = %s",
-                    (s[10],),
+                    "SELECT version_number, state, effective_from, live_outcomes_count "
+                    "FROM strategy_versions WHERE id = %s",
+                    (s[7],),
                 )
                 version = cur.fetchone()
             if not version:
                 cur.execute(
-                    "SELECT version_number, state, effective_from, component_weights_json, "
-                    "hard_filters_json, band_cutoffs_json, hit_definition_json, "
-                    "live_outcomes_count FROM strategy_versions WHERE strategy_id = %s "
+                    "SELECT version_number, state, effective_from, live_outcomes_count "
+                    "FROM strategy_versions WHERE strategy_id = %s "
                     "ORDER BY effective_from DESC LIMIT 1",
                     (sid,),
                 )
                 version = cur.fetchone()
-            labels = _component_labels(cur, sid)
-            weights = dict((version[3] or {}) if version else {})
-            total = sum(float(w) for w in weights.values()) or 0.0
-            components = sorted(
-                [{"key": k, "label": labels.get(k, k), "weight": float(w),
-                  "share": round(float(w) / total, 4) if total else None}
-                 for k, w in weights.items()],
-                key=lambda c: -c["weight"],
-            )
+            fact = dossier.strategy_facts(cur).get(s[1])
             # calibration record: aggregates only, never a per-name row
             cur.execute(
                 "SELECT COUNT(*), COALESCE(SUM(CASE WHEN hit THEN 1 ELSE 0 END), 0), "
@@ -245,25 +242,20 @@ def strategy_detail(key: str):
                 mean_cov = _f(cur.fetchone()[0])
     finally:
         conn.close()
+    plain = (dossier.plain_for(fact) if fact
+             else plain_copy.strategy_plain(s[1], bool(s[4]), scored=scored, resolved=s[6]))
     return {
         "key": s[1], "label": s[2], "monogram": s[3], "calibrated": bool(s[4]),
         "calibrated_at": s[5].isoformat() if s[5] else None,
-        "resolved_outcomes_count": s[6], "description": s[7] or "",
-        "plain": plain_copy.strategy_plain(s[1], bool(s[4]), int(hits or 0), int(n or 0)),
-        "score_evidence_note": s[9] or "",
-        "publishing_paused": bool(s[11]), "publishing_paused_reason": s[12] or "",
-        "band_cutoffs": (version[5] if version else None) or s[8],
+        "resolved_outcomes_count": s[6],
+        "plain": plain,
+        "record_source": fact["record_source"] if fact else "",
+        "publishing_paused": bool(s[8]), "publishing_paused_reason": s[9] or "",
         "version": None if not version else {
             "number": version[0], "state": version[1],
             "effective_from": version[2].isoformat() if version[2] else None,
-            "hit_definition": version[6], "live_outcomes_count": version[7],
+            "live_outcomes_count": version[3],
         },
-        "components": components, "declared_weight_total": total,
-        "hard_filters": [
-            {"key": f.get("key"), "label": f.get("label") or f.get("key"), "op": f.get("op"),
-             "value": f.get("value"), "unit": f.get("unit")}
-            for f in ((version[4] if version else None) or []) if isinstance(f, dict)
-        ],
         "calibration": {
             "resolved": n, "hits": hits,
             "hit_rate": round(hits / n, 3) if n else None,
@@ -285,6 +277,55 @@ def _pct(last, base):
     if last is None or base is None or not float(base):
         return None
     return round((float(last) - float(base)) / float(base) * 100, 2)
+
+
+# "What tends to fire here" is measured, never written: per industry, the
+# alerts of the last 30 days, how many were measured, how many moved 10%,
+# and the triggers behind them, counted the way the pulse counts. Cached in
+# process like the pulse.
+_MONTH_DAYS = 30
+_MONTH_TTL = int(os.environ.get("PULSE_CACHE_SECONDS", "300"))
+_month_cache = {"t": 0.0, "body": None}
+_month_lock = threading.Lock()
+
+
+def empty_month(days=_MONTH_DAYS):
+    return {"days": days, "fired": 0, "measured": 0, "moved_10": 0, "top_triggers": []}
+
+
+def industry_month_map(days=_MONTH_DAYS):
+    """industry key -> {days, fired, measured, moved_10, top_triggers:
+    [{key, label, n}]} from alert_events joined to triggers. Counts only;
+    no ticker leaves here."""
+    now = time.time()
+    with _month_lock:
+        hit = _month_cache["body"]
+        if hit is not None and now - _month_cache["t"] < _MONTH_TTL:
+            return hit
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            events = record._event_rows(
+                cur, "ae.fired_at >= now() - make_interval(days => %s)", [days])
+    finally:
+        conn.close()
+    out = {}
+    for e in events:
+        m = out.setdefault(e["industry_key"], {**empty_month(days), "_triggers": {}})
+        m["fired"] += 1
+        if e["max_5d"] is not None:
+            m["measured"] += 1
+            if e["max_5d"] >= record.MOVE_10:
+                m["moved_10"] += 1
+        t = m["_triggers"].setdefault(
+            e["trigger_key"], {"key": e["trigger_key"], "label": e["trigger"], "n": 0})
+        t["n"] += 1
+    for m in out.values():
+        m["top_triggers"] = sorted(m.pop("_triggers").values(),
+                                   key=lambda t: (-t["n"], t["key"]))
+    with _month_lock:
+        _month_cache.update({"t": now, "body": out})
+    return out
 
 
 @router.get("/api/industries/{key}")
@@ -420,6 +461,7 @@ def industry_detail(key: str,
     return {
         "key": ind[1], "label": ind[2], "benchmark_etf": ind[3], "description": ind[4] or "",
         "plain": plain_copy.industry_plain(ind[1]),
+        "month": industry_month_map().get(ind[1]) or empty_month(),
         "universe_count": ind[5], "benchmark": benchmark,
         "followed": followed, "in_scope": in_scope, "names_shown_limit": k,
         "names": names, "run_as_of": run_as_of,

@@ -1,0 +1,263 @@
+/* Plain-words cards for strategies and industries (DESIGN_V6 §5, §8).
+   Tokens only, so light and dark follow public/tokens.css. Sentences at
+   17px, 20px padding, sentence-case labels, no uppercase, no monospace. */
+
+.plain {
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+.plain-card {
+  padding: 20px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 17px;
+  line-height: 1.55;
+  min-width: 0;
+}
+
+@media (min-width: 700px) {
+  .plain-card {
+    padding: 24px;
+  }
+}
+
+.plain-card p,
+.plain-card ul {
+  margin: 0;
+}
+
+.plain-card ul {
+  padding-left: 1.15em;
+}
+
+.plain-card li + li {
+  margin-top: 4px;
+}
+
+.plain-card h4 {
+  margin: 18px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-muted);
+}
+
+.plain-card h4:first-child {
+  margin-top: 0;
+}
+
+.plain-lede {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+
+.plain-card .plain-lede + h4 {
+  margin-top: 18px;
+}
+
+.plain-judgment {
+  color: var(--ink-muted);
+  font-size: 15px;
+  margin-top: 6px !important;
+}
+
+.plain-compact {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+.plain-compact b {
+  font-weight: 700;
+}
+
+.plain-line {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+.plain-line .plain-fires {
+  color: var(--ink-muted);
+}
+
+/* the record, when a strategy has one: the two counts large, then the sentence */
+.plain-record {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.plain-record-num {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.plain-record-num small {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  margin-left: 4px;
+}
+
+/* status words: measured record / no record yet / not running yet */
+.plain-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--r-pill);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  vertical-align: middle;
+  color: var(--ink-muted);
+  background: var(--surface-sunken);
+  border: 1px solid transparent;
+}
+
+.plain-chip.is-measured {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
+.plain-chip.is-not_running {
+  background: transparent;
+  border-color: var(--border-strong);
+}
+
+/* a list of cards: one column, 12px apart, the card's lede smaller */
+.plain-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
+}
+
+@media (min-width: 900px) {
+  .plain-list.two-up {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.plain-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.plain-row .plain-row-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.plain-row .plain-row-top h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.plain-row .plain-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+}
+
+.plain-row .plain-row-actions .btn {
+  min-height: 40px;
+}
+
+/* one line and one action at the top of a screen (DESIGN_V6 §7) */
+.plain-opener {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-4);
+  margin: 0 0 var(--s-5);
+}
+
+.plain-opener p {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  max-width: 40ch;
+}
+
+.plain-opener .btn {
+  min-height: 44px;
+}
+
+/* a quiet sentence under a heading, 17px like the cards */
+.plain-note {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+
+.plain-note b {
+  color: var(--ink);
+}
+
+/* a closed drawer for the detail Simple mode hides */
+.plain-more {
+  margin-top: var(--s-3);
+}
+
+.plain-more > summary {
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-pill);
+  background: var(--surface-sunken);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.plain-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.plain-more[open] > summary {
+  margin-bottom: var(--s-3);
+}
+
+.plain-caveats {
+  margin: 12px 0 0;
+  padding-left: 1.15em;
+  color: var(--ink-muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* a full card placed inside another card: no second surface */
+.plain-card.plain-flat {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}

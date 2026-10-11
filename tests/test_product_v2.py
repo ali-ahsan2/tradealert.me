@@ -8,18 +8,29 @@ API on :8000 and docker-compose Postgres to flip the verified flag.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
 from urllib import error, request
 
-BASE = "http://127.0.0.1:8000/api"
-POSTGRES = "docker compose exec -T postgres psql -U tradealert -d tradealert"
+BASE = os.environ.get("API_BASE", "http://127.0.0.1:8000/api")
+POSTGRES = os.environ.get(
+    "POSTGRES_CMD", "docker compose exec -T postgres psql -U tradealert -d tradealert")
 PASSWORD = "testpass123"
 
 
-def _call(method, path, body=None, token=None):
+def _ip_for(email):
+    # the signup limiter is five per hour per client IP; each test user
+    # presents its own address so the suite runs in one go (as v3 does)
+    h = abs(hash(email))
+    return f"10.{(h >> 16) % 250 + 1}.{(h >> 8) % 250 + 1}.{h % 250 + 1}"
+
+
+def _call(method, path, body=None, token=None, ip=None):
     headers = {"Accept": "application/json"}
+    if ip:
+        headers["X-Forwarded-For"] = ip
     data = None
     if body is not None:
         data = json.dumps(body).encode()
@@ -43,18 +54,19 @@ def get(path, token=None):
     return _call("GET", path, token=token)
 
 
-def post(path, body, token=None):
-    return _call("POST", path, body, token)
+def post(path, body, token=None, ip=None):
+    return _call("POST", path, body, token, ip)
 
 
 def new_user(email, password=PASSWORD):
-    status, _, _ = post("/signup", {"email": email, "password": password})
+    ip = _ip_for(email)
+    status, _, _ = post("/signup", {"email": email, "password": password}, ip=ip)
     assert status == 200, status
     subprocess.run(
         f"{POSTGRES} -c \"UPDATE users SET verified=TRUE WHERE email='{email}';\"",
         shell=True, capture_output=True, check=True,
     )
-    status, body, _ = post("/login", {"email": email, "password": password})
+    status, body, _ = post("/login", {"email": email, "password": password}, ip=ip)
     assert status == 200, body
     return body["token"]
 
@@ -92,9 +104,14 @@ def test_stock_dossier_carries_v2_fields():
     assert status == 200, body
     assert isinstance(body["strategies"], list) and body["strategies"]
     assert "components" in body["strategies"][0]
+    assert "plain" in body["strategies"][0]
+    for c in body["strategies"][0]["components"]:
+        assert "weight" not in c and "rank" in c
     assert isinstance(body["history"], list)
     assert isinstance(body["peers"], list)
-    assert any(p["self"] for p in body["peers"]) or not body["peers"]
+    # peers are the industry's top-K on the strategy; the name itself is
+    # flagged when it is inside that top-K, not forced into it
+    assert all("self" in p and "rank" in p for p in body["peers"])
     assert isinstance(body["events"], list)
     assert isinstance(body["past_reactions"], list)
     assert body["note"] == ""
@@ -104,7 +121,12 @@ def test_strategy_detail_is_public():
     status, body, _ = get("/strategies/fast_mover")
     assert status == 200, body
     assert body["key"] == "fast_mover"
-    assert isinstance(body["components"], list)
+    # the plain card ships; the recipe does not (DESIGN_V6 §8, §10)
+    assert body["plain"]["one_line"] and body["plain"]["status"] == "measured"
+    assert body["plain"]["record_numbers"] == {"hits": 26, "n": 32}
+    for k in ("components", "hard_filters", "band_cutoffs", "declared_weight_total",
+              "description"):
+        assert k not in body, k
     assert "calibration" in body and "hit_rate" in body["calibration"]
     status, body, _ = get("/strategies/not_a_strategy")
     assert status == 404 and body == {"detail": "not found"}, body
@@ -169,7 +191,8 @@ def test_export_has_everything_and_no_secrets():
     token = new_user(f"exp{tag()}@example.com")
     status, body, headers = get("/me/export", token)
     assert status == 200, body
-    assert "attachment" in headers.get("Content-Disposition", "")
+    disposition = next((v for k, v in headers.items() if k.lower() == "content-disposition"), "")
+    assert "attachment" in disposition, headers
     for k in ("account", "settings", "industries", "picks", "alert_rules", "digests"):
         assert k in body, k
     assert "password_hash" not in json.dumps(body)

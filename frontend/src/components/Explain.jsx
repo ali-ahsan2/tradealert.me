@@ -1,17 +1,24 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { Link } from "../lib/router.jsx";
 import { GLOSSARY } from "../lib/glossary.js";
+import { RecordLine, StrategyPlainCard } from "./Plain.jsx";
 
 // An inline explainer. Wrap a term in <Explain term="coverage">coverage</Explain>
 // and it gets a dotted underline and a tap-to-open card with the plain
 // definition. Works on touch (no hover), closes on Escape, outside tap or
 // scroll, and never blocks the thing it explains. Without children it
 // renders a small "?" the way the old Help did, but readable on a phone.
+//
+// Pass `plain` (a strategy's plain object, with `label`) and the popover
+// shows the compact strategy card and its record instead of a definition,
+// so a lens picker or a dossier can explain a strategy in place; `more`
+// links to its page.
 
-export default function Explain({ term, text, title, children, className = "", side = "auto" }) {
+export default function Explain({ term, text, title, plain, label, more, children, className = "", side = "auto" }) {
   const g = term ? GLOSSARY[term] : null;
   const body = text || (g && (g.long || g.short));
   const heading = title || (g && g.term) || null;
+  const hasCard = Boolean(plain && plain.one_line);
   const [open, setOpen] = useState(false);
   const [align, setAlign] = useState("left");
   const box = useRef(null);
@@ -38,7 +45,7 @@ export default function Explain({ term, text, title, children, className = "", s
     };
   }, [open]);
 
-  if (!body) return children || null;
+  if (!body && !hasCard) return children || null;
 
   const toggle = (e) => {
     e.preventDefault();
@@ -51,6 +58,7 @@ export default function Explain({ term, text, title, children, className = "", s
     setOpen((v) => !v);
   };
 
+  const name = heading || label || "this";
   return (
     <span className={`xp ${className}`} ref={box} onClick={(e) => e.stopPropagation()}>
       <button
@@ -58,21 +66,35 @@ export default function Explain({ term, text, title, children, className = "", s
         className={children ? "xp-term" : "xp-q"}
         aria-expanded={open}
         aria-controls={id}
-        aria-label={children ? undefined : `What is ${heading || "this"}?`}
+        aria-label={children ? undefined : `What is ${name}?`}
         onClick={toggle}
       >
         {children || "?"}
       </button>
       {open && (
         <span className={`xp-pop xp-${align}`} id={id} role="note">
-          {heading && <b className="xp-h">{heading}</b>}
-          <span className="xp-b">{body}</span>
+          {hasCard ? (
+            <span className="xp-b">
+              <StrategyPlainCard strategy={{ label: label || heading, plain }} compact />
+              <RecordLine plain={plain} className="muted" />
+            </span>
+          ) : (
+            <>
+              {heading && <b className="xp-h">{heading}</b>}
+              <span className="xp-b">{body}</span>
+            </>
+          )}
           {g && g.see && g.see.length > 0 && (
             <span className="xp-see">
               See also {g.see.map((k, i) => (GLOSSARY[k] ? <span key={k}>{i > 0 ? ", " : ""}<Term k={k} /></span> : null))}
             </span>
           )}
-          {term && (
+          {more && (
+            <Link to={more} className="xp-more" onClick={() => setOpen(false)}>
+              How it scores
+            </Link>
+          )}
+          {term && !more && (
             <Link to={`/help#${term}`} className="xp-more" onClick={() => setOpen(false)}>
               More in the guide
             </Link>
