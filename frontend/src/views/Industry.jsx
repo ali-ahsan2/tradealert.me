@@ -49,9 +49,15 @@ export default function Industry({ industryKey }) {
     };
   }, [industryKey, reload]);
 
+  // A visitor's one action on this screen is Start free, which brings them
+  // back here; the kicker leads to the start, since Explore needs a session.
+  const signedIn = Boolean(getToken());
+  const startHere = `/signup?next=${encodeURIComponent(`/industries/${industryKey}`)}`;
+  const back = signedIn ? ["/board", "← Explore"] : ["/", "← tradealert.me"];
+
   const toggleFollow = async () => {
-    if (!getToken()) {
-      navigate(`/login?next=${encodeURIComponent(`/industries/${industryKey}`)}`);
+    if (!signedIn) {
+      navigate(startHere);
       return;
     }
     setBusy(true);
@@ -75,8 +81,8 @@ export default function Industry({ industryKey }) {
   if (err) {
     return (
       <div className="wrap wrap-narrow">
-        <Link to="/board" className="backlink">
-          ← Explore
+        <Link to={back[0]} className="backlink">
+          {back[1]}
         </Link>
         {err.status === 404 ? <Empty title="No such industry." /> : <ErrorCard error={err} onRetry={() => setReload((n) => n + 1)} />}
       </div>
@@ -101,16 +107,18 @@ export default function Industry({ industryKey }) {
     <div className="wrap">
       <ScreenHead
         kicker={
-          <Link to="/board" className="backlink">
-            ← Explore
+          <Link to={back[0]} className="backlink">
+            {back[1]}
           </Link>
         }
         title={d.label}
         line={why || firstSentence(whatIsInIt)}
         action={
-          <button className={`btn ${d.followed ? "btn-secondary" : "btn-primary"}`} disabled={busy || atLimit} onClick={toggleFollow}>
-            {busy ? "…" : d.followed ? CTA.STOP_WATCHING : getToken() ? "Watch this industry for me" : "Log in to watch it"}
-          </button>
+          signedIn ? (
+            <button className={`btn ${d.followed ? "btn-secondary" : "btn-primary"}`} disabled={busy || atLimit} onClick={toggleFollow}>
+              {busy ? "…" : d.followed ? CTA.STOP_WATCHING : "Watch this industry for me"}
+            </button>
+          ) : null
         }
       />
 
@@ -333,14 +341,21 @@ export default function Industry({ industryKey }) {
         </>
       ) : (
         <div className="card locked-panel" style={{ marginTop: "var(--s-5)" }}>
-          <p className="state-title">{getToken() ? "Your plan does not watch this industry yet." : "Log in to see this industry's names."}</p>
+          <p className="state-title">{signedIn ? "Your plan does not watch this industry yet." : "Start free to see this industry's names."}</p>
           <p className="muted">
-            {plural(d.universe_count, "name")} are rated here every morning. Watch it for me and they join your Explore
-            {me && me.tier && limit < 999 ? ` (your plan watches ${industriesLabel(limit)})` : ""}.
+            {plural(d.universe_count, "name")} are rated here every morning.{" "}
+            {signedIn ? (
+              <>
+                Watch it for me and they join your Explore
+                {me && me.tier && limit < 999 ? ` (your plan watches ${industriesLabel(limit)})` : ""}.
+              </>
+            ) : (
+              <>Free plan, no card; pick this industry and they join your Explore.</>
+            )}
           </p>
-          {!getToken() && (
-            <Link to={`/login?next=${encodeURIComponent(`/industries/${industryKey}`)}`} className="btn btn-primary">
-              Log in to watch it
+          {!signedIn && (
+            <Link to={startHere} className="btn btn-primary">
+              {CTA.START_FREE}
             </Link>
           )}
         </div>

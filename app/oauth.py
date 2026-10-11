@@ -11,9 +11,10 @@ entire path runs offline against the seeded test user
 user upsert are identical to the live flow.
 
 Credentials come from env (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).
-Without them the button returns 503 instead of emitting a broken
-redirect, matching the pattern of the other optional integrations
-(Stripe, Twilio, SES).
+Without them /start sends the visitor back to the form it came from with
+?oauth=unavailable (the form answers in one line) instead of emitting a
+broken redirect or a bare JSON error; the other optional integrations
+(Stripe, Twilio, SES) answer 503 because only scripts call them.
 """
 import base64
 import hashlib
@@ -74,12 +75,27 @@ def _provider(provider):
     return provider, _PROVIDERS[provider]
 
 
+def _configured(conf):
+    return bool(os.environ.get(conf["client_id_env"])
+                and os.environ.get(conf["client_secret_env"]))
+
+
 def _client_creds(provider, conf):
     cid = os.environ.get(conf["client_id_env"])
     secret = os.environ.get(conf["client_secret_env"])
     if not cid or not secret:
         raise HTTPException(503, f"{conf['label']} sign in is not configured")
     return cid, secret
+
+
+def _unavailable_url(screen, next_path):
+    """Back to the sign-up or log-in form (whichever the button sat on) with
+    the flag the form shows as one line; `next` rides along."""
+    page = "signup" if screen == "signup" else "login"
+    params = {"oauth": "unavailable"}
+    if _safe_next(next_path):
+        params["next"] = _safe_next(next_path)
+    return f"/{page}?{urlencode(params)}"
 
 
 def _b64url(n):
@@ -278,8 +294,10 @@ def _store_token_page(provider, token, name, created=False, next_path=""):
 
 
 @router.get("/api/oauth/start/{provider}")
-def oauth_start(provider: str, next: str = ""):
+def oauth_start(provider: str, next: str = "", screen: str = ""):
     provider, conf = _provider(provider)
+    if not _DEV and not _configured(conf):
+        return RedirectResponse(_unavailable_url(screen, next), status_code=303)
     _prune_pending()
     state = _store_state(provider, next)
     if _DEV:

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { api, logout, toast } from "../api.js";
-import { Link, Redirect, navigate } from "../lib/router.jsx";
+import { Link, Redirect, navigate, safeNext, useQuery } from "../lib/router.jsx";
 import { currentTermsVersion, hasConsent, useMe } from "../lib/me.jsx";
 import { CONSENT_LABEL } from "../lib/legal.js";
 import FinePrint from "../components/FinePrint.jsx";
@@ -9,13 +9,18 @@ import FinePrint from "../components/FinePrint.jsx";
 // Shown in place of any app screen until the account has accepted the
 // current terms version; Google sign-ups and existing accounts meet it
 // here, email sign-ups ticked the same sentence on the form. /legal/* is
-// public, so the linked documents stay readable from this screen.
+// public, so the linked documents stay readable from this screen. The shells
+// arrive here with the address they were opening as `next`; the tick sends
+// the person back there, else to Home.
 export default function Welcome() {
   const { me, refresh } = useMe();
+  const q = useQuery();
+  const next = safeNext(q.get("next"));
   const [tick, setTick] = useState(false);
   const [busy, setBusy] = useState(false);
+  const toHome = !next || next === "/home" || next.startsWith("/home?");
 
-  if (me && hasConsent(me)) return <Redirect to="/home" />;
+  if (me && hasConsent(me)) return <Redirect to={next || "/home"} />;
 
   const go = async (e) => {
     e.preventDefault();
@@ -55,7 +60,7 @@ export default function Welcome() {
         </label>
         <FinePrint short links={false} className="welcome-fine" />
         <button type="submit" className="btn btn-primary btn-block" disabled={!tick || busy}>
-          {busy ? "One moment…" : "Open my Home"}
+          {busy ? "One moment…" : toHome ? "Open my Home" : "Continue"}
         </button>
         <p className="xs faint welcome-out">
           {me && me.email ? `Signed in as ${me.email}. ` : ""}

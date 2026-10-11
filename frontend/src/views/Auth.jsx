@@ -8,6 +8,7 @@ import { plainTriggerFromLabel } from "../lib/plain.js";
 import { useCountUp, useReveal } from "../lib/motion.js";
 import { pct, plural, shortDate } from "../lib/fmt.js";
 import FinePrint from "../components/FinePrint.jsx";
+import { Notice } from "../components/ui.jsx";
 import "./auth.css";
 
 // Sign up and log in (DESIGN_V5 §4, step 2; DESIGN_V6 §3, §6). The form
@@ -111,6 +112,9 @@ function PulsePanel({ pulse }) {
 export default function Auth({ mode }) {
   const q = useQuery();
   const next = safeNext(q.get("next"));
+  // /api/oauth/start answers 303 back here with this flag when Google is
+  // not configured; the form says so in one line and offers email
+  const oauthDown = q.get("oauth") === "unavailable";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [accept, setAccept] = useState(false);
@@ -156,24 +160,33 @@ export default function Auth({ mode }) {
       <div className="card form-card">
         <h1>{isSignup ? "Create my account" : "Welcome back"}</h1>
         <p className="sub">{isSignup ? "Email, a password, one tick. Then pick what I should watch." : "Log in to my Home, watchlist and alerts."}</p>
-        <button
-          type="button"
-          className="btn btn-google"
-          disabled={isSignup && !accept}
-          title={isSignup && !accept ? "Tick the box below first." : undefined}
-          onClick={() => {
-            // the tick here signals intent only; a Google account records
-            // its consent on /welcome, by an authenticated request
-            const p = new URLSearchParams();
-            if (next) p.set("next", next);
-            const qs = p.toString();
-            window.location.assign(`/api/oauth/start/google${qs ? `?${qs}` : ""}`);
-          }}
-        >
-          <GoogleMark />
-          Continue with Google
-        </button>
-        <div className="or">or with email</div>
+        {oauthDown ? (
+          <Notice tone="info" className="auth-note">
+            Google sign-in isn't available here yet. Use email.
+          </Notice>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="btn btn-google"
+              disabled={isSignup && !accept}
+              title={isSignup && !accept ? "Tick the box below first." : undefined}
+              onClick={() => {
+                // the tick here signals intent only; a Google account records
+                // its consent on /welcome, by an authenticated request.
+                // `screen` names the form to come back to if Google is off.
+                const p = new URLSearchParams();
+                p.set("screen", isSignup ? "signup" : "login");
+                if (next) p.set("next", next);
+                window.location.assign(`/api/oauth/start/google?${p.toString()}`);
+              }}
+            >
+              <GoogleMark />
+              Continue with Google
+            </button>
+            <div className="or">or with email</div>
+          </>
+        )}
         <form onSubmit={submit}>
           <div className="field">
             <label htmlFor="email">Email</label>

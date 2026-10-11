@@ -34,7 +34,7 @@ export default function Verified() {
           ) : (
             <>
               Need a fresh link? Open <Link to={signedIn ? "/settings" : `/login?next=${encodeURIComponent("/settings")}`}>My account</Link> and tap
-              “Resend the email”.
+              “Verify my email”.
             </>
           )}
         </p>

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api, cached, toast } from "../api.js";
 import { Link, navigate, safeNext, useQuery } from "../lib/router.jsx";
-import { useMe } from "../lib/me.jsx";
+import { hasChannel, useMe } from "../lib/me.jsx";
 import { alertsLabel, industriesLabel, plural, tzGuess } from "../lib/fmt.js";
 import { useMode } from "../lib/mode.js";
 import { DEFAULT_TRIGGERS, TRIGGER_PLAIN } from "../lib/glossary.js";
@@ -16,18 +16,20 @@ import FinePrint from "../components/FinePrint.jsx";
 import { Empty, ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
 import "./help.css";
 
-// First run (DESIGN_V6 §3, step 4), two screens in the bare layout, one
-// action each: pick what I should watch, then tell me when something
-// happens. Everything shown is live: the industries and their plain words
-// come from the API, each industry's month from the public pulse (counts
-// only, no tickers), the names from the board for the industry just chosen,
-// clamped by the plan exactly as Explore is. An industry card is its label,
-// one line of what is in it and the measured month (DESIGN_V6 §3, §7); the
-// benchmark and the rating counts sit behind More detail. Timezone and channels live in Account. A plan limit
-// opens the upgrade sheet in place. Every exit goes through finish(): `next`
-// if the visitor arrived with one, else Home with the welcome flag.
+// First run (DESIGN_V6 §3, step 4), three screens in the bare layout, one
+// action each: pick what I should watch, tell me when something happens,
+// choose how to tell me. Everything shown is live: the industries and their
+// plain words come from the API, each industry's month from the public pulse
+// (counts only, no tickers), the names from the board for the industry just
+// chosen, clamped by the plan exactly as Explore is. An industry card is its
+// label, one line of what is in it and the measured month (DESIGN_V6 §3,
+// §7); the benchmark and the rating counts sit behind More detail. The third
+// step writes the same channel fields My account does. The timezone is
+// saved on exit. A plan limit opens the upgrade sheet in place. Every exit
+// goes through finish(): `next` if the visitor arrived with one, else Home
+// with the welcome flag.
 
-const STEPS = ["Pick what I should watch", "Tell me when something happens"];
+const STEPS = ["Pick what I should watch", "Tell me when something happens", "Choose how to tell me"];
 // A newcomer watches one name from a handful, not a whole board. The plan's
 // names_shown_limit still clamps below this on the server.
 const TOP = 5;
@@ -214,6 +216,9 @@ export default function Onboarding() {
   const [board, setBoard] = useState(null); // {rows, strategy} or null while loading
   const [boardFor, setBoardFor] = useState("");
   const [pins, setPins] = useState(() => new Set());
+  const [settings, setSettings] = useState(null); // /me/settings for step 3
+  const [saving, setSaving] = useState("");
+  const [saved, setSaved] = useState("");
   const shapeReq = useRef(0);
   const headRef = useRef(null);
   const firstStep = useRef(true);
@@ -251,6 +256,9 @@ export default function Onboarding() {
     api("/me/picks")
       .then((d) => alive && setPins(new Set(d.picks.map((p) => p.symbol))))
       .catch(() => {});
+    api("/me/settings")
+      .then((d) => alive && setSettings(d))
+      .catch(() => alive && setSettings({}));
     fetchPulse(30)
       .then((d) => alive && setPulse(d))
       .catch(() => alive && setPulse(false));
@@ -326,16 +334,40 @@ export default function Onboarding() {
     }
   };
 
+  // Step 3: one PATCH per toggle, the fields My account writes. The box
+  // flips at once and flips back if the save fails.
+  const patchSetting = async (body, label) => {
+    const before = settings;
+    setSettings((cur) => ({ ...(cur || {}), ...body }));
+    setSaving(label);
+    setSaved("");
+    try {
+      const d = await api("/me/settings", { method: "PATCH", json: body });
+      setSettings(d);
+      setSaved(label);
+      setTimeout(() => setSaved(""), 3000);
+    } catch (e) {
+      setSettings(before);
+      toast(e.detail || `Couldn't save ${label}.`);
+    } finally {
+      setSaving("");
+    }
+  };
+  const status = (label) => (saving === label ? " Saving…" : saved === label ? " Saved." : "");
+
   // Every exit: the browser's zone is saved so the digest lands in the
   // morning (changeable in Account), the account is re-read, and the
   // visitor goes where they were headed, else Home with the welcome flag.
+  // A visitor who came for a paid plan still meets Home's first brief; the
+  // plans flag opens the upgrade sheet over it once (DESIGN_V6 §3, step 5).
   const finish = async () => {
     setBusy(true);
     try {
       await api("/me/settings", { method: "PATCH", json: { timezone: tzGuess() } }).catch(() => {});
       await refresh();
     } finally {
-      navigate(next || "/home?welcome=1");
+      const toPlans = next && (next === "/pricing" || next.startsWith("/pricing?"));
+      navigate(toPlans ? "/home?welcome=1&plans=1" : next || "/home?welcome=1");
     }
   };
 
@@ -356,6 +388,11 @@ export default function Onboarding() {
   // the cheapest plan that arms alerts at all, for a plan that arms none
   const alertTier = byPrice && byPrice.find((t) => t.alerts_limit !== 0);
   const tier = me && me.tier;
+  // the cheapest plan that carries a channel, for the lock note under it
+  const planFor = (ch) => {
+    const t = byPrice && byPrice.find((x) => (x.channels || []).includes(ch));
+    return t ? `${t.label} and above` : "Not in your plan";
+  };
   const atLimit = limit < 999 && picked.length >= limit;
   const stepStyle = footH ? { paddingBottom: footH } : undefined;
   const defaults = DEFAULT_TRIGGERS.map((k) => (TRIGGER_PLAIN[k] ? TRIGGER_PLAIN[k][0].toLowerCase() : k));
@@ -416,6 +453,17 @@ export default function Onboarding() {
         <>These are the top-rated names in {focusLabel || "your industry"} this morning.</>
       )}
     </>
+  );
+
+  // Step 3's line: what is watched for you and what the plan sends, where.
+  const channels = (tier && tier.channels) || ["email"];
+  const utility3 = tier ? (
+    <>
+      {pins.size > 0 ? <>{plural(pins.size, "name")} watched for you. </> : null}
+      Your plan sends <b>{alertsLabel(tier.alerts_limit)}</b> by {list(channels)}.
+    </>
+  ) : (
+    <>Alerts and the weekly brief reach you by email first.</>
   );
 
   return (
@@ -619,11 +667,93 @@ export default function Onboarding() {
               ))}
             </ul>
           )}
-          <p className="muted small ob-tz">
-            Your weekly brief arrives in your morning ({tzGuess()}); change the zone and where alerts reach you in <Link to="/settings">My account</Link>.
-          </p>
           <StickyFoot onHeight={setFootH}>
             <button type="button" className="btn-quiet" onClick={() => setStep(1)}>
+              ← Back
+            </button>
+            <span className="row">
+              <button type="button" className="linkbtn ob-skip" disabled={busy} onClick={finish}>
+                Skip for now
+              </button>
+              <button type="button" className="btn btn-primary" disabled={busy} onClick={() => setStep(3)}>
+                Choose how to tell me
+              </button>
+            </span>
+            <FinePrint short links={false} className="ob-fine" />
+          </StickyFoot>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="ob-step page-enter" style={stepStyle}>
+          <div className="ob-head">
+            <h1 ref={headRef} tabIndex={-1}>
+              Choose how to tell me
+            </h1>
+            <p className="utility">{utility3}</p>
+            <p className="muted">Email is on. Add web push or SMS where your plan carries them; change any of it later in My account.</p>
+          </div>
+          {!settings ? (
+            <Skeleton rows={3} height={56} />
+          ) : (
+            <div className="ob-pref ob-channels">
+              <label className="check">
+                <input type="checkbox" checked={settings.channel_email !== false} onChange={(e) => patchSetting({ channel_email: e.target.checked }, "email")} />
+                <span>
+                  Email · {me ? me.email : ""}
+                  <span className="lock-note">
+                    Account emails always arrive; alerts and the weekly brief can be turned off.{status("email")}
+                  </span>
+                </span>
+              </label>
+              <label className={`check ${hasChannel(me, "push") ? "" : "locked"}`}>
+                <input type="checkbox" checked={Boolean(settings.channel_push)} disabled={!hasChannel(me, "push")} onChange={(e) => patchSetting({ channel_push: e.target.checked }, "web push")} />
+                <span>
+                  Web push
+                  <span className="lock-note">
+                    {hasChannel(me, "push") ? (
+                      <>A note on this device the moment an alert fires.{status("web push")}</>
+                    ) : (
+                      <>
+                        {planFor("push")} ·{" "}
+                        <button type="button" className="linkbtn" onClick={() => openUpgrade("channels", { channel: "push" })}>
+                          {CTA.NEXT_PLAN}
+                        </button>
+                      </>
+                    )}
+                  </span>
+                </span>
+              </label>
+              <label className={`check ${hasChannel(me, "sms") ? "" : "locked"}`}>
+                <input type="checkbox" checked={Boolean(settings.channel_sms)} disabled={!hasChannel(me, "sms")} onChange={(e) => patchSetting({ channel_sms: e.target.checked }, "SMS")} />
+                <span>
+                  SMS
+                  <span className="lock-note">
+                    {hasChannel(me, "sms") ? (
+                      <>A text to your phone.{status("SMS")}</>
+                    ) : (
+                      <>
+                        {planFor("sms")} ·{" "}
+                        <button type="button" className="linkbtn" onClick={() => openUpgrade("channels", { channel: "sms" })}>
+                          {CTA.NEXT_PLAN}
+                        </button>
+                      </>
+                    )}
+                  </span>
+                </span>
+              </label>
+              {hasChannel(me, "sms") && settings.channel_sms && !settings.phone_number && (
+                <p className="muted small ob-hint">
+                  Add your number in <Link to="/settings#channels">My account</Link>; an unconfirmed number receives nothing.
+                </p>
+              )}
+            </div>
+          )}
+          <p className="muted small ob-tz">
+            Your weekly brief arrives in your morning ({tzGuess()}); change the zone in <Link to="/settings">My account</Link>.
+          </p>
+          <StickyFoot onHeight={setFootH}>
+            <button type="button" className="btn-quiet" onClick={() => setStep(2)}>
               ← Back
             </button>
             <span className="row">

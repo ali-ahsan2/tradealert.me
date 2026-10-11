@@ -25,11 +25,13 @@ function boardLink(key) {
   return `/board?strategy=${encodeURIComponent(key)}`;
 }
 
+// The screen is "Strategies" everywhere it is named; "How it hunts" leads
+// the line under the title (one screen, one name).
 function openerLine(list) {
   const n = list.length;
   const m = list.filter((s) => statusOf(s) === "measured").length;
-  const has = m === 0 ? "None has" : m === 1 ? "One has" : `${word(m)} have`;
-  return `${word(n)} ${n === 1 ? "strategy" : "strategies"}. ${has} a measured record.`;
+  const has = m === 0 ? "none has" : m === 1 ? "one has" : `${word(m).toLowerCase()} have`;
+  return `How it hunts: ${word(n).toLowerCase()} ${n === 1 ? "strategy" : "strategies"}; ${has} a measured record.`;
 }
 
 // One card per strategy. Simple keeps the ones that put a score on names
@@ -74,8 +76,8 @@ export default function Strategies() {
   return (
     <div className="wrap">
       <ScreenHead
-        title="How it hunts"
-        line={list ? openerLine(list) : "What each strategy looks for, in plain words, and its record."}
+        title="Strategies"
+        line={list ? openerLine(list) : "How it hunts: what each strategy looks for, and its record."}
         action={
           lead ? (
             <Link to={boardLink(lead.key)} className="btn btn-primary">
@@ -177,7 +179,7 @@ export function StrategyDetail({ strategyKey }) {
       <ScreenHead
         kicker={
           <Link to="/strategies" className="backlink">
-            ← How it hunts
+            ← Strategies
           </Link>
         }
         title={

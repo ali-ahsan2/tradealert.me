@@ -351,7 +351,7 @@ function Record({ record }) {
           </li>
         </ol>
         <p className="ld-foot">
-          Method, the event list and what the test does not prove: <Link to="/strategies/fast_mover">the evidence page</Link>.
+          Method, the event list and what the test does not prove: <Link to="/strategies/fast_mover">Fast Mover, under Strategies</Link>.
         </p>
       </div>
     </section>

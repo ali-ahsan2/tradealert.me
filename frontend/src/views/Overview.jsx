@@ -277,8 +277,15 @@ function TheLine({ d, locked, tz }) {
 }
 
 // How this works: the three sentences, shown until dismissed once per
-// browser; the first visit (?welcome=1) titles it "Your first brief".
-function HowCard({ welcome, onDone }) {
+// browser. The first visit (?welcome=1) titles it "Your first brief", puts
+// it first in the brief and points at the page's one action (DESIGN_V6 §3,
+// step 5): `action` is {to, label} or {run, label}; taking it dismisses the
+// card too.
+function HowCard({ welcome, onDone, action = null }) {
+  const take = () => {
+    onDone();
+    if (action && action.run) requestAnimationFrame(action.run);
+  };
   return (
     <section className="card howcard" aria-labelledby="how-h">
       <div className="brief-head">
@@ -304,9 +311,21 @@ function HowCard({ welcome, onDone }) {
           <span>Measured, not predicted: it keeps score of how early it told me.</span>
         </li>
       </ul>
-      <button type="button" className="btn btn-secondary btn-sm" onClick={onDone}>
-        Got it
-      </button>
+      <div className="row howcard-acts">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={onDone}>
+          Got it
+        </button>
+        {welcome && action && action.to && (
+          <Link to={action.to} className="btn-quiet" onClickCapture={onDone}>
+            {action.label} <Icon name="arrow" size={16} />
+          </Link>
+        )}
+        {welcome && action && !action.to && (
+          <button type="button" className="btn-quiet" onClick={take}>
+            {action.label} <Icon name="arrow" size={16} />
+          </button>
+        )}
+      </div>
     </section>
   );
 }
@@ -983,6 +1002,16 @@ export default function Overview() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ?plans=1 (onboarding, for a visitor who arrived for a paid plan): the
+  // upgrade sheet opens once over the first brief, then the flag leaves.
+  // Deferred a tick so the sheet, mounted after this page, is listening.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("plans") !== "1") return undefined;
+    stripParam("plans");
+    const t = setTimeout(() => openUpgrade("general"), 0);
+    return () => clearTimeout(t);
+  }, []);
+
   // everything below the fold: closed in Simple, open in Full, mounted on
   // the first open so its requests wait until then
   const [moreOpen, setMoreOpen] = useState(full);
@@ -1066,6 +1095,7 @@ export default function Overview() {
     return (
       <div className="wrap brief">
         {verified}
+        {showHow && welcome && <HowCard welcome onDone={dismissHow} action={{ to: "/onboarding", label: "Pick my industries" }} />}
         <header className="home-head">
           <h1>{hello}</h1>
           <p className="home-line">You follow no industries yet, so there is nothing to brief.</p>
@@ -1076,7 +1106,7 @@ export default function Overview() {
           </div>
           <FinePrint short links={false} />
         </header>
-        {showHow && <HowCard welcome={welcome} onDone={dismissHow} />}
+        {showHow && !welcome && <HowCard onDone={dismissHow} />}
       </div>
     );
   }
@@ -1085,12 +1115,13 @@ export default function Overview() {
     return (
       <div className="wrap brief">
         {verified}
+        {showHow && welcome && <HowCard welcome onDone={dismissHow} />}
         <header className="home-head">
           <h1>{hello}</h1>
           <p className="home-line">No morning scoring has finished yet. Your brief fills after the first one.</p>
         </header>
         <Empty title="Nothing scored yet.">The engine runs each morning; what changed, the alerts and the dates ahead appear here after it.</Empty>
-        {showHow && <HowCard welcome={welcome} onDone={dismissHow} />}
+        {showHow && !welcome && <HowCard onDone={dismissHow} />}
       </div>
     );
   }
@@ -1103,25 +1134,30 @@ export default function Overview() {
     const el = document.getElementById("changed");
     if (el) el.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
   };
+  // howAction is the same destination for the first-visit card's link.
   let primary;
+  let howAction;
   if (!locked && a.unread > 0) {
     primary = (
       <Link to="/alerts" className="btn btn-primary">
         Read my alerts <Icon name="arrow" size={16} />
       </Link>
     );
+    howAction = { to: "/alerts", label: "Read my alerts" };
   } else if (watchedEvent) {
     primary = (
       <Link to="/calendar?days=14" className="btn btn-primary">
         See what's coming <Icon name="arrow" size={16} />
       </Link>
     );
+    howAction = { to: "/calendar?days=14", label: "See what's coming" };
   } else {
     primary = (
       <button type="button" className="btn btn-primary" onClick={scrollToChanged}>
         Show me what changed
       </button>
     );
+    howAction = { run: scrollToChanged, label: "Show me what changed" };
   }
 
   // the three cards
@@ -1155,6 +1191,9 @@ export default function Overview() {
   return (
     <div className="wrap brief">
       {verified}
+
+      {/* 0. The first visit: the three sentences, then the one action ------ */}
+      {showHow && welcome && <HowCard welcome onDone={dismissHow} action={howAction} />}
 
       {/* 1. The greeting, the line, one action --------------------------- */}
       <header className="home-head">
@@ -1252,8 +1291,8 @@ export default function Overview() {
         </div>
       )}
 
-      {/* 6. How this works, until dismissed -------------------------------- */}
-      {showHow && <HowCard welcome={welcome} onDone={dismissHow} />}
+      {/* 6. How this works, until dismissed (the first visit had it on top) */}
+      {showHow && !welcome && <HowCard onDone={dismissHow} />}
 
       {/* 7. Everything else, behind one details ---------------------------- */}
       <details className="acc more" open={moreOpen} onToggle={(e) => setMoreOpen(e.currentTarget.open)}>

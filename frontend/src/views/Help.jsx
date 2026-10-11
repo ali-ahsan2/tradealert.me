@@ -297,7 +297,7 @@ export default function Help() {
   return (
     <div className="wrap help">
       <ScreenHead
-        title="How it works"
+        title="Help"
         line={THREE}
         action={
           me ? (
@@ -333,7 +333,7 @@ export default function Help() {
       </div>
       <div className="help-actions">
         <Link to="/strategies" className="btn btn-secondary btn-sm">
-          The strategies and their record
+          Strategies
         </Link>
       </div>
 

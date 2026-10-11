@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api, getToken, logout, prefetch } from "../api.js";
-import { Link, navigate, usePath } from "../lib/router.jsx";
+import { Link, Redirect, navigate, safeNext, usePath } from "../lib/router.jsx";
 import { hasConsent, useMe } from "../lib/me.jsx";
 import { THEMES, getTheme, setTheme } from "../lib/theme.js";
 import { MODES, useMode } from "../lib/mode.js";
@@ -13,7 +13,6 @@ import UpgradeSheet from "./UpgradeSheet.jsx";
 import FinePrint from "./FinePrint.jsx";
 import ExploreTabs, { isExplore } from "./ExploreTabs.jsx";
 import { CTA } from "../lib/plain.js";
-import Welcome from "../views/Welcome.jsx";
 
 // v6 shells (DESIGN_V6 §3, §10): the layout is chosen by the route, never
 // by whether /api/me has answered, so a public page never wears the rail
@@ -100,9 +99,11 @@ function ThemeControl() {
 }
 
 // Detail: Simple is the structural default (cards, caps, one column); More
-// detail shows the table and every control. The choice persists and nothing
-// is removed either way. Other packages import this control.
-const MODE_LABEL = { simple: "Simple", full: "More detail" };
+// shows the table and every control. The choice persists and nothing is
+// removed either way. Every caller sets the caption "Detail" before the
+// control, so the segments read "Detail: Simple / More". Other packages
+// import this control.
+const MODE_LABEL = { simple: "Simple", full: "More" };
 export function ModeControl({ className = "" }) {
   const { mode, setMode } = useMode();
   return (
@@ -263,19 +264,26 @@ export function BottomBar({ unread }) {
   );
 }
 
-// The public top bar: wordmark, Plans · Help, then Log in / Start free, or
-// "Open my Home" and the avatar when a session is present.
+// The public top bar: wordmark, Plans (My plan once signed in) · Help, then
+// Log in / Start free, or "Open my Home" and the avatar when a session is
+// present. The sign-up and log-in screens each carry one primary (the form's
+// own), so the bar shows only the other door there, quiet; the verify page
+// already offers "Open my Home" once.
 export function TopBar() {
   const { me } = useMe();
-  const here = usePath().split("?")[0];
+  const [here, qs = ""] = usePath().split("?");
   const signedIn = Boolean(getToken());
+  const next = safeNext(new URLSearchParams(qs).get("next"));
+  const carry = (to) => (next ? `${to}?next=${encodeURIComponent(next)}` : to);
+  const onSignup = here === "/signup";
+  const onLogin = here === "/login";
   return (
     <header className="topbar">
       <div className="topbar-inner">
         <Brand />
         <nav className="navlinks" aria-label="Primary">
           <Link to="/pricing" className="navlink" aria-current={isActive(here, "/pricing") ? "page" : undefined}>
-            Plans
+            {signedIn ? CTA.MY_PLAN : "Plans"}
           </Link>
           <Link to="/help" className="navlink" aria-current={isActive(here, "/help") ? "page" : undefined}>
             Help
@@ -284,19 +292,25 @@ export function TopBar() {
         <span className="spacer" />
         {signedIn ? (
           <>
-            <Link to="/home" className="btn btn-primary btn-sm">
-              {CTA.OPEN_HOME}
-            </Link>
+            {here !== "/verified" && (
+              <Link to="/home" className="btn btn-primary btn-sm">
+                {CTA.OPEN_HOME}
+              </Link>
+            )}
             {me && <AccountMenu me={me} />}
           </>
         ) : (
           <>
-            <Link to="/login" className="btn btn-quiet">
-              Log in
-            </Link>
-            <Link to="/signup" className="btn btn-primary btn-sm">
-              {CTA.START_FREE}
-            </Link>
+            {!onLogin && (
+              <Link to={carry("/login")} className="btn btn-quiet">
+                Log in
+              </Link>
+            )}
+            {!onSignup && (
+              <Link to={carry("/signup")} className={onLogin ? "btn btn-quiet" : "btn btn-primary btn-sm"}>
+                {CTA.START_FREE}
+              </Link>
+            )}
           </>
         )}
       </div>
@@ -305,6 +319,7 @@ export function TopBar() {
 }
 
 export function Footer({ bare = false }) {
+  const signedIn = Boolean(getToken());
   return (
     <footer className="footer">
       <div className="footer-inner">
@@ -313,8 +328,8 @@ export function Footer({ bare = false }) {
             <span className="footer-word">tradealert.me</span>
             <nav className="footer-nav" aria-label="Legal">
               <Link to="/about">About</Link>
-              <Link to="/help">How it works</Link>
-              <Link to="/pricing">Plans</Link>
+              <Link to="/help">Help</Link>
+              <Link to="/pricing">{signedIn ? CTA.MY_PLAN : "Plans"}</Link>
               <Link to="/legal/terms">Terms</Link>
               <Link to="/legal/privacy">Privacy</Link>
               <Link to="/legal/disclaimer">Disclaimer</Link>
@@ -387,6 +402,14 @@ export function PublicShell({ children }) {
   );
 }
 
+// The consent gate (DESIGN_V6 §6, §10) is one screen in one chrome: an
+// account that has not ticked the current terms is sent to /welcome, bare,
+// with the address it was opening as `next`, and comes back once it has.
+function ConsentRedirect() {
+  const path = usePath();
+  return <Redirect to={`/welcome?next=${encodeURIComponent(path)}`} />;
+}
+
 // Onboarding and the consent screen: the brand, the page, the short fine
 // print. `gate` applies the consent check (onboarding); /welcome is the gate
 // itself and /auth/done only decides where to go.
@@ -405,7 +428,7 @@ export function BareShell({ children, gate = false }) {
         </div>
       </header>
       <main id="main" className="main" tabIndex={-1}>
-        {holding ? <Holding /> : gated ? <Welcome /> : children}
+        {holding ? <Holding /> : gated ? <ConsentRedirect /> : children}
       </main>
       <Footer bare />
       <ToastHost />
@@ -419,8 +442,9 @@ export function AppShell({ children }) {
   const unread = useUnread(me);
   const here = usePath().split("?")[0];
   usePrefetchLinks(Boolean(me));
-  const gated = Boolean(me) && !hasConsent(me);
   const holding = loading && !me;
+  // never the app chrome around the consent screen: redirect, bare
+  if (me && !hasConsent(me)) return <ConsentRedirect />;
   return (
     <div className="app layout-app">
       <a className="skip" href="#main">
@@ -432,8 +456,6 @@ export function AppShell({ children }) {
         <main id="main" className="main" tabIndex={-1}>
           {holding ? (
             <Holding />
-          ) : gated ? (
-            <Welcome />
           ) : (
             <>
               {isExplore(here) && <ExploreTabs />}
@@ -444,7 +466,7 @@ export function AppShell({ children }) {
         <Footer />
       </div>
       <BottomBar unread={unread} />
-      {me && !gated && <Tour steps={HOME_TOUR} />}
+      {me && <Tour steps={HOME_TOUR} />}
       <ToastHost />
       <UpgradeSheet />
       <CommandPalette />

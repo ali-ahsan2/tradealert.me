@@ -20,11 +20,11 @@ const SCREENS = [
   { label: "Explore · What changed", to: "/changes", hint: "g c" },
   { label: "Explore · Coming up", to: "/calendar", hint: "g l" },
   { label: "Strategies", to: "/strategies", hint: "g t" },
-  { label: "My week, by email", to: "/digests", hint: "g d" },
-  { label: "Compare names for me", to: "/compare" },
+  { label: "My week", to: "/digests", hint: "g d" },
+  { label: "Compare for me", to: "/compare" },
   { label: "Help", to: "/help" },
   { label: "My account", to: "/settings", hint: "g s" },
-  { label: "My plan", to: "/pricing" },
+  { label: "My plan", to: "/pricing", hint: "g p" },
 ];
 
 export default function CommandPalette() {
