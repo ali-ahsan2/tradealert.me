@@ -1,6 +1,15 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { login, signup } from "../api.js";
 import { Link, navigate, useQuery } from "../lib/router.jsx";
+import { fetchPulse, leadPhrase } from "../lib/record.js";
+import { useCountUp, useReveal } from "../lib/motion.js";
+import { pct, plural, shortDate } from "../lib/fmt.js";
+import "./auth.css";
+
+// Sign up and sign in (DESIGN_V5 §4, step 2). The form sits beside the live
+// pulse: three counts from /api/pulse (anonymous, aggregate, no tickers) so
+// what fired this month stays in view while the account is made. Nothing on
+// this screen promises anything; every number is measured.
 
 function GoogleMark() {
   return (
@@ -18,6 +27,84 @@ function safeNext(raw) {
   return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : null;
 }
 
+// One live number with its plain label; counts up once on reveal. A null
+// value (still loading) shows a dash, never a zero we did not measure.
+function Num({ value, short, long, active }) {
+  const n = useCountUp(value == null ? null : value, { active });
+  return (
+    <div className="auth-pulse-num">
+      <span className="n">{value == null ? "—" : n}</span>
+      <span className="l l-short">{short}</span>
+      <span className="l l-long">{long}</span>
+    </div>
+  );
+}
+
+// The pulse's first example: industry, trigger, date, the measured move and
+// the lead. No ticker; the public pulse carries none. Only the price move
+// takes colour.
+function Example({ e }) {
+  if (!e || e.max_5d == null) return null;
+  const lead = leadPhrase(e);
+  return (
+    <p className="auth-pulse-ex">
+      <b>{e.industry_label}</b> · {e.trigger} on {shortDate(e.date)} ·{" "}
+      <span className={e.max_5d >= 0 ? "pos" : "neg"}>{pct(e.max_5d)}</span> at the high within five sessions
+      {e.chg_5d != null && (
+        <>
+          , closed <span className={e.chg_5d >= 0 ? "pos" : "neg"}>{pct(e.chg_5d)}</span>
+        </>
+      )}
+      {lead ? ` · ${lead}` : ""}
+    </p>
+  );
+}
+
+// pulse: null while loading, false when the request failed, else the body.
+function PulsePanel({ pulse }) {
+  const [ref, seen] = useReveal();
+  const a = pulse ? pulse.alerts : null;
+  const u = pulse ? pulse.universe : null;
+  const lead = pulse ? pulse.lead_sessions_median : null;
+  const days = (pulse && pulse.days) || 30;
+  const ex = pulse && pulse.examples ? pulse.examples[0] : null;
+  return (
+    <aside ref={ref} className={`auth-pulse reveal ${seen ? "in" : ""}`} aria-label={`What fired across every industry in the last ${days} days`}>
+      <p className="auth-pulse-k">Last {days} days, every industry</p>
+      {pulse === false ? (
+        <p className="auth-pulse-empty">
+          Every alert we send is a recorded event: the trigger, the date, and what the price did in the five sessions after.
+        </p>
+      ) : (
+        <div className="auth-pulse-nums">
+          <Num value={a ? a.fired : null} short="alerts fired" long={a ? `alerts fired on ${plural(a.names, "name")}` : "alerts fired"} active={seen} />
+          <Num
+            value={a ? a.moved_10 : null}
+            short="moved 10%+ after"
+            long={a && a.measured ? `of ${a.measured} measured, moved 10%+ within five sessions` : "moved 10%+ within five sessions after"}
+            active={seen}
+          />
+          {pulse && lead == null ? (
+            <Num
+              value={u ? u.names : null}
+              short="names scored"
+              long={u ? `names scored each morning across ${plural(u.industries, "industry", "industries")}` : "names scored"}
+              active={seen}
+            />
+          ) : (
+            <Num value={lead} short="sessions to peak" long="sessions from alert to peak, median" active={seen} />
+          )}
+        </div>
+      )}
+      <Example e={ex} />
+      <p className="auth-pulse-foot">
+        <span className="m">Measured, not predicted.</span>
+        {pulse && pulse.as_of && <span>As of {shortDate(pulse.as_of)}</span>}
+      </p>
+    </aside>
+  );
+}
+
 export default function Auth({ mode }) {
   const q = useQuery();
   const next = safeNext(q.get("next"));
@@ -25,7 +112,20 @@ export default function Auth({ mode }) {
   const [password, setPassword] = useState("");
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [pulse, setPulse] = useState(null);
   const isSignup = mode === "signup";
+
+  // The pulse is public and cached server-side; a failure hides the numbers
+  // and nothing else on the screen depends on it.
+  useEffect(() => {
+    let alive = true;
+    fetchPulse(30)
+      .then((d) => alive && setPulse(d))
+      .catch(() => alive && setPulse(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -46,19 +146,13 @@ export default function Auth({ mode }) {
   };
 
   return (
-    <div className="auth-shell">
+    <div className="auth">
       <div className="card form-card">
         <h1>{isSignup ? "Create your account" : "Welcome back"}</h1>
         <p className="sub">
-          {isSignup
-            ? "Free includes the top 5 names in one industry and a weekly digest. No card needed."
-            : "Sign in to your Board, watchlist and alerts."}
+          {isSignup ? "Email and a password. Then pick an industry and see what fired in it." : "Sign in to your Home, watchlist and alerts."}
         </p>
-        <button
-          type="button"
-          className="btn btn-google"
-          onClick={() => window.location.assign("/api/oauth/start/google")}
-        >
+        <button type="button" className="btn btn-google" onClick={() => window.location.assign("/api/oauth/start/google")}>
           <GoogleMark />
           Continue with Google
         </button>
@@ -66,14 +160,7 @@ export default function Auth({ mode }) {
         <form onSubmit={submit}>
           <div className="field">
             <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+            <input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="field">
             <label htmlFor="password">Password</label>
@@ -99,10 +186,15 @@ export default function Auth({ mode }) {
             </p>
           )}
           <button className="btn btn-primary btn-block" disabled={busy}>
-            {busy ? "One moment…" : isSignup ? "Create account" : "Sign in"}
+            {busy ? "One moment…" : isSignup ? "Create my account" : "Sign in"}
           </button>
+          {isSignup && (
+            <p className="auth-after">
+              <b>Free plan, no card.</b> Your first brief is one industry away.
+            </p>
+          )}
         </form>
-        <p className="small muted" style={{ marginTop: "var(--s-4)", marginBottom: 0 }}>
+        <p className="small muted auth-links">
           {isSignup ? (
             <>
               Already have an account? <Link to={next ? `/login?next=${encodeURIComponent(next)}` : "/login"}>Sign in</Link>
@@ -114,13 +206,13 @@ export default function Auth({ mode }) {
           )}
         </p>
         {isSignup && (
-          <p className="xs faint" style={{ marginTop: "var(--s-3)", marginBottom: 0 }}>
-            By creating an account you agree to the <Link to="/legal/terms">terms</Link> and{" "}
-            <Link to="/legal/privacy">privacy policy</Link>. Research and information only; never
-            investment advice.
+          <p className="xs faint auth-legal">
+            By creating an account you agree to the <Link to="/legal/terms">terms</Link> and <Link to="/legal/privacy">privacy policy</Link>. Research and
+            information only; never investment advice.
           </p>
         )}
       </div>
+      <PulsePanel pulse={pulse} />
     </div>
   );
 }
