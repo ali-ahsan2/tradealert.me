@@ -9,6 +9,7 @@ import Icon from "./Icons.jsx";
 import CommandPalette from "./CommandPalette.jsx";
 import Shortcuts from "./Shortcuts.jsx";
 import Tour, { HOME_TOUR, restartTour } from "./Tour.jsx";
+import UpgradeSheet from "./UpgradeSheet.jsx";
 
 // v4 shell: signed-in subscribers get a left rail on desktop and a bottom
 // tab bar on phones, with a slim in-page header carrying search, plan and
@@ -367,6 +368,7 @@ export function Shell({ children }) {
       <BottomBar unread={unread} />
       {me && <Tour steps={HOME_TOUR} enabled={here === "/overview"} />}
       <ToastHost />
+      <UpgradeSheet />
       <CommandPalette />
       <Shortcuts />
     </div>
