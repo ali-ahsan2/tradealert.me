@@ -6,7 +6,10 @@ dossiers, calendar, alerts, digests) and an operator Lab for strategy
 analysis. FastAPI + Postgres on the back, React + Vite in `frontend/`
 built into `static/`.
 
-The product's rules live in the specs at the repo root: `DESIGN_V4.md`
+The product's rules live in the specs at the repo root: `DESIGN_V5.md`
+(desire and flow: the record endpoints `/api/pulse` and `/api/me/record`,
+the binding copy rules for FOMO built from recorded facts, the connected
+funnel and the in-place upgrade sheet), `DESIGN_V4.md`
 (the current look: consumer app and analysis terminal; §6 positioning as an
 assistant that watches, explains and alerts; §7 the newcomer-ease pass with
 Simple/Full mode, the glossary and `/help`), `PRODUCT_DESIGN.md`
