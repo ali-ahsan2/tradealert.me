@@ -1,8 +1,74 @@
-import React, { useEffect, useRef, useState } from "react";
+/*
+ * The Lab: the admin-only strategy workbench served at /lab (its own Vite
+ * entry, frontend/lab.html). One file holds the shell and five of the seven
+ * screens; Reports lives in Reports.jsx and the plain-language layer (term
+ * tooltips, panel heads, glossary, intro, plain maps) in plain.jsx.
+ *
+ * Map for a new programmer (line numbers are approximate; grep the name):
+ *
+ *   helpers        pct, relTime, shortDate, errText, useFetch, Load    ~L75-145
+ *   gate           useGate, Gate (sign-in), Denied                      ~L148-245
+ *   walkthrough    SCREEN_INTROS, WALKTHROUGH_STEPS, Walkthrough        ~L265-345
+ *   Strategies     StrategiesScreen (one card per strategy)             ~L350-420
+ *   Inputs         GradeBadge, FiltersTable, ComponentsTable,
+ *                  BandsTable, InputsScreen                             ~L423-695
+ *   Versions       VersionsScreen: one-sentence verdict, History,
+ *                  Compare (DiffList, PerformanceStrip, matched run)    ~L697-935
+ *   Backtest       KINDS, BacktestScreen: five steps, run(), GroupRows,
+ *                  BaseRows, the result card and Provenance             ~L938-1335
+ *   Findings       STATUSES, KINDFIELDS, FindingsScreen (form + ledger),
+ *                  FindingDetail (status, linked queries)               ~L1336-1580
+ *   Log            LogScreen (query audit table)                        ~L1583-1626
+ *   shell          LabApp: top bar, strategy context bar, screen intro,
+ *                  LabIntro, status strip, GlossaryDrawer; App (gate)   ~L1627-end
+ *
+ * Navigation is React state only (screen, strat); there are no URL routes.
+ * Data comes from app/lab.py (/api/admin/lab/*) and app/lab_release.py
+ * (the performance verdict); Reports reads app/reporting.py. Everything the
+ * user sees today is computed on synthetic fixtures (db/seed_lab.py).
+ *
+ * DESIGN_V6 §9 governs the plain layer: nothing moves; every addition is
+ * additive and collapsible; plain word first, technical word second.
+ */
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./lab.css";
 import { api, login, getToken, logout } from "../api.js";
 import ReportsScreen from "./Reports.jsx";
+import {
+  LabUI,
+  withFloors,
+  floorsSentence,
+  useLocalFlag,
+  GRADE_PLAIN,
+  STATUS_PLAIN,
+  KIND_PLAIN,
+  RELATION_PLAIN,
+  QUERY_STATUS_PLAIN,
+  EXCLUSION_PLAIN,
+  VERSION_STATE_PLAIN,
+  plainTech,
+  WarnBadge,
+  fmtRule,
+  fmtBand,
+  fmtValue,
+  BAND_ORDER,
+  RawValues,
+  MATCHED_SPEC,
+  matchedSpecSentence,
+  matchedSpecShort,
+  PANELS,
+  Term,
+  Help,
+  PanelHead,
+  GlossaryDrawer,
+  LabIntro,
+  StartHereList,
+} from "./plain.jsx";
+
+// Evidence grades read as a phrase that already contains the stored word
+// ("weak evidence"), so they are not doubled as "plain (technical)".
+const gradeWord = (g) => GRADE_PLAIN[g] || g || "—";
 
 const ADMIN_CHECK = "/admin/_check";
 
@@ -175,23 +241,7 @@ function Denied({ retry }) {
   );
 }
 
-function Help({ text }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <span className="labhelp">
-      <button
-        type="button"
-        className="labhelp-btn"
-        aria-label="What does this mean?"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
-        ?
-      </button>
-      {open && <span className="labhelp-pop" role="tooltip">{text}</span>}
-    </span>
-  );
-}
+// Help (the "?" popover) and Term (the dotted term tooltip) live in plain.jsx.
 
 function Collapsible({ title, subtitle, defaultOpen, children }) {
   const [open, setOpen] = useState(!!defaultOpen);
@@ -243,18 +293,39 @@ const WALKTHROUGH_STEPS = [
     title: "4. Versions and Findings",
     body: "Versions lets you compare two points in a strategy's history on the exact same events, so a change is judged fairly. Findings is where a conclusion worth keeping gets written down and linked to the runs that support it.",
   },
+  {
+    title: "5. Reports",
+    body: "Where the data comes from: each feed and when it last ran, how much price history and how many events exist, which industries have usable data, and one stock's chart with its events marked. A strategy result is only as good as the bars and events under it.",
+  },
+  {
+    title: "6. Log",
+    body: "Every run anyone made, in order, with who ran it, its settings fingerprint and its status. Every number anyone cites must trace back to a row here.",
+  },
+  {
+    title: "Start here",
+    body: "A path through the Lab in eight short steps. Pick one to go straight there; the same list sits in the \"What this lab is\" panel on the Strategies screen.",
+    startHere: true,
+  },
 ];
 
-function Walkthrough({ onClose }) {
+function Walkthrough({ onClose, onGo }) {
   const [step, setStep] = useState(0);
   const last = step === WALKTHROUGH_STEPS.length - 1;
   const s = WALKTHROUGH_STEPS[step];
   return (
     <div className="labwalk-backdrop" role="dialog" aria-modal="true" aria-label="Lab walkthrough">
-      <div className="labwalk">
+      <div className={`labwalk${s.startHere ? " labwalk-wide" : ""}`}>
         <p className="labwalk-step">{step + 1} / {WALKTHROUGH_STEPS.length}</p>
         <h2>{s.title}</h2>
         <p>{s.body}</p>
+        {s.startHere && (
+          <StartHereList
+            onGo={(item) => {
+              onClose();
+              onGo(item);
+            }}
+          />
+        )}
         <div className="labwalk-actions">
           <button className="btn" onClick={onClose}>Skip</button>
           <span style={{ flex: 1 }} />
@@ -279,6 +350,8 @@ function Chip({ label, on, onClick }) {
 function StrategiesScreen({ strategies, onPick }) {
   const list = strategies?.strategies || [];
   return (
+    <div className="labstack">
+    <PanelHead id="strategies" title="Strategies" />
     <div className="stratlist">
       {list.map((s) => (
         <article className="card stratcard" key={s.key}>
@@ -289,11 +362,16 @@ function StrategiesScreen({ strategies, onPick }) {
                 <h3>{s.label}</h3>
                 {s.calibrated ? (
                   <span className="badge ok" title={`Weights backed by ${s.resolved_outcomes_count} resolved outcomes`}>
-                    calibrated
+                    measured (calibrated)
                   </span>
                 ) : (
                   <span className="badge warn" title="Weights are provisional priors, not yet backed by resolved outcomes">
-                    provisional
+                    starting guesses (provisional)
+                  </span>
+                )}
+                {s.version_state && (
+                  <span className="muted stratcard-state">
+                    version state: {plainTech(VERSION_STATE_PLAIN, s.version_state)}
                   </span>
                 )}
               </div>
@@ -304,11 +382,11 @@ function StrategiesScreen({ strategies, onPick }) {
                   <dd>v{s.version_number ?? "—"}</dd>
                 </div>
                 <div>
-                  <dt>Outcomes</dt>
+                  <dt><Term text="Past alerts whose result is now known." g="resolved outcome">Outcomes</Term></dt>
                   <dd>{s.resolved_outcomes_count ?? 0} resolved</dd>
                 </div>
                 <div>
-                  <dt>Last tested</dt>
+                  <dt><Term text="When someone last ran a backtest on this strategy." g="backtest">Last tested</Term></dt>
                   <dd>
                     {s.last_query_at ? (
                       <span title={`${s.last_query_at} · ${s.last_query_by}`}>{relTime(s.last_query_at)}</span>
@@ -318,7 +396,7 @@ function StrategiesScreen({ strategies, onPick }) {
                   </dd>
                 </div>
                 <div>
-                  <dt>Key</dt>
+                  <dt><Term text="The strategy's machine name, as the API and the Log refer to it." g="strategy (lens)">Key</Term></dt>
                   <dd className="mono">{s.key}</dd>
                 </div>
               </dl>
@@ -338,6 +416,7 @@ function StrategiesScreen({ strategies, onPick }) {
         </article>
       ))}
     </div>
+    </div>
   );
 }
 
@@ -345,7 +424,11 @@ function GradeBadge({ grade }) {
   if (!grade || grade === "none") {
     return <span className="muted">never tested</span>;
   }
-  return <span className={`badge ${grade === "strong" ? "ok" : grade === "weak" ? "warn" : ""}`}>{grade}</span>;
+  return (
+    <span className={`badge ${grade === "strong" ? "ok" : grade === "weak" ? "warn" : ""}`}>
+      {gradeWord(grade)}
+    </span>
+  );
 }
 
 function FiltersTable({ filters }) {
@@ -353,26 +436,53 @@ function FiltersTable({ filters }) {
     return <p className="muted">No hard filters declared for this version.</p>;
   }
   return (
+    <>
     <table className="labtable">
       <thead>
-        <tr><th>Rule</th><th>Source</th><th>Cov.</th><th>Evidence</th></tr>
+        <tr>
+          <th><Term k="rule">Rule</Term></th>
+          <th><Term k="source">Source</Term></th>
+          <th><Term k="cov">Cov.</Term></th>
+          <th><Term k="evidence">Evidence</Term></th>
+        </tr>
       </thead>
       <tbody>
         {filters.map((f, i) => (
           <tr key={i}>
             <td>
               <span className="mono">{f.label}</span>
-              <span className="mono muted"> {f.op} {JSON.stringify(f.value)}{f.unit ? ` ${f.unit}` : ""}</span>
+              <span className="muted">
+                {" "}
+                {fmtRule(f.op, f.value, f.unit) ?? (
+                  <span className="mono">{f.op} {JSON.stringify(f.value)}{f.unit ? ` ${f.unit}` : ""}</span>
+                )}
+              </span>
             </td>
             <td>
               {f.source && f.source.name ? (
                 <>
                   {f.source.name}
-                  {f.source.vintage_lag_days != null &&
-                    ` · ${f.source.vintage_lag_days}d vintage lag`}
+                  {f.source.vintage_lag_days != null && (
+                    <>
+                      {" · "}
+                      <Term
+                        text="How stale this feed is when the rule reads it. Ignoring it would be lookahead bias."
+                        g="vintage lag"
+                      >
+                        {f.source.vintage_lag_days}d vintage lag
+                      </Term>
+                    </>
+                  )}
                 </>
               ) : (
-                <span className="muted">untagged at ingest</span>
+                <span className="muted">
+                  <Term
+                    text="The feed was not recorded when the data was loaded, so its lag is unknown."
+                    g="untagged at ingest"
+                  >
+                    untagged at ingest
+                  </Term>
+                </span>
               )}
             </td>
             <td className="mono">{pct((f.coverage_pct ?? 0) / 100)}</td>
@@ -381,6 +491,11 @@ function FiltersTable({ filters }) {
         ))}
       </tbody>
     </table>
+    <RawValues
+      data={filters.map((f) => ({ key: f.key, op: f.op, value: f.value, unit: f.unit }))}
+      sentence="The stored rules, exactly as the engine reads them."
+    />
+    </>
   );
 }
 
@@ -391,7 +506,13 @@ function ComponentsTable({ components }) {
   return (
     <table className="labtable">
       <thead>
-        <tr><th>Component</th><th>Declared</th><th>Median eff.</th><th>Cov.</th><th>Evidence</th></tr>
+        <tr>
+          <th><Term k="component">Component</Term></th>
+          <th><Term k="declared">Declared</Term></th>
+          <th><Term k="median_eff">Median eff.</Term></th>
+          <th><Term k="cov">Cov.</Term></th>
+          <th><Term k="evidence">Evidence</Term></th>
+        </tr>
       </thead>
       <tbody>
         {components.map((c, i) => (
@@ -414,20 +535,29 @@ function ComponentsTable({ components }) {
 function BandsTable({ bands }) {
   const entries = Object.entries(bands || {});
   if (entries.length === 0) return <p className="muted">No band cutoffs recorded.</p>;
+  // Strong first, as subscribers read the words; unknown keys last.
+  const rank = (k) => {
+    const i = BAND_ORDER.indexOf(k);
+    return i === -1 ? BAND_ORDER.length : i;
+  };
+  entries.sort((a, b) => rank(a[0]) - rank(b[0]));
   return (
+    <>
     <table className="labtable">
       <thead>
-        <tr><th>Band</th><th>Cutoff</th></tr>
+        <tr><th><Term k="band">Band</Term></th><th><Term k="cutoff">Cutoff</Term></th></tr>
       </thead>
       <tbody>
         {entries.map(([k, v]) => (
           <tr key={k}>
             <td>{k}</td>
-            <td className="mono">{JSON.stringify(v)}</td>
+            <td>{fmtBand(v) ?? <span className="mono">{JSON.stringify(v)}</span>}</td>
           </tr>
         ))}
       </tbody>
     </table>
+    <RawValues data={bands} sentence="The stored cutoffs, exactly as the engine reads them." />
+    </>
   );
 }
 
@@ -442,15 +572,20 @@ function InputsScreen({ strat }) {
         {(data) => (
           <>
         <div className="card">
-          <h3>
-            Version {data.version ? data.version.version_number : "?"}
-            {data.version && (
-              <span className="muted" style={{ fontWeight: 400 }}>
-                {" "}· in effect since{" "}
-                <span title={data.version.effective_from}>{shortDate(data.version.effective_from)}</span>
-              </span>
-            )}
-          </h3>
+          <PanelHead
+            id="version"
+            title={
+              <>
+                Version {data.version ? data.version.version_number : "?"}
+                {data.version && (
+                  <span className="muted" style={{ fontWeight: 400 }}>
+                    {" "}· in effect since{" "}
+                    <span title={data.version.effective_from}>{shortDate(data.version.effective_from)}</span>
+                  </span>
+                )}
+              </>
+            }
+          />
           {data.version && data.version.change_reason && (
             <p className="muted" style={{ marginTop: 0 }}>{data.version.change_reason}</p>
           )}
@@ -459,44 +594,40 @@ function InputsScreen({ strat }) {
           )}
         </div>
         <div className="card">
-          <div className="sec-head">
-            <h3>Hard filters</h3>
+          <PanelHead id="filters" title="Hard filters">
             <p>Fail any one and the stock is excluded, whatever it scores.</p>
-          </div>
+          </PanelHead>
           <div className="table-scroll">
             <FiltersTable filters={data.hard_filters} />
           </div>
         </div>
         <div className="card">
-          <div className="sec-head">
-            <h3>Component weights</h3>
+          <PanelHead id="components" title="Component weights">
             <p>Declared is intended. Median effective is what it came to after missing data.</p>
-          </div>
+          </PanelHead>
           <div className="table-scroll">
             <ComponentsTable components={data.components} />
           </div>
         </div>
         <div className="card">
-          <div className="sec-head">
-            <h3>Band cutoffs</h3>
+          <PanelHead id="bands" title="Band cutoffs">
             <p>A label, never a gate.</p>
-          </div>
+          </PanelHead>
           <BandsTable bands={data.band_cutoffs} />
         </div>
         <div className="card">
-          <div className="sec-head">
-            <h3>Related findings</h3>
+          <PanelHead id="related" title="Related findings">
             <p>Each backed by the runs linked to it.</p>
-          </div>
+          </PanelHead>
           {data.findings.length === 0 ? (
             <p className="muted">No findings recorded for this strategy yet.</p>
           ) : (
             data.findings.map((f, i) => (
               <div className="rel" key={f.id || i} style={{ marginBottom: 8 }}>
                 <span>
-                  <span className="badge">{f.evidence_grade}</span>{" "}
-                  <span className="badge">{f.status}</span>{" "}
-                  <span className="mono">{f.claim_kind}</span>
+                  <span className="badge">{gradeWord(f.evidence_grade)}</span>{" "}
+                  <span className="badge">{plainTech(STATUS_PLAIN, f.status)}</span>{" "}
+                  <span className="mono">{plainTech(KIND_PLAIN, f.claim_kind)}</span>
                 </span>
                 <p style={{ margin: 0 }}>{f.claim}</p>
               </div>
@@ -509,18 +640,21 @@ function InputsScreen({ strat }) {
       <Load data={coverage.data} err={coverage.err} loading={coverage.loading}>
         {(data) => (
         <div className="card">
-          <div className="sec-head">
-            <h3>Event coverage</h3>
+          <PanelHead id="coverage_inputs" title="Event coverage">
             <p>Recorded history available to test against.</p>
-          </div>
+          </PanelHead>
           <div className="statrow">
             <div className="stat">
               <span className="stat-num">{coverage.data.instruments}</span>
-              <span className="stat-lab">instruments</span>
+              <span className="stat-lab">
+                <Term text="How many different stocks have recorded history to test on." g="instrument / ticker / symbol">instruments</Term>
+              </span>
             </div>
             <div className="stat">
               <span className="stat-num">{coverage.data.events}</span>
-              <span className="stat-lab">events · {coverage.data.events_complete} complete</span>
+              <span className="stat-lab">
+                <Term k="events">events</Term> · {coverage.data.events_complete} <Term k="complete">complete</Term>
+              </span>
             </div>
             <div className="stat">
               <span className="stat-num">
@@ -534,7 +668,12 @@ function InputsScreen({ strat }) {
           <div className="table-scroll">
           <table className="labtable" style={{ marginTop: 8 }}>
             <thead>
-              <tr><th>Industry</th><th>Events</th><th>Instruments</th><th>Synthetic</th></tr>
+              <tr>
+                <th><Term k="industry">Industry</Term></th>
+                <th><Term k="events">Events</Term></th>
+                <th><Term text="How many different stocks in that industry have recorded events." g="instrument / ticker / symbol">Instruments</Term></th>
+                <th><Term k="synthetic">Synthetic</Term></th>
+              </tr>
             </thead>
             <tbody>
               {coverage.data.industries.map((r, i) => (
@@ -558,6 +697,12 @@ function InputsScreen({ strat }) {
 function VersionsScreen({ strat }) {
   const { data, err, loading } = useFetch([strat], () =>
     api(`/admin/lab/strategies/${strat}/versions`));
+  const { floors } = useContext(LabUI);
+  // Best effort: the server's one-sentence verdict on the live version
+  // (lab_release.py performance payload). Silent when unavailable.
+  const perf = useFetch([strat], () =>
+    api(`/admin/lab/strategies/${strat}/performance`).catch(() => ({ metrics: null })));
+  const verdict = perf.data && perf.data.metrics;
   const [a, setA] = useState("");
   const [b, setB] = useState("");
   const [diff, setDiff] = useState(null);
@@ -584,12 +729,11 @@ function VersionsScreen({ strat }) {
     setMatching(true);
     setMatchErr("");
     try {
+      // MATCHED_SPEC (plain.jsx) is also what the disclosure sentence
+      // beside the button describes, so the two cannot drift apart.
       const base = {
         strategy_key: strat,
-        window: { from: null, to: null },
-        event_kinds: ["earnings"],
-        hit_definition: { price_move_pct: 20, volume_spike_x: 3, combine: "or", window: "tight" },
-        baselines: ["all_events"],
+        ...MATCHED_SPEC,
         hypothesis: `Same-events comparison of v${a} and v${b} on the fixture earnings set.`,
       };
       for (const vn of [Number(a), Number(b)]) {
@@ -605,10 +749,21 @@ function VersionsScreen({ strat }) {
   };
   const PerformanceStrip = ({ p }) => (
     <div className="card">
-      <h3>Performance on the same events</h3>
+      <PanelHead id="performance" title="Performance on the same events">
+        <p>
+          Both versions scored on {p.events_in_scope ?? "the same"} identical events with one shared
+          spec. When the Lab runs the pair itself it uses: {matchedSpecShort()}.
+        </p>
+      </PanelHead>
       <table className="labtable">
         <thead>
-          <tr><th>Version</th><th>Hit rate</th><th>Hits</th><th>n</th><th>95% CI</th></tr>
+          <tr>
+            <th><Term k="version">Version</Term></th>
+            <th><Term k="hit_rate">Hit rate</Term></th>
+            <th><Term k="hits">Hits</Term></th>
+            <th><Term k="n">n</Term></th>
+            <th><Term k="ci95">95% CI</Term></th>
+          </tr>
         </thead>
         <tbody>
           <tr>
@@ -628,11 +783,11 @@ function VersionsScreen({ strat }) {
         </tbody>
       </table>
       <p className="muted">
-        difference {p.difference == null ? "—" : pct(p.difference)}
+        <Term k="difference">difference</Term> {p.difference == null ? "—" : pct(p.difference)}
         {p.difference_ci95 && p.difference_ci95[0] != null && (
-          <> (95% {pct(p.difference_ci95[0])} to {pct(p.difference_ci95[1])})</>
+          <> (<Term k="ci95">95% CI</Term> {pct(p.difference_ci95[0])} to {pct(p.difference_ci95[1])})</>
         )}
-        {p.p_value != null && <> · p {p.p_value}</>}
+        {p.p_value != null && <> · <Term k="p">p</Term> {p.p_value}</>}
       </p>
       <p className={p.verdict.state === "better" ? "notice" : p.verdict.state === "worse" ? "errorbox" : "muted"} style={p.verdict.state === "better" || p.verdict.state === "worse" ? undefined : { margin: 0 }}>
         {p.verdict.text}
@@ -640,42 +795,59 @@ function VersionsScreen({ strat }) {
       {p.warnings.length > 0 && (
         <div className="rel" style={{ marginTop: 8 }}>
           {p.warnings.map((w, i) => (
-            <span className="badge warn" key={i} title={w.text}>{w.code}</span>
+            <WarnBadge w={w} floors={floors} key={i} />
           ))}
         </div>
       )}
     </div>
   );
-  const DiffList = ({ title, items }) =>
+  const DiffList = ({ title, items, kind }) =>
     items.length === 0 ? null : (
       <div className="card">
-        <h3>{title}</h3>
+        <PanelHead id={`diff-${kind}`} title={title} {...PANELS.diff} />
         <table className="labtable">
           <thead>
-            <tr><th>Key</th><th>Before</th><th>After</th></tr>
+            <tr>
+              <th><Term k="key">Key</Term></th>
+              <th><Term k="before">Before</Term></th>
+              <th><Term k="after">After</Term></th>
+            </tr>
           </thead>
           <tbody>
             {items.map((it, i) => (
               <tr key={i}>
                 <td className="mono">{it.key}</td>
-                <td className="mono">{JSON.stringify(it.before)}</td>
-                <td className="mono">{JSON.stringify(it.after)}</td>
+                <td>{fmtValue(it.before, kind) ?? <span className="mono">{JSON.stringify(it.before)}</span>}</td>
+                <td>{fmtValue(it.after, kind) ?? <span className="mono">{JSON.stringify(it.after)}</span>}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        <RawValues data={items} sentence="The stored before and after values, exactly as the engine reads them." />
       </div>
     );
   return (
     <div className="labstack">
+      {verdict && verdict.answer_head && (
+        <div className="card oneline">
+          <PanelHead
+            id="oneline"
+            title="In one sentence"
+            plain={`v${verdict.version_number} · ${plainTech(VERSION_STATE_PLAIN, verdict.state)} · the server's own verdict`}
+          />
+          <p className="oneline-answer">
+            <strong>{verdict.answer_head}</strong> {verdict.answer}
+          </p>
+          {verdict.answer_note && <p className="muted oneline-note">{verdict.answer_note}</p>}
+        </div>
+      )}
       <Load data={data} err={err} loading={loading}>
         {(data) => (
           <>
         <div className="card">
-          <div className="sec-head">
-            <h3>History</h3>
+          <PanelHead id="history" title="History">
             <p>Newest first.</p>
-          </div>
+          </PanelHead>
           {data.versions.length === 0 ? (
             <p className="muted">No versions recorded.</p>
           ) : (
@@ -698,10 +870,10 @@ function VersionsScreen({ strat }) {
           )}
         </div>
         <div className="card">
-          <div className="sec-head">
-            <h3>Compare two versions</h3>
+          <PanelHead id="compare" title="Compare two versions">
             <p>Both must run on the same events, or the difference means nothing.</p>
-          </div>
+            <p className="floors-note">{floorsSentence(floors)}</p>
+          </PanelHead>
           <div className="formrow">
             <label className="labfield">
               Earlier version
@@ -734,18 +906,19 @@ function VersionsScreen({ strat }) {
                 diff.band_cutoffs.length === 0 && (
                   <p className="muted">No differences in filters, weights or cutoffs between these two versions.</p>
                 )}
-              <DiffList title="Hard filters" items={diff.hard_filters} />
-              <DiffList title="Component weights" items={diff.component_weights} />
-              <DiffList title="Band cutoffs" items={diff.band_cutoffs} />
+              <DiffList title="Hard filters" items={diff.hard_filters} kind="filters" />
+              <DiffList title="Component weights" items={diff.component_weights} kind="weights" />
+              <DiffList title="Band cutoffs" items={diff.band_cutoffs} kind="bands" />
               {diff.performance && diff.performance.matched ? (
                 <PerformanceStrip p={diff.performance} />
               ) : (
                 <div className="card">
-                  <h3>Performance on the same events</h3>
+                  <PanelHead id="performance" title="Performance on the same events" />
                   <p className="muted">
                     No existing run covers both versions with an identical spec, so there is
                     nothing fair to compare yet. Running both now on one shared event set fixes that.
                   </p>
+                  <p className="muted">{matchedSpecSentence()}</p>
                   <button className="btn btn-primary" onClick={runMatched} disabled={matching}>
                     {matching ? "Running…" : "Run both versions on the same events"}
                   </button>
@@ -795,6 +968,7 @@ function BacktestScreen({ strat, onCite }) {
   const [result, setResult] = useState(null);
   const [runErr, setRunErr] = useState("");
   const resultRef = useRef(null);
+  const { floors } = useContext(LabUI);
 
   useEffect(() => {
     if (result || runErr) {
@@ -858,11 +1032,18 @@ function BacktestScreen({ strat, onCite }) {
 
   const GroupRows = ({ rows }) => (
     <table className="labtable">
-      <caption className="mono">groups</caption>
+      <caption className="mono">
+        groups <span className="caption-plain">· stocks split by whether they passed the rules</span>
+      </caption>
       <thead>
         <tr>
-          <th>Group</th><th>n</th><th>Hits</th><th>Hit rate</th><th>95% CI</th>
-          <th>Instruments</th><th>Warnings</th>
+          <th><Term k="group">Group</Term></th>
+          <th><Term k="n">n</Term></th>
+          <th><Term k="hits">Hits</Term></th>
+          <th><Term k="hit_rate">Hit rate</Term></th>
+          <th><Term k="ci95">95% CI</Term></th>
+          <th><Term k="instruments">Instruments</Term></th>
+          <th><Term k="warnings">Warnings</Term></th>
         </tr>
       </thead>
       <tbody>
@@ -876,9 +1057,7 @@ function BacktestScreen({ strat, onCite }) {
             <td>{g.distinct_instruments}</td>
             <td>
               {g.warnings.length
-                ? g.warnings.map((w, i) => (
-                    <span className={`badge ${w.severity}`} key={i} title={w.text}>{w.code}</span>
-                  ))
+                ? g.warnings.map((w, i) => <WarnBadge w={w} floors={floors} key={i} />)
                 : "—"}
             </td>
           </tr>
@@ -889,9 +1068,17 @@ function BacktestScreen({ strat, onCite }) {
 
   const BaseRows = ({ rows }) => (
     <table className="labtable">
-      <caption className="mono">baselines</caption>
+      <caption className="mono">
+        baselines <span className="caption-plain">· what the pass group is compared with</span>
+      </caption>
       <thead>
-        <tr><th>Baseline</th><th>n</th><th>Hits</th><th>Hit rate</th><th>95% CI</th></tr>
+        <tr>
+          <th><Term k="baseline">Baseline</Term></th>
+          <th><Term k="n">n</Term></th>
+          <th><Term k="hits">Hits</Term></th>
+          <th><Term k="hit_rate">Hit rate</Term></th>
+          <th><Term k="ci95">95% CI</Term></th>
+        </tr>
       </thead>
       <tbody>
         {rows.map((b, i) => (
@@ -911,10 +1098,9 @@ function BacktestScreen({ strat, onCite }) {
     <>
       <form onSubmit={run} className="labstack">
         <section className="lab-step">
-          <div className="sec-head">
-            <h3><span className="stepnum">1</span> Which version to test</h3>
+          <PanelHead id="step1" title={<><span className="stepnum">1</span> Which version to test</>}>
             <p>Runs the rules as they stood at that point in time.</p>
-          </div>
+          </PanelHead>
           <label className="labfield" style={{ maxWidth: 280 }}>
             Version
             <select aria-label="Version" value={ver} onChange={(e) => setVer(e.target.value)}>
@@ -926,10 +1112,9 @@ function BacktestScreen({ strat, onCite }) {
           </label>
         </section>
         <section className="lab-step">
-          <div className="sec-head">
-            <h3><span className="stepnum">2</span> Which stocks to test on</h3>
+          <PanelHead id="step2" title={<><span className="stepnum">2</span> Which stocks to test on</>}>
             <p>Every stock the strategy can see, unless you narrow it.</p>
-          </div>
+          </PanelHead>
           <Collapsible
             title="Narrow the universe"
             subtitle={universeIsSet ? universeSummary : "using the full universe"}
@@ -941,10 +1126,10 @@ function BacktestScreen({ strat, onCite }) {
               <input value={tickers} onChange={(e) => setTickers(e.target.value)} placeholder="PDYN, LEU" />
             </label>
             <label className="labfield">
-              Market cap band (USD)
+              Market cap band (USD millions)
               <span style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 6, minWidth: 0 }}>
-                <input type="number" placeholder="lo (USD)" value={capLo} onChange={(e) => setCapLo(e.target.value)} />
-                <input type="number" placeholder="hi (USD)" value={capHi} onChange={(e) => setCapHi(e.target.value)} />
+                <input type="number" placeholder="e.g. 300" value={capLo} onChange={(e) => setCapLo(e.target.value)} />
+                <input type="number" placeholder="e.g. 3000" value={capHi} onChange={(e) => setCapHi(e.target.value)} />
               </span>
             </label>
             <label className="labfield">
@@ -977,10 +1162,9 @@ function BacktestScreen({ strat, onCite }) {
           </Collapsible>
         </section>
         <section className="lab-step">
-          <div className="sec-head">
-            <h3><span className="stepnum">3</span> What counts as a hit</h3>
+          <PanelHead id="step3" title={<><span className="stepnum">3</span> What counts as a hit</>}>
             <p>Pick the events, then set how big a move counts.</p>
-          </div>
+          </PanelHead>
           <div>
             <span className="labfield-label">
               Events to test
@@ -1017,20 +1201,22 @@ function BacktestScreen({ strat, onCite }) {
           </p>
         </section>
         <section className="lab-step">
-          <div className="sec-head">
-            <h3><span className="stepnum">4</span> What to compare against</h3>
+          <PanelHead id="step4" title={<><span className="stepnum">4</span> What to compare against</>}>
             <p>A hit rate alone means little. 30% is only good if random days do worse.</p>
-          </div>
+          </PanelHead>
           <div className="chiprow">
             <Chip label="All selected events" on={baselines.includes("all_events")} onClick={() => toggle(baselines, setBaselines, "all_events")} />
             <Chip label="Random trading days" on={baselines.includes("random_day")} onClick={() => toggle(baselines, setBaselines, "random_day")} />
           </div>
+          <p className="floors-note">{floorsSentence(floors)}</p>
         </section>
         <section className="lab-step">
-          <div className="sec-head">
-            <h3><span className="stepnum">5</span> Record what you expected <span className="muted">(optional)</span></h3>
+          <PanelHead
+            id="step5"
+            title={<><span className="stepnum">5</span> Record what you expected <span className="muted">(optional)</span></>}
+          >
             <p>Fill this in only if the result might become a finding.</p>
-          </div>
+          </PanelHead>
           <Collapsible
             title="Record a hypothesis"
             subtitle={advancedIsSet ? advancedSummary : "not recorded"}
@@ -1044,7 +1230,10 @@ function BacktestScreen({ strat, onCite }) {
             <label className="labfield">
               Family key
               <span className="labfield-inline-help">
-                <Help text="Group repeated tests of the same idea under one family key. Test the same hypothesis five times and one of those runs will look good by chance alone; the family key applies a statistical correction (Holm-Bonferroni) so a lucky run doesn't get mistaken for a real result." />
+                <Help
+                  text="Group repeated tests of the same idea under one family key. Test the same hypothesis five times and one of those runs will look good by chance alone; the family key applies a statistical correction (Holm-Bonferroni) so a lucky run doesn't get mistaken for a real result."
+                  g="family key (line of inquiry)"
+                />
               </span>
               <input value={family} onChange={(e) => setFamily(e.target.value)} placeholder="e.g. si-growth-2026" />
             </label>
@@ -1066,20 +1255,24 @@ function BacktestScreen({ strat, onCite }) {
           <>
             {result.provenance.synthetic_data_used && (
               <div className="banner" style={{ marginBottom: 12 }}>
-                These results were computed on synthetic sandbox fixtures. Records in the
-                provenance notes which source produced them.
+                These results were computed on synthetic sandbox fixtures, so they are a
+                rehearsal, not evidence. The Provenance section below names the source that
+                produced them.
               </div>
             )}
             {result.cached && (
               <p className="notice">Served from an earlier identical query (#{result.cached_from_query_id}); still audited as a new run.</p>
             )}
             <div className="card">
-              <div className="result-head">
-                <h3 style={{ margin: 0 }}>Result · query #{result.query_id}</h3>
-                <button type="button" className="btn" onClick={() => onCite(result.query_id)}>
-                  Cite this run in a finding
-                </button>
-              </div>
+              <PanelHead
+                id="result"
+                title={<>Result · <Term k="query_id">query #{result.query_id}</Term></>}
+                actions={
+                  <button type="button" className="btn" onClick={() => onCite(result.query_id)}>
+                    Cite this run in a finding
+                  </button>
+                }
+              />
               {result.warnings.length > 0 && (
                 <div style={{ marginBottom: 8 }}>
                   {result.warnings.map((w, i) => (
@@ -1096,29 +1289,34 @@ function BacktestScreen({ strat, onCite }) {
                 <div className="rel" style={{ marginTop: 12 }}>
                   <h4>Pass group vs {result.comparison.vs}</h4>
                   <dl className="kv">
-                    <dt>difference</dt><dd className="rate">{pct(result.comparison.difference)}</dd>
-                    <dt>test</dt><dd>{result.comparison.test}</dd>
-                    <dt>p</dt><dd className="mono">{result.comparison.p_value}</dd>
-                    <dt>p (Holm)</dt><dd className="mono">{result.comparison.p_value_adjusted}</dd>
-                    <dt>family</dt><dd>{result.comparison.adjustment.family_key || "—"} · {result.comparison.adjustment.tests_in_family} tests</dd>
+                    <dt><Term k="difference">difference</Term></dt><dd className="rate">{pct(result.comparison.difference)}</dd>
+                    <dt><Term k="test">test</Term></dt><dd>{result.comparison.test}</dd>
+                    <dt><Term k="p">p</Term></dt><dd className="mono">{result.comparison.p_value}</dd>
+                    <dt><Term k="p_holm">p (Holm)</Term></dt><dd className="mono">{result.comparison.p_value_adjusted}</dd>
+                    <dt><Term k="family">family</Term></dt><dd>{result.comparison.adjustment.family_key || "—"} · {result.comparison.adjustment.tests_in_family} tests</dd>
                   </dl>
                 </div>
               )}
               <details style={{ marginTop: 12 }}>
-                <summary className="muted">Provenance · {result.provenance.events_in_scope} events in scope</summary>
+                <summary className="muted">
+                  Provenance (where the data came from) · {result.provenance.events_in_scope} events in scope
+                </summary>
+                <p className="muted" style={{ margin: "8px 0 0" }}>
+                  What went into this run and what was left out.
+                </p>
                 <dl className="kv" style={{ marginTop: 8 }}>
                   <dt>events (after universe)</dt><dd>{result.provenance.events_total_after_universe}</dd>
                   <dt>excluded</dt><dd>{result.provenance.events_excluded}</dd>
-                  <dt>assumed versions</dt><dd>{result.provenance.version_confidence_assumed_count} scores</dd>
-                  <dt>synthetic</dt><dd>{result.provenance.synthetic_data_used ? "yes" : "no"}</dd>
-                  <dt>sources</dt><dd><span className="mono">{result.provenance.sources.join("; ")}</span></dd>
+                  <dt><Term text="Scores made before version tracking; the exact rules behind them cannot be confirmed." g="assumed version">assumed versions</Term></dt><dd>{result.provenance.version_confidence_assumed_count} scores</dd>
+                  <dt><Term k="synthetic">synthetic</Term></dt><dd>{result.provenance.synthetic_data_used ? "yes" : "no"}</dd>
+                  <dt><Term text="The feeds the inputs came from." g="data source (feed)">sources</Term></dt><dd><span className="mono">{result.provenance.sources.join("; ")}</span></dd>
                 </dl>
                 {result.provenance.exclusions.length > 0 && (
                   <table className="labtable">
                     <tbody>
                       {result.provenance.exclusions.map((x, i) => (
                         <tr key={i}>
-                          <td className="mono">{x.reason}</td>
+                          <td>{plainTech(EXCLUSION_PLAIN, x.reason)}</td>
                           <td>{x.count}</td>
                         </tr>
                       ))}
@@ -1191,7 +1389,7 @@ function FindingsScreen({ citeQueryId }) {
     <div className="labgrid">
       <div className="card">
         <form onSubmit={create} style={{ display: "grid", gap: 12 }}>
-          <h3>Record a finding</h3>
+          <PanelHead id="record" title="Record a finding" className="in-grid" />
           {formErr && <div className="errorbox">{formErr}</div>}
           <div aria-live="polite">
             {saved && <p className="notice" style={{ margin: 0 }}>{saved}</p>}
@@ -1219,7 +1417,7 @@ function FindingsScreen({ citeQueryId }) {
               Kind
               <select value={form.claim_kind} onChange={(e) => setForm({ ...form, claim_kind: e.target.value })}>
                 {KINDFIELDS.map((k) => (
-                  <option key={k} value={k}>{k}</option>
+                  <option key={k} value={k}>{plainTech(KIND_PLAIN, k)}</option>
                 ))}
               </select>
             </label>
@@ -1237,6 +1435,7 @@ function FindingsScreen({ citeQueryId }) {
       </div>
       <div className="labgrid" style={{ alignContent: "start" }}>
         <div className="card" style={{ display: "grid", gap: 10 }}>
+          <PanelHead id="findings" title="Findings" className="in-grid" />
           <div className="formrow">
             <label className="labfield">
               Strategy filter
@@ -1247,7 +1446,7 @@ function FindingsScreen({ citeQueryId }) {
               <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                 <option value="">any</option>
                 {STATUSES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                  <option key={s} value={s}>{plainTech(STATUS_PLAIN, s)}</option>
                 ))}
               </select>
             </label>
@@ -1265,9 +1464,9 @@ function FindingsScreen({ citeQueryId }) {
                     onClick={() => setOpenId(openId === f.id ? null : f.id)}
                     aria-expanded={openId === f.id}
                   >
-                    <span className="badge">{f.evidence_grade}</span>{" "}
-                    <span className="badge">{f.status}</span>{" "}
-                    <span className="mono">{f.claim_kind}</span>{" "}
+                    <span className="badge">{gradeWord(f.evidence_grade)}</span>{" "}
+                    <span className="badge">{plainTech(STATUS_PLAIN, f.status)}</span>{" "}
+                    <span className="mono">{plainTech(KIND_PLAIN, f.claim_kind)}</span>{" "}
                     <span className="mono muted">#{f.id} · {f.strategy}</span>
                     <p style={{ margin: "8px 0 0" }}>{f.title}</p>
                   </button>
@@ -1297,7 +1496,7 @@ function FindingDetail({ fid, grade }) {
     try {
       const d = await api(`/admin/lab/findings/${fid}`, { method: "PATCH", json: { status: s } });
       setStatus(d.status);
-      setMsg("status updated; evidence grade is computed, not editable");
+      setMsg("Status updated. The evidence grade is computed from the linked runs and cannot be edited.");
     } catch (ex) {
       setMsg(ex.message);
     }
@@ -1309,7 +1508,7 @@ function FindingDetail({ fid, grade }) {
         method: "POST",
         json: { lab_query_id: Number(addQ), relation: addRel },
       });
-      setMsg(`linked; evidence grade now ${d.evidence_grade}`);
+      setMsg(`Run linked. The evidence grade is now ${gradeWord(d.evidence_grade)}.`);
       setAddQ("");
     } catch (ex) {
       setMsg(ex.message);
@@ -1319,7 +1518,7 @@ function FindingDetail({ fid, grade }) {
     setMsg("");
     try {
       const d = await api(`/admin/lab/findings/${fid}/queries/${lqid}`, { method: "DELETE" });
-      setMsg(`unlinked; evidence grade now ${d.evidence_grade}`);
+      setMsg(`Run unlinked. The evidence grade is now ${gradeWord(d.evidence_grade)}.`);
     } catch (ex) {
       setMsg(ex.message);
     }
@@ -1329,17 +1528,20 @@ function FindingDetail({ fid, grade }) {
       <Load data={data} err={err} loading={loading}>
         {(data) => (
           <>
+        <PanelHead id="finding" title={`Finding #${fid}`} />
         <p style={{ marginTop: 0 }}>{data.claim}</p>
         <div className="formrow">
           <label className="labfield">
             Status
             <select value={status} onChange={(e) => patchStatus(e.target.value)}>
               {STATUSES.map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s}>{plainTech(STATUS_PLAIN, s)}</option>
               ))}
             </select>
           </label>
-          <p className="muted" style={{ alignSelf: "end" }}>evidence grade: <span className="badge">{grade}</span></p>
+          <p className="muted" style={{ alignSelf: "end" }}>
+            <Term k="evidence">evidence grade</Term>: <span className="badge">{gradeWord(grade)}</span>
+          </p>
         </div>
         {data.notes && <p className="muted">{data.notes}</p>}
         <h4>Linked queries</h4>
@@ -1348,7 +1550,7 @@ function FindingDetail({ fid, grade }) {
         ) : (
           data.queries.map((q) => (
             <div className="rel-select" key={q.id} style={{ marginBottom: 6 }}>
-              <span className="badge">{q.relation}</span>
+              <span className="badge">{plainTech(RELATION_PLAIN, q.relation)}</span>
               <span className="mono">#{q.id}</span>
               <span className="muted">{q.query_type} · {q.created_at}</span>
               <button className="btn" style={{ marginLeft: "auto" }} onClick={() => del(q.id)}>Unlink</button>
@@ -1364,9 +1566,9 @@ function FindingDetail({ fid, grade }) {
             aria-label="Query id"
           />
           <select value={addRel} onChange={(e) => setAddRel(e.target.value)}>
-            <option value="supports">supports</option>
-            <option value="contradicts">contradicts</option>
-            <option value="replicates">replicates</option>
+            <option value="supports">{plainTech(RELATION_PLAIN, "supports")}</option>
+            <option value="contradicts">{plainTech(RELATION_PLAIN, "contradicts")}</option>
+            <option value="replicates">{plainTech(RELATION_PLAIN, "replicates")}</option>
           </select>
           <button className="btn btn-primary" onClick={add}>Link query</button>
         </div>
@@ -1382,7 +1584,7 @@ function LogScreen() {
   const { data, err, loading } = useFetch([], () => api("/admin/lab/queries?limit=100"));
   return (
     <div className="card">
-      <h3>Query audit log</h3>
+      <PanelHead id="log" title="Query audit log" />
       <Load data={data} err={err} loading={loading}>
         {(data) => (
         data.queries.length === 0 ? (
@@ -1391,8 +1593,14 @@ function LogScreen() {
           <table className="labtable">
             <thead>
               <tr>
-                <th>#</th><th>Strategy</th><th>Status</th><th>By</th>
-                <th>Family</th><th>Hypothesis</th><th>Hash</th><th>At</th>
+                <th><Term k="query_id">#</Term></th>
+                <th><Term k="strategy">Strategy</Term></th>
+                <th><Term k="query_status">Status</Term></th>
+                <th><Term k="by">By</Term></th>
+                <th><Term k="family_key">Family</Term></th>
+                <th><Term k="hypothesis">Hypothesis</Term></th>
+                <th><Term k="hash">Hash</Term></th>
+                <th><Term k="at">At</Term></th>
               </tr>
             </thead>
             <tbody>
@@ -1400,7 +1608,7 @@ function LogScreen() {
                 <tr key={q.id}>
                   <td className="mono">{q.id}</td>
                   <td>{q.strategy}</td>
-                  <td><span className="badge">{q.status}</span></td>
+                  <td><span className="badge">{plainTech(QUERY_STATUS_PLAIN, q.status)}</span></td>
                   <td className="mono">{q.by}</td>
                   <td className="mono">{q.family_key || "—"}</td>
                   <td>{q.hypothesis || "—"}</td>
@@ -1417,6 +1625,7 @@ function LogScreen() {
 }
 
 const WALKTHROUGH_SEEN_KEY = "lab_walkthrough_seen";
+const INTRO_SEEN_KEY = "lab_intro_seen";
 const STRATEGY_SCREENS = ["inputs", "versions", "backtest"];
 
 function LabApp() {
@@ -1439,6 +1648,26 @@ function LabApp() {
       /* ignore */
     }
   };
+  // "What this lab is" shows on Strategies until dismissed; "What is this?"
+  // in the top bar brings it back.
+  const [introSeen, setIntroSeen] = useLocalFlag(INTRO_SEEN_KEY, false);
+  // The glossary drawer, opened from the top bar and from every Term's
+  // "more" link; focus returns to whatever opened it.
+  const [glossary, setGlossary] = useState({ open: false, term: null });
+  const glossaryTrigger = useRef(null);
+  const openGlossary = (term, trigger) => {
+    glossaryTrigger.current = trigger || document.activeElement;
+    setGlossary({ open: true, term: term || null });
+  };
+  const closeGlossary = () => {
+    setGlossary({ open: false, term: null });
+    const t = glossaryTrigger.current;
+    glossaryTrigger.current = null;
+    if (t && typeof t.focus === "function") setTimeout(() => t.focus(), 0);
+  };
+  // The floors come from the API so the copy cannot drift from lab.py;
+  // the literals in plain.jsx are only the fallback.
+  const floors = withFloors(strategies && strategies.floors);
   useEffect(() => {
     if (!strat && strategies) {
       const first = strategies.strategies[0];
@@ -1455,6 +1684,14 @@ function LabApp() {
     setCiteQueryId(null);
     setScreen(id);
   };
+  const goStartHere = (item) => {
+    if (item.glossary) {
+      openGlossary(null, null);
+      return;
+    }
+    if (item.strat) go(strat, item.screen);
+    else navTo(item.screen);
+  };
   const tab = (label, id) => (
     <button className={screen === id ? "active" : ""} onClick={() => navTo(id)}>
       {label}
@@ -1470,10 +1707,11 @@ function LabApp() {
     </button>
   );
   return (
-    <>
+    <LabUI.Provider value={{ openGlossary, floors }}>
       <div className="labbar">
         <span className="mark">LB</span>
         <span className="surface-name">Analysis engine</span>
+        <span className="surface-note">Internal. Subscribers never see this.</span>
         <nav className="labnav">
           <button
             className={screen === "strategies" || STRATEGY_SCREENS.includes(screen) ? "active" : ""}
@@ -1486,7 +1724,22 @@ function LabApp() {
           {tab("Log", "log")}
         </nav>
         <span style={{ flex: 1 }} />
-        <span className="muted mono">{strategies ? `${strategies.events_total} fixture events` : ""}</span>
+        <span
+          className="muted mono labbar-count"
+          title="Dated events in the sandbox test set. Today all of them are synthetic fixtures."
+        >
+          {strategies ? `${strategies.events_total} events in the test set` : ""}
+        </span>
+        <button
+          className="btn"
+          onClick={() => {
+            setIntroSeen(false);
+            navTo("strategies");
+          }}
+        >
+          What is this?
+        </button>
+        <button className="btn" onClick={(e) => openGlossary(null, e.currentTarget)}>Glossary</button>
         <button className="btn" onClick={() => setShowWalk(true)}>Guide</button>
         <button
           className="btn"
@@ -1498,7 +1751,7 @@ function LabApp() {
           Sign out
         </button>
       </div>
-      {showWalk && <Walkthrough onClose={closeWalk} />}
+      {showWalk && <Walkthrough onClose={closeWalk} onGo={goStartHere} />}
       <div className="labwrap">
         {err && <div className="errorbox">{err}</div>}
         {STRATEGY_SCREENS.includes(screen) && (
@@ -1530,6 +1783,9 @@ function LabApp() {
           </div>
         )}
         <p className="labscreen-intro">{SCREEN_INTROS[screen]}</p>
+        {screen === "strategies" && !introSeen && (
+          <LabIntro onDismiss={() => setIntroSeen(true)} onGo={goStartHere} />
+        )}
         {screen === "strategies" && (
           <StrategiesScreen strategies={strategies} onPick={go} />
         )}
@@ -1559,7 +1815,8 @@ function LabApp() {
           strategies <b>{options.length || "—"}</b>
         </span>
         <span>
-          fixture events <b>{strategies ? strategies.events_total : "—"}</b>
+          events in the test set <b>{strategies ? strategies.events_total : "—"}</b>{" "}
+          <span className="labstatus-dim">(synthetic fixtures)</span>
         </span>
         <span>
           screen <b>{screen.toUpperCase()}</b>
@@ -1567,11 +1824,12 @@ function LabApp() {
         </span>
         <span className="spacer" />
         <span>synthetic rows never leave this surface</span>
-        <span>
+        <button type="button" className="labstatus-btn" onClick={() => setShowWalk(true)}>
           <b>?</b> guide
-        </span>
+        </button>
       </div>
-    </>
+      <GlossaryDrawer open={glossary.open} term={glossary.term} onClose={closeGlossary} />
+    </LabUI.Provider>
   );
 }
 

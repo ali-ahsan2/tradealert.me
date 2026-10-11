@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createChart, CrosshairMode } from "lightweight-charts";
 import { api } from "../api.js";
+import { PanelHead, Term, SOURCE_STATUS_PLAIN, plainTech } from "./plain.jsx";
 
 function pctCell(v) {
   if (v === null || v === undefined) return <span className="muted">—</span>;
@@ -117,8 +118,13 @@ function SourcesTable({ data }) {
       <table className="labtable">
         <thead>
           <tr>
-            <th>Source</th><th>Provides</th><th>Last run</th><th>Result</th>
-            <th>Rows</th><th>Every</th><th>Next</th>
+            <th><Term k="feed">Source</Term></th>
+            <th><Term k="provides">Provides</Term></th>
+            <th><Term k="last_run">Last run</Term></th>
+            <th><Term k="result">Result</Term></th>
+            <th><Term k="rows">Rows</Term></th>
+            <th><Term k="every">Every</Term></th>
+            <th><Term k="next">Next</Term></th>
           </tr>
         </thead>
         <tbody>
@@ -139,7 +145,7 @@ function SourcesTable({ data }) {
                 <span className={`badge ${s.last_status === "ok" ? "ok"
                   : s.last_status === "partial" ? "warn"
                   : s.last_status === "failed" ? "block" : ""}`}>
-                  {s.last_status}
+                  {plainTech(SOURCE_STATUS_PLAIN, s.last_status)}
                 </span>
               </td>
               <td className="mono">{s.rows ? s.rows.toLocaleString() : "—"}</td>
@@ -195,10 +201,9 @@ export default function ReportsScreen() {
   return (
     <div className="labstack">
       <div className="card">
-        <div className="sec-head">
-          <h3>Reporting</h3>
+        <PanelHead id="reporting" title="Reporting">
           <p>Where the data comes from, and what it shows at every level.</p>
-        </div>
+        </PanelHead>
         <nav className="labsubnav rep-nav">
           {tab("sources", "Sources")}
           {tab("universe", "Universe")}
@@ -212,35 +217,40 @@ export default function ReportsScreen() {
       {level === "sources" && sources && (
         <>
           <div className="card">
-            <div className="sec-head">
-              <h3>Data sources</h3>
+            <PanelHead id="sources" title="Data sources">
               <p>Each feed, when it last ran and when it runs next.</p>
-            </div>
+            </PanelHead>
             <SourcesTable data={sources} />
           </div>
           <div className="card">
-            <div className="sec-head"><h3>Coverage</h3></div>
+            <PanelHead id="coverage" title="Coverage" />
             <div className="statrow">
               <div className="stat">
                 <span className="stat-num">{sources.coverage.symbols}</span>
-                <span className="stat-lab">symbols with price history</span>
+                <span className="stat-lab"><Term k="symbols_hist">symbols with price history</Term></span>
               </div>
               <div className="stat">
                 <span className="stat-num">{Number(sources.coverage.bars).toLocaleString()}</span>
-                <span className="stat-lab">daily bars</span>
+                <span className="stat-lab"><Term k="bars">daily bars</Term></span>
               </div>
               <div className="stat">
                 <span className="stat-num">{String(sources.coverage.first_bar || "—")}</span>
-                <span className="stat-lab">earliest</span>
+                <span className="stat-lab"><Term k="earliest">earliest</Term></span>
               </div>
               <div className="stat">
                 <span className="stat-num">{String(sources.coverage.last_bar || "—")}</span>
-                <span className="stat-lab">latest</span>
+                <span className="stat-lab"><Term k="latest">latest</Term></span>
               </div>
             </div>
             <table className="labtable" style={{ marginTop: 12 }}>
               <thead>
-                <tr><th>Events</th><th>Kind</th><th>Count</th><th>Hits</th><th>Hit rate</th></tr>
+                <tr>
+                  <th><Term k="real_or_synthetic">Events</Term></th>
+                  <th><Term k="kind">Kind</Term></th>
+                  <th><Term k="count">Count</Term></th>
+                  <th><Term k="hits">Hits</Term></th>
+                  <th><Term k="hit_rate_default">Hit rate</Term></th>
+                </tr>
               </thead>
               <tbody>
                 {sources.events.map((e, i) => (
@@ -264,14 +274,18 @@ export default function ReportsScreen() {
 
       {level === "universe" && uni && (
         <div className="card">
-          <div className="sec-head">
-            <h3>Universe by industry</h3>
+          <PanelHead id="universe" title="Universe by industry">
             <p>How much of each industry has usable data behind it.</p>
-          </div>
+          </PanelHead>
           <div className="table-scroll">
             <table className="labtable">
               <thead>
-                <tr><th>Industry</th><th>Instruments</th><th>With bars</th><th>Real events</th></tr>
+                <tr>
+                  <th><Term k="industry">Industry</Term></th>
+                  <th><Term k="instruments_count">Instruments</Term></th>
+                  <th><Term k="with_bars">With bars</Term></th>
+                  <th><Term k="real_events">Real events</Term></th>
+                </tr>
               </thead>
               <tbody>
                 {uni.industries.map((r) => (
@@ -306,15 +320,21 @@ export default function ReportsScreen() {
       {level === "market" && bench && (
         <>
           <div className="card">
-            <div className="sec-head">
-              <h3>Market, sectors and macro</h3>
+            <PanelHead id="market" title="Market, sectors and macro">
               <p>Click any row to chart it.</p>
-            </div>
+            </PanelHead>
             <div className="table-scroll">
               <table className="labtable">
                 <thead>
-                  <tr><th>Symbol</th><th>Name</th><th>Kind</th><th>Last</th>
-                    <th>30d</th><th>90d</th><th>Bars</th></tr>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Name</th>
+                    <th><Term k="bench_kind">Kind</Term></th>
+                    <th><Term k="last">Last</Term></th>
+                    <th><Term k="chg30">30d</Term></th>
+                    <th><Term k="chg90">90d</Term></th>
+                    <th><Term k="bars">Bars</Term></th>
+                  </tr>
                 </thead>
                 <tbody>
                   {bench.benchmarks.map((b) => (
@@ -363,40 +383,39 @@ export default function ReportsScreen() {
             </form>
           </div>
           <div className="card">
-            <div className="sec-head">
-              <h3>{sym}{stock?.industry ? ` · ${stock.industry}` : ""}</h3>
+            <PanelHead id="chart" title={`${sym}${stock?.industry ? ` · ${stock.industry}` : ""}`}>
               <p>Candles with volume. Circles mark recorded events; filled means it moved.</p>
-            </div>
+            </PanelHead>
             <PriceChart symbol={sym} days={days} markers={markers} />
           </div>
           {stock && (
             <div className="card">
-              <div className="sec-head"><h3>Data health</h3></div>
+              <PanelHead id="health" title="Data health" />
               <div className="statrow">
                 <div className="stat">
                   <span className="stat-num">{stock.coverage?.bars ?? 0}</span>
-                  <span className="stat-lab">bars stored</span>
+                  <span className="stat-lab"><Term k="bars_stored">bars stored</Term></span>
                 </div>
                 <div className="stat">
                   <span className="stat-num">{String(stock.coverage?.last || "—")}</span>
-                  <span className="stat-lab">latest bar</span>
+                  <span className="stat-lab"><Term k="latest_bar">latest bar</Term></span>
                 </div>
                 <div className="stat">
                   <span className="stat-num">
                     {stock.events?.reduce((a, e) => a + Number(e.n), 0) ?? 0}
                   </span>
-                  <span className="stat-lab">events</span>
+                  <span className="stat-lab"><Term k="events_count">events</Term></span>
                 </div>
                 {stock.benchmark && (
                   <div className="stat">
                     <span className="stat-num">{stock.benchmark.symbol}</span>
-                    <span className="stat-lab">sector benchmark</span>
+                    <span className="stat-lab"><Term k="sector_benchmark">sector benchmark</Term></span>
                   </div>
                 )}
               </div>
               {stock.ingest?.last_error && (
                 <div className="banner" style={{ marginTop: 12 }}>
-                  Last ingest error: {stock.ingest.last_error}
+                  Last ingest (data load) error: {stock.ingest.last_error}
                 </div>
               )}
             </div>

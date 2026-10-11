@@ -1279,3 +1279,513 @@ html[data-surface="lab"] ::selection {
   background: var(--selection-bg);
   color: var(--selection-fg);
 }
+
+
+/* ---------- v6: the plain-language layer (DESIGN_V6 section 9) ----------
+   Everything below is additive. Layout, data and controls stay where they
+   are; these rules only dress the plain labels, the term tooltips, the
+   panel explanations, the glossary drawer and the intro panel. Sentences
+   use --ink-muted, never --ink-faint, so they read on the dark surface. */
+
+/* Panel heads: technical title, plain label beside it, "Explain" toggle. */
+.panelhead-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2) var(--s-3);
+  flex-wrap: wrap;
+}
+
+.panelhead-row h3 {
+  margin: 0;
+}
+
+.panelhead-plain {
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+}
+
+.panelhead-toggle {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ink-muted);
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: var(--r-sm);
+  padding: 1px 7px;
+  cursor: pointer;
+}
+
+.panelhead-toggle:hover,
+.panelhead-toggle[aria-expanded="true"] {
+  border-color: var(--info);
+  color: var(--info);
+}
+
+.panelhead-actions {
+  margin-left: auto;
+}
+
+.panelhead-body {
+  display: grid;
+  gap: var(--s-2);
+  margin: var(--s-2) 0 0;
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+.panelhead-body > div {
+  display: grid;
+  grid-template-columns: 124px minmax(0, 1fr);
+  gap: var(--s-3);
+}
+
+.panelhead-body dt {
+  padding-top: 2px;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.panelhead-body dd {
+  margin: 0;
+  color: var(--ink);
+}
+
+/* Inside a grid card the card's own gap carries the rhythm. */
+.panelhead.in-grid {
+  margin-bottom: 0;
+}
+
+/* Under a numbered step the explanation aligns with the heading text. */
+.lab-step .panelhead-body {
+  margin-left: calc(26px + 10px);
+}
+
+@media (max-width: 640px) {
+  .panelhead-body > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .lab-step .panelhead-body {
+    margin-left: 0;
+  }
+}
+
+/* Term tooltips: the header text stays; the expansion lives in the pop. */
+.labterm {
+  display: inline;
+}
+
+.labterm-btn {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+.labterm-btn:hover,
+.labterm-btn[aria-expanded="true"] {
+  color: var(--info);
+  text-decoration-color: var(--info);
+}
+
+.labterm-btn:focus-visible,
+.labhelp-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+  border-radius: 2px;
+}
+
+/* Fixed, so a scrolling table never clips it; the component clamps it to
+   the viewport and right-aligns it near the right edge. */
+.labterm-pop {
+  position: fixed;
+  top: auto;
+  left: auto;
+  z-index: 40;
+  line-height: 1.5;
+  font-family: var(--font-sans);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  white-space: normal;
+}
+
+.labterm-more {
+  border: 0;
+  background: transparent;
+  color: var(--link);
+  font: inherit;
+  font-size: var(--fs-xs);
+  padding: 0;
+  cursor: pointer;
+}
+
+.labterm-more:hover {
+  text-decoration: underline;
+}
+
+/* Warning codes with their meaning printed beside them. */
+.warnline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0 8px 2px 0;
+}
+
+.labtable .warnline {
+  display: flex;
+}
+
+.warnline-text {
+  color: var(--ink-muted);
+  font-size: var(--fs-xs);
+}
+
+.caption-plain {
+  font-family: var(--font-sans);
+  color: var(--ink-muted);
+}
+
+/* Raw JSON behind a toggle, one sentence above it. */
+.rawjson {
+  margin-top: var(--s-2);
+  font-size: var(--fs-sm);
+}
+
+.rawjson summary {
+  cursor: pointer;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rawjson summary:hover {
+  color: var(--info);
+}
+
+.rawjson-note {
+  margin: var(--s-2) 0;
+  color: var(--ink-muted);
+}
+
+.rawjson-pre {
+  margin: 0;
+  padding: var(--s-3);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-xs);
+  overflow-x: auto;
+}
+
+/* The floors, stated where decisions are made. */
+.floors-note,
+.sec-head .floors-note {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+.lab-step > .floors-note {
+  padding-left: calc(26px + 10px);
+}
+
+/* The server's one-sentence verdict (Versions). */
+.oneline-answer {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: 1.5;
+}
+
+.oneline-answer strong {
+  color: var(--info);
+}
+
+.oneline-note {
+  margin: var(--s-2) 0 0;
+  font-size: var(--fs-sm);
+}
+
+.stratcard-state {
+  font-size: var(--fs-xs);
+}
+
+/* Top bar and status strip additions. */
+.labbar .surface-note {
+  color: var(--ink-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+.labbar .labbar-count {
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .labbar .surface-note {
+    display: none;
+  }
+}
+
+@media (max-width: 920px) {
+  .labbar .labbar-count {
+    display: none;
+  }
+}
+
+.labstatus-btn {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+
+.labstatus-btn:hover {
+  color: var(--ink);
+}
+
+.labstatus-dim {
+  color: var(--ink-faint);
+}
+
+/* Glossary drawer: fixed over the right edge, between the bar and strip. */
+.labglossary {
+  position: fixed;
+  top: 44px;
+  right: 0;
+  bottom: 28px;
+  z-index: 45;
+  width: min(420px, 100vw);
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: var(--s-3);
+  padding: var(--s-4);
+  background: var(--surface);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lift);
+}
+
+.labglossary-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.labglossary-head h2 {
+  margin: 0;
+  flex: 1;
+  font-size: var(--fs-md);
+}
+
+.labglossary-lead {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+}
+
+.labglossary-search {
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  padding: 7px 9px;
+}
+
+.labglossary-search:focus {
+  outline: none;
+  border-color: var(--info);
+}
+
+.labglossary-list {
+  margin: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: var(--s-2);
+  align-content: start;
+  padding-right: 4px;
+}
+
+.labglossary-list > div {
+  display: grid;
+  gap: 2px;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+}
+
+.labglossary-list > div.hit {
+  border-color: var(--info);
+  background: var(--info-fill);
+}
+
+.labglossary-list dt {
+  font-weight: 600;
+  font-size: var(--fs-sm);
+}
+
+.labglossary-list dd {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+/* "What this lab is" and the Start-here path. */
+.labintro-body {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.labintro-body p {
+  margin: 0;
+  max-width: 76ch;
+  font-size: var(--fs-base);
+  line-height: 1.55;
+}
+
+.labintro-ideas {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s-3);
+}
+
+.labintro-ideas > div {
+  padding: var(--s-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.labintro-ideas dt {
+  margin-bottom: 2px;
+  font-weight: 600;
+  font-size: var(--fs-sm);
+}
+
+.labintro-ideas dd {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+.labintro-start {
+  margin: var(--s-2) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.starthere {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: sh;
+  display: grid;
+  gap: var(--s-2);
+}
+
+.starthere li {
+  display: grid;
+  grid-template-columns: 22px 150px minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: baseline;
+  counter-increment: sh;
+  font-size: var(--fs-sm);
+}
+
+.starthere li::before {
+  content: counter(sh);
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+}
+
+.starthere-go {
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--link);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.starthere-go:hover {
+  text-decoration: underline;
+}
+
+.starthere-do {
+  color: var(--ink-muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .starthere li {
+    grid-template-columns: 22px minmax(0, 1fr);
+  }
+
+  .starthere-do {
+    grid-column: 2;
+  }
+}
+
+.labwalk.labwalk-wide {
+  max-width: 640px;
+}
+
+.labwalk .starthere {
+  max-height: 55vh;
+  overflow-y: auto;
+  text-align: left;
+}
+
+/* FindingDetail's "link a query" row: the generic width rule for inputs
+   (.labfield input:not(...)) outranks .qid-input's 90px, so the id field
+   filled the row and the relation select and button overflowed the card.
+   Same specificity, later in the cascade; the row may wrap in a narrow card. */
+.rel-select.labfield {
+  flex-wrap: wrap;
+}
+
+.rel-select.labfield input.qid-input {
+  width: 90px;
+  flex: none;
+}
+
+.rel-select.labfield select {
+  flex: 1 1 140px;
+  min-width: 0;
+  width: auto;
+}
