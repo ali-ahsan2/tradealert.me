@@ -6,6 +6,8 @@ import zlib
 import subprocess
 import sys
 import time
+
+import pytest
 from urllib import error, request
 
 BASE = os.environ.get("API_BASE", "http://127.0.0.1:8000/api")
@@ -34,7 +36,7 @@ def _call(method, path, body=None, token=None):
         return e.code, e.read()
 
 
-def tester():
+def _tester():
     tag = str(int(time.time()))
     email = f"unif{tag}@example.com"
     status, _ = _call("POST", "/signup", {"email": email, "password": "testpass123", "accept_terms": True})
@@ -46,6 +48,11 @@ def tester():
     status, body = _call("POST", "/login", {"email": email, "password": "testpass123"})
     assert status == 200
     return json.loads(body)["token"]
+
+
+@pytest.fixture(scope="module")
+def token():
+    return _tester()
 
 
 def test_board_and_stock_require_auth():
@@ -88,7 +95,7 @@ if __name__ == "__main__":
         print(f"FAIL test_board_and_stock_require_auth: {type(e).__name__}: {e}")
 
     try:
-        token = tester()
+        token = _tester()
         for name in ("test_404_identical_between_missing_and_invalid",
                      "test_out_of_universe_symbol_404s", "test_board_ok"):
             try:
@@ -102,6 +109,6 @@ if __name__ == "__main__":
                 print(f"ERROR {name}: {type(e).__name__}: {e}")
     except Exception as e:  # noqa: BLE001
         failures += 1
-        print(f"ERROR tester(): {type(e).__name__}: {e}")
+        print(f"ERROR _tester(): {type(e).__name__}: {e}")
 
     sys.exit(1 if failures else 0)

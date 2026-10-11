@@ -12,8 +12,11 @@ BASE = os.environ.get("API_BASE", "http://127.0.0.1:8000/api")
 POSTGRES = os.environ.get(
     "POSTGRES_CMD", "docker compose exec -T postgres psql -U tradealert -d tradealert")
 
-ADMIN_EMAIL = "tester@example.com"
-ADMIN_PASS = "password123"
+# The Lab needs an admin login: LAB_ADMIN_EMAIL / LAB_ADMIN_PASSWORD, else the
+# long-lived test admin, else the login db/bootstrap.py --fixture creates.
+ADMIN_EMAIL = os.environ.get("LAB_ADMIN_EMAIL", "tester@example.com")
+ADMIN_PASS = os.environ.get("LAB_ADMIN_PASSWORD", "password123")
+ADMIN_FALLBACK = ("dev@example.com", "devpass123")
 
 
 def _raw(method, path, body=None, token=None):
@@ -68,6 +71,9 @@ def admin_token():
     if "admin" not in _SHARED:
         status, body, _ = post("/login", {"email": ADMIN_EMAIL,
                                           "password": ADMIN_PASS})
+        if status == 401 and "LAB_ADMIN_EMAIL" not in os.environ:
+            status, body, _ = post("/login", {"email": ADMIN_FALLBACK[0],
+                                              "password": ADMIN_FALLBACK[1]})
         assert status == 200, body
         _SHARED["admin"] = body["token"]
     return _SHARED["admin"]
