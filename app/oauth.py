@@ -33,6 +33,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from app.db import _load_env, get_conn
 from app import security
 
+try:  # the legal package owns the constant; until it merges, the same value
+    from app.legal import TERMS_VERSION
+except ImportError:  # pragma: no cover - transitional
+    TERMS_VERSION = "2026-10-11"  # must match frontend/src/lib/legal.js
+
 _load_env()
 
 log = logging.getLogger("tradealert.oauth")
@@ -91,10 +96,37 @@ def _redirect_uri(provider):
     return f"{base}/api/oauth/callback/{provider}"
 
 
-def _store_state(provider):
+def _safe_next(raw):
+    """Only a same-origin path may be carried through the sign-in; never an
+    absolute URL or a protocol-relative one."""
+    if raw and raw.startswith("/") and not raw.startswith("//"):
+        return raw
+    return ""
+
+
+def _store_state(provider, next_path="", accept_terms=False):
     state = _b64url(24)
-    _pending[state] = {"provider": provider, "created_at": time.time()}
+    _pending[state] = {"provider": provider, "created_at": time.time(),
+                       "next": _safe_next(next_path),
+                       "accept_terms": bool(accept_terms)}
     return state
+
+
+_consent_cols = None
+
+
+def _has_consent_columns(conn):
+    """users.accepted_terms_version / accepted_terms_at arrive with the
+    consent migration; until it has run here the insert leaves them out."""
+    global _consent_cols
+    if _consent_cols is None:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_schema = current_schema() AND table_name = 'users' "
+                "AND column_name IN ('accepted_terms_version', 'accepted_terms_at')")
+            _consent_cols = cur.fetchone()[0] == 2
+    return _consent_cols
 
 
 def _pop_state(provider, state):
@@ -167,7 +199,12 @@ def _profile_from_provider(conf, code):
     }
 
 
-def _upsert_user(provider, profile):
+def _upsert_user(provider, profile, accept_terms=False):
+    """Returns (user_id, created): whether this sign-in made the row. A row
+    made from /signup carries the tick the visitor gave there, so the new
+    account is created accepted; a first sign-in from /login meets the
+    /welcome backstop instead."""
+    created = False
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -196,19 +233,26 @@ def _upsert_user(provider, profile):
                          profile["name"], uid),
                     )
             if not uid:
+                cols = "email, name, provider, provider_id, verified"
+                vals = "%s, %s, %s, %s, %s"
+                args = [profile["email"], profile["name"], provider,
+                        profile["provider_id"], profile["verified"]]
+                if accept_terms and _has_consent_columns(conn):
+                    cols += ", accepted_terms_version, accepted_terms_at"
+                    vals += ", %s, now()"
+                    args.append(TERMS_VERSION)
                 cur.execute(
-                    "INSERT INTO users (email, name, provider, provider_id, "
-                    "verified) VALUES (%s, %s, %s, %s, %s) "
+                    f"INSERT INTO users ({cols}) VALUES ({vals}) "
                     "ON CONFLICT (provider, provider_id) WHERE provider IS NOT NULL "
                     "DO UPDATE SET name = EXCLUDED.name "
                     "RETURNING id",
-                    (profile["email"], profile["name"], provider,
-                     profile["provider_id"], profile["verified"]),
+                    args,
                 )
                 uid = cur.fetchone()[0]
+                created = True
             _provision(conn, uid)
             conn.commit()
-            return uid
+            return uid, created
     finally:
         conn.close()
 
@@ -231,7 +275,18 @@ def _provision(conn, user_id):
         )
 
 
-def _store_token_page(provider, token, name):
+def _done_url(created, next_path):
+    """The client's /auth/done decides the first screen (onboarding for an
+    account that follows no industries, else `next` or Home)."""
+    params = {}
+    if created:
+        params["new"] = "1"
+    if next_path:
+        params["next"] = next_path
+    return "/auth/done" + (f"?{urlencode(params)}" if params else "")
+
+
+def _store_token_page(provider, token, name, created=False, next_path=""):
     display_name = html.escape(name) if name else "this account"
     return HTMLResponse(
         '<!doctype html><html><head><meta charset="utf-8">'
@@ -244,16 +299,16 @@ def _store_token_page(provider, token, name):
         '<script>'
         "try{localStorage.setItem('ta_token',"
         f"{json.dumps(token)});}}catch(e){{}}\n"
-        "location.href='/board';"
+        f"location.replace({json.dumps(_done_url(created, next_path))});"
         "</script></body></html>"
     )
 
 
 @router.get("/api/oauth/start/{provider}")
-def oauth_start(provider: str):
+def oauth_start(provider: str, next: str = "", accept_terms: str = ""):
     provider, conf = _provider(provider)
     _prune_pending()
-    state = _store_state(provider)
+    state = _store_state(provider, next, accept_terms == "1")
     if _DEV:
         return RedirectResponse(
             f"/api/oauth/callback/{provider}?state={state}&dev=1",
@@ -292,7 +347,11 @@ def oauth_callback(provider: str, code: str = "",
         if not code:
             raise HTTPException(400, "missing authorization code")
         profile = _profile_from_provider(conf, code)
-    uid = _upsert_user(provider, profile)
+    uid, created = _upsert_user(provider, profile,
+                                accept_terms=entry.get("accept_terms", False))
     token = security.make_token(uid)
-    log.info("oauth %s sign-in: user %s (dev=%s)", provider, uid, _DEV or dev == "1")
-    return _store_token_page(provider, token, profile.get("name"))
+    log.info("oauth %s sign-in: user %s (new=%s, dev=%s)", provider, uid,
+             created, _DEV or dev == "1")
+    return _store_token_page(provider, token, profile.get("name"),
+                             created=created,
+                             next_path=entry.get("next", ""))

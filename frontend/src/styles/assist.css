@@ -129,17 +129,6 @@ details.acc > .acc-body { padding: 0 0 var(--s-4); }
 /* Hints: a short muted line under a control or table. */
 .hint { font-size: var(--fs-xs); color: var(--ink-muted); margin: var(--s-1) 0 0; line-height: 1.45; }
 
-/* Mode toggle in the header hides on narrow phones (it lives in the account menu too). */
-@media (max-width: 640px) { .apphead .modeseg-head { display: none; } }
-
-/* Plans: what you would be told, under each price. */
-.tutil { margin: var(--s-2) 0 0; font-size: var(--fs-xs); font-weight: 400; line-height: 1.45; color: var(--ink-muted); text-align: left; max-width: 26ch; }
-.plan .tutil { max-width: none; margin-bottom: var(--s-3); }
-
-/* Plans: one form per width, and the utility sentence tops each column. */
-@media (min-width: 900px) { .plans-cards.plans-mobile { display: none; } }
-.plans-table thead th { vertical-align: top; }
-
 /* HIT/MISS is a measured outcome, not a hard-filter verdict: no colour. */
 .outcome { font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; color: var(--ink-muted); white-space: nowrap; }
 
@@ -149,12 +138,6 @@ details.acc > .acc-body { padding: 0 0 var(--s-4); }
 /* Scroll containers inside accordions must not widen the column. */
 details.acc > .acc-body { min-width: 0; max-width: 100%; }
 details.acc > .acc-body .tscroll { max-width: 100%; }
-
-/* Desktop: the rail already carries the plan chip and the account menu. */
-@media (min-width: 900px) {
-  .app.authed .apphead-right .tierchip,
-  .app.authed .apphead-right .acct { display: none; }
-}
 
 /* v5 motion and record layer -------------------------------------------- */
 .reveal { opacity: 0; transform: translateY(8px); transition: opacity .5s ease, transform .5s ease; }

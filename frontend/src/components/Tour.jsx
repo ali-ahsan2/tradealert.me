@@ -1,23 +1,18 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-// A coachmark sequence for a newcomer's first visit: a bottom sheet over a
-// soft backdrop, one short card per step, Next / Done and Skip. It shows
-// once per browser (localStorage, which may be blocked, so every access is
-// guarded) and can be brought back with restartTour(), which clears the
-// mark and raises a window event the mounted Tour listens for. Styles are
-// the .tour* classes in styles/assist.css; nothing here is mounted on its
-// own, the shell decides where.
+// A coachmark sequence for Home: a bottom sheet over a soft backdrop, one
+// short card per step, Next / Done and Skip. It never opens on its own
+// (DESIGN_V6: the welcome card is the single first-visit message); the
+// account menu's "Take the tour again" calls restartTour(), which raises a
+// window event the mounted Tour listens for, and leaves a pending mark so a
+// Tour that mounts a moment later (after navigating to /home) still opens.
+// The "seen" mark in localStorage is kept so a later version may consult
+// it; every access is guarded because storage may be blocked. Styles are
+// the .tour* classes in styles/assist.css; the shell decides where it mounts.
 
 const EVENT = "ta:tour";
 const DEFAULT_KEY = "ta_tour_v1";
-
-function seen(key) {
-  try {
-    return localStorage.getItem(key) === "1";
-  } catch {
-    return false;
-  }
-}
+let pendingKey = null;
 
 function mark(key) {
   try {
@@ -27,42 +22,44 @@ function mark(key) {
   }
 }
 
-// Clears the "seen" mark and reopens any mounted Tour with this key.
+// Clears the "seen" mark and reopens any mounted Tour with this key; a Tour
+// mounted afterwards picks up the pending mark.
 export function restartTour(storageKey = DEFAULT_KEY) {
   try {
     localStorage.removeItem(storageKey);
   } catch {
     /* nothing stored, nothing to clear */
   }
+  pendingKey = storageKey;
   window.dispatchEvent(new CustomEvent(EVENT, { detail: storageKey }));
 }
 
-// Four steps for a newcomer on Home. Each body is two sentences and names
-// what the product does, never what a price will do.
+// Four steps on Home. Each body is two sentences and names what the product
+// does for you, never what a price will do.
 export const HOME_TOUR = [
   {
-    title: "Your brief",
+    title: "Home",
     body:
-      "Home opens with what changed on your names since the last run and why. The alerts that fired and the dated events ahead sit right under it.",
+      "Home opens with what happened for you since the last run: the alerts you were sent, what moved on names you were not watching, and the dates ahead.",
   },
   {
-    title: "The Board and what a band means",
+    title: "Explore and the rating word",
     body:
-      "The Board ranks every name in your industries by how well its setup fits the strategy today. The band word is the claim: strong, elevated, neutral, weak or excluded; the number beside it is detail.",
+      "Explore ranks every name in your industries by how well its setup fits the strategy today. The rating word is the claim: strong, elevated, neutral or weak; the number beside it is detail.",
   },
   {
-    title: "A name's verdict and Why",
+    title: "A name and its Why",
     body:
-      "Open any name and the first line says what its score is and where it landed, in plain words. The Why section lists the inputs behind the number and which ones had no data.",
+      "Open any name and the first line says where it landed, in plain words. Why lists the inputs behind it and which ones had no data.",
   },
   {
     title: "Alerts: one tap",
     body:
-      "Tap Notify me on a name and we email you when a fact prints: a dated catalyst, a borrow fee that doubled, volume at three times normal. Every alert names the fact that fired it.",
+      "Tap Alert me on a name and you are emailed when a fact prints: a dated catalyst, a borrow fee that doubled, volume at three times normal. Every alert names the fact that fired it.",
   },
 ];
 
-export default function Tour({ steps, storageKey = DEFAULT_KEY, enabled = true, onDone }) {
+export default function Tour({ steps, storageKey = DEFAULT_KEY, onDone }) {
   const [open, setOpen] = useState(false);
   const [i, setI] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -79,18 +76,21 @@ export default function Tour({ steps, storageKey = DEFAULT_KEY, enabled = true, 
     if (doneRef.current) doneRef.current();
   }, [storageKey]);
 
-  // First visit: open once, unless this browser has already seen it.
+  // A restart asked for before this Tour mounted (the account menu on
+  // another screen navigates to Home first).
   useEffect(() => {
-    if (enabled && count > 0 && !seen(storageKey)) {
+    if (count > 0 && pendingKey === storageKey) {
+      pendingKey = null;
       setI(0);
       setOpen(true);
     }
-  }, [enabled, count, storageKey]);
+  }, [count, storageKey]);
 
   // restartTour() from anywhere (the help page, the account menu).
   useEffect(() => {
     const on = (e) => {
       if (e.detail && e.detail !== storageKey) return;
+      pendingKey = null;
       setI(0);
       setOpen(true);
     };

@@ -5,7 +5,35 @@
 
 const FIX_URL = "./fixtures.json";
 const TOKEN = "preview-session";
+const VISITOR_KEY = "ta_preview_visitor";
+// matches frontend/src/lib/legal.js; the seeded subscriber has accepted
+const TERMS_VERSION = "2026-10-11";
 let FIX = {};
+
+// "View as visitor": /api/me answers 401 and no token is held, so every
+// route renders as it would for someone who has not signed in.
+export function isVisitor() {
+  try {
+    return sessionStorage.getItem(VISITOR_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setVisitor(on) {
+  try {
+    if (on) sessionStorage.setItem(VISITOR_KEY, "1");
+    else sessionStorage.removeItem(VISITOR_KEY);
+  } catch {
+    /* the toggle just won't persist across reloads */
+  }
+  try {
+    if (on) localStorage.removeItem("ta_token");
+    else localStorage.setItem("ta_token", TOKEN);
+  } catch {
+    /* the token only gates routes; the mock answers regardless */
+  }
+}
 const BANDS = { strong: 4, elevated: 3, neutral: 2, weak: 1, excluded: 0 };
 
 function key(path) {
@@ -132,6 +160,15 @@ function search(path) {
 function read(path) {
   const b = base(path);
   const q = params(path);
+  if (b === "/me") {
+    if (isVisitor()) return json({ detail: "not authenticated" }, 401);
+    const me = hit("/me");
+    if (!me) return notFound();
+    // the seeded subscriber has ticked the current terms once already
+    if (!me.accepted_terms_version) me.accepted_terms_version = TERMS_VERSION;
+    return json(me);
+  }
+  if (b.startsWith("/me") && isVisitor()) return json({ detail: "not authenticated" }, 401);
   let body = hit(path);
   if (body !== undefined) return json(body);
   if (b === "/screen") return screen(path);
@@ -244,7 +281,19 @@ function write(method, path, payload) {
   if (b === "/me/industries" || b.startsWith("/me/industries/")) {
     return json({ detail: "industry changes are disabled in the preview; the dataset is fixed" }, 409);
   }
-  if (b === "/login" || b === "/signup") return json({ token: TOKEN, user: hit("/me") });
+  if (b === "/login" || b === "/signup") {
+    setVisitor(false);
+    return json({ token: TOKEN, user: hit("/me") });
+  }
+  if (b === "/me/consent" && method === "POST") {
+    const me = hit("/me");
+    if (me) {
+      me.accepted_terms_version = payload.version || TERMS_VERSION;
+      me.accepted_terms_at = new Date().toISOString();
+    }
+    return json({ accepted_terms_version: me && me.accepted_terms_version });
+  }
+  if (b === "/me/verify/resend" && method === "POST") return json({ sent: true });
   if (b === "/me/password") return json({ changed: true });
   if (b === "/me" && method === "DELETE") return json({ detail: "account deletion is disabled in the preview" }, 409);
   return json({ detail: "not available in the preview" }, 409);
@@ -253,11 +302,7 @@ function write(method, path, payload) {
 export async function installMock() {
   const res = await fetch(FIX_URL);
   FIX = await res.json();
-  try {
-    localStorage.setItem("ta_token", TOKEN);
-  } catch {
-    /* the token only gates routes; the mock answers regardless */
-  }
+  setVisitor(isVisitor());
   // the board and settings write paths straight into history; keep them in the hash
   for (const m of ["pushState", "replaceState"]) {
     const orig = window.history[m].bind(window.history);

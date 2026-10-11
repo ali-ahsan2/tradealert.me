@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { api, getToken } from "../api.js";
+import { TERMS_VERSION } from "./legal.js";
 
 // One /api/me request per page load, shared by the nav, the board, and
 // every gated control. Re-fetched when the token changes (login, logout,
@@ -44,4 +45,20 @@ export function useMe() {
 
 export function hasChannel(me, channel) {
   return Boolean(me && me.tier && me.tier.channels && me.tier.channels.includes(channel));
+}
+
+// The consent gate (DESIGN_V6 §6): an account is usable once it has ticked
+// the current terms version. /api/me says which version is current
+// (terms_version_current); the client constant is the fallback. A missing
+// field means "not accepted".
+export function currentTermsVersion(me) {
+  return (me && me.terms_version_current) || TERMS_VERSION;
+}
+
+export function needsConsent(me) {
+  return !me || me.accepted_terms_version !== currentTermsVersion(me);
+}
+
+export function hasConsent(me) {
+  return Boolean(me) && !needsConsent(me);
 }

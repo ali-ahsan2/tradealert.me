@@ -25,6 +25,28 @@ function Section({ id, title, lead, children }) {
   );
 }
 
+// POST /api/me/verify/resend (DESIGN_V6 §10, rate-limited). Until the
+// endpoint ships a 404 is answered in words, never as a crash.
+function ResendVerify() {
+  const [busy, setBusy] = useState(false);
+  const send = async () => {
+    setBusy(true);
+    try {
+      await api("/me/verify/resend", { method: "POST", json: {} });
+      toast("Sent. Check your inbox for the new link.");
+    } catch (e) {
+      toast(e.status === 404 || e.status === 405 ? "Resending isn't available yet. The first email still works for a day." : e.detail || "Couldn't resend. Try again in a minute.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button type="button" className="btn btn-secondary btn-sm resend-btn" disabled={busy} onClick={send}>
+      {busy ? "Sending…" : "Resend the email"}
+    </button>
+  );
+}
+
 export default function Settings() {
   const { me, refresh } = useMe();
   const q = useQuery();
@@ -185,6 +207,7 @@ export default function Settings() {
           <span className="k">Status</span>
           <span className="v" style={{ fontFamily: "inherit" }}>
             {me.verified ? <span className="pos">Verified</span> : <span className="warn">Not verified · alerts, digests and upgrades wait on it</span>}
+            {!me.verified && <ResendVerify />}
           </span>
         </div>
         {me.provider && (
@@ -215,7 +238,7 @@ export default function Settings() {
         </div>
         {me.provider ? (
           <p className="small muted" style={{ marginBottom: 0 }}>
-            You sign in with {me.provider}. To add a password, <Link to="/reset">send yourself a reset link</Link>.
+            You log in with {me.provider}. To add a password, <Link to="/reset">send yourself a reset link</Link>.
           </p>
         ) : (
           <PasswordForm />
@@ -268,12 +291,15 @@ export default function Settings() {
         )}
       </Section>
 
-      <Section id="channels" title="Delivery" lead="Where alerts and digests reach you. Email is always on.">
+      <Section id="channels" title="Delivery" lead="Where alerts and digests reach you.">
         <label className="check">
-          <input type="checkbox" checked disabled />
+          <input type="checkbox" checked={settings.channel_email !== false} onChange={(e) => patch({ channel_email: e.target.checked }, "email")} />
           <span>
-            Email
-            <span className="lock-note">Required · {me.email}</span>
+            Email · {me.email}
+            <span className="lock-note">
+              Account emails always arrive; alerts and digests can be turned off.
+              {status("email") ? ` ${status("email")}` : ""}
+            </span>
           </span>
         </label>
         <label className={`check ${hasChannel(me, "push") ? "" : "locked"}`}>

@@ -50,7 +50,7 @@ function useOnScreen(ref) {
 }
 
 function primaryAction(me) {
-  return me ? { to: "/overview", label: "Open your home" } : { to: "/signup", label: "Start free" };
+  return me ? { to: "/home", label: "Open my Home" } : { to: "/signup", label: "Start free" };
 }
 
 /* 1. Hero ------------------------------------------------------------- */
@@ -66,7 +66,7 @@ function Hero({ me, pulse, run, industries, loading, ctaRef }) {
         <div className="ld-hero-copy">
           <p className="ld-eyebrow">A research assistant for small caps</p>
           <h1 id="ld-h1">
-            <span>It watches your industries.</span> <span>It tells you before the move is over.</span>
+            <span>It watches my industries.</span> <span>It tells me before the move is over.</span>
           </h1>
           <p className="ld-lede">
             Every morning it reads the filings and market data on every name in the industries you follow, scores each one with the working shown, and

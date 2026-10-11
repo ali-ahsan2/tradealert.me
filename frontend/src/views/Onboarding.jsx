@@ -1,33 +1,33 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api, cached, toast } from "../api.js";
-import { Link, navigate } from "../lib/router.jsx";
-import { hasChannel, useMe } from "../lib/me.jsx";
-import { alertsLabel, industriesLabel, plural, tzGuess, tzList } from "../lib/fmt.js";
+import { Link, navigate, safeNext, useQuery } from "../lib/router.jsx";
+import { useMe } from "../lib/me.jsx";
+import { alertsLabel, industriesLabel, plural, tzGuess } from "../lib/fmt.js";
 import { useMode } from "../lib/mode.js";
-import { DEFAULT_TRIGGERS, GLOSSARY, TRIGGER_PLAIN } from "../lib/glossary.js";
+import { DEFAULT_TRIGGERS, TRIGGER_PLAIN } from "../lib/glossary.js";
 import { verdict } from "../lib/plain.js";
 import { fetchPulse, tallySentence } from "../lib/record.js";
 import { openUpgrade } from "../lib/upgrade.js";
-import Explain, { Term } from "../components/Explain.jsx";
+import Explain from "../components/Explain.jsx";
 import NotifyButton from "../components/NotifyButton.jsx";
 import ScoreBadge from "../components/ScoreBadge.jsx";
 import Pin from "../components/Pin.jsx";
+import { IndustryPlainLine } from "../components/Plain.jsx";
 import { Empty, ErrorCard, Notice, Skeleton } from "../components/ui.jsx";
 import "./help.css";
 
-// First run (DESIGN_V5 §4, step 3), three screens: pick an industry with its
-// month in numbers, learn the three words every screen uses, pin one name
-// and turn on alerts in one tap. Everything shown is live: the industries
-// and their counts come from the API, each industry's month from the public
-// pulse (counts only, no tickers), the example and the names from the board
-// for the industry just chosen, clamped by the plan exactly as the Board
-// is. Delivery preferences (timezone, channels) live in a small accordion
-// on the last step so nothing the old flow saved is lost. A plan limit
-// opens the upgrade sheet in place; nothing here links out to the plans
-// page for a prompt.
+// First run (DESIGN_V6 §3, step 4), two screens in the bare layout, one
+// action each: pick what I should watch, then tell me when something
+// happens. Everything shown is live: the industries and their plain words
+// come from the API, each industry's month from the public pulse (counts
+// only, no tickers), the names from the board for the industry just chosen,
+// clamped by the plan exactly as Explore is. Benchmark and band counts sit
+// behind More detail. Timezone and channels live in Account. A plan limit
+// opens the upgrade sheet in place. Every exit goes through finish(): `next`
+// if the visitor arrived with one, else Home with the welcome flag.
 
-const STEPS = ["Pick an industry", "Three words you'll see everywhere", "Pin one name and turn on alerts"];
-// A newcomer pins one name from a handful, not a whole board. The plan's
+const STEPS = ["Pick what I should watch", "Tell me when something happens"];
+// A newcomer watches one name from a handful, not a whole board. The plan's
 // names_shown_limit still clamps below this on the server.
 const TOP = 5;
 
@@ -46,9 +46,9 @@ function Progress({ step }) {
   );
 }
 
-// The footer sticks above the bottom bar, so without room after it the last
-// cards of a step can never scroll clear of it. It reports its height and
-// the step pads its end by the same amount.
+// The footer sticks to the bottom of the viewport, so without room after it
+// the last cards of a step can never scroll clear of it. It reports its
+// height and the step pads its end by the same amount.
 function StickyFoot({ children, onHeight }) {
   const ref = useRef(null);
   useEffect(() => {
@@ -82,13 +82,35 @@ function Bell() {
   );
 }
 
+// POST /api/me/verify/resend (DESIGN_V6 §10, rate-limited). Until the
+// endpoint ships a 404 is answered in words, never as a crash.
+function ResendVerify() {
+  const [busy, setBusy] = useState(false);
+  const send = async () => {
+    setBusy(true);
+    try {
+      await api("/me/verify/resend", { method: "POST", json: {} });
+      toast("Sent. Check your inbox for the new link.");
+    } catch (e) {
+      toast(e.status === 404 || e.status === 405 ? "Resending isn't available yet. The first email still works for a day." : e.detail || "Couldn't resend. Try again in a minute.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button type="button" className="btn btn-secondary btn-sm resend-btn" disabled={busy} onClick={send}>
+      {busy ? "Sending…" : "Resend the email"}
+    </button>
+  );
+}
+
 // One obvious tap on a name: pin it, then arm the three default triggers.
 // The pin is one POST; the arming is NotifyButton's own flow (the shared
 // rule cache and the verify / plan / quota cards every other screen shows),
 // started by tapping the button it renders once the name is pinned. A name
-// already pinned shows the pair as state: the labelled Pin and the Notify
-// button, exactly as the Board does.
-function PinNotify({ symbol, pinned, onPin }) {
+// already watched shows the pair as state: the labelled Pin and the Notify
+// button, exactly as Explore does.
+function WatchForMe({ symbol, pinned, onPin }) {
   const [busy, setBusy] = useState(false);
   const [armNext, setArmNext] = useState(false);
   const notifyRef = useRef(null);
@@ -111,7 +133,7 @@ function PinNotify({ symbol, pinned, onPin }) {
       setArmNext(true);
     } catch (err) {
       if (err.status === 403) {
-        toast(err.detail || "Your plan's pick limit is reached.");
+        toast(err.detail || "Your plan's limit on watched names is reached.");
         openUpgrade("picks", { symbol });
       } else toast(err.detail || "That didn't work. Try again.");
     } finally {
@@ -126,10 +148,10 @@ function PinNotify({ symbol, pinned, onPin }) {
         className="btn btn-primary pn-btn"
         disabled={busy}
         onClick={go}
-        title={`Pin ${symbol} to your watchlist and tell me when it has a ${plainList.join(", a ")}.`}
+        title={`Keep ${symbol} on my watchlist and tell me when it has a ${plainList.join(", a ")}.`}
       >
         <Bell />
-        <span>{busy ? "Pinning…" : "Pin and notify me"}</span>
+        <span>{busy ? "One moment…" : "Watch this for me"}</span>
       </button>
     );
   }
@@ -137,7 +159,7 @@ function PinNotify({ symbol, pinned, onPin }) {
     <>
       <Pin symbol={symbol} pinned onChange={onPin} label />
       <span className="pn-notify" ref={notifyRef}>
-        <NotifyButton symbol={symbol} compact />
+        <NotifyButton symbol={symbol} compact label="Alert me" onLabel="Alerting" />
       </span>
     </>
   );
@@ -149,9 +171,30 @@ function tallyLower(t) {
   return s.charAt(0) === "N" ? s.charAt(0).toLowerCase() + s.slice(1) : s;
 }
 
+// The industry's month, in numbers, from the public pulse: counts, never
+// tickers. "12 alerts fired here in the last 30 days; 2 moved 10%+."
+function PulseLine({ p, pulse, days }) {
+  if (pulse === null) return null; // still loading: no figure is guessed
+  if (!p || !p.fired) return <span className="ind-pulse">No alerts fired here in the last {days} days.</span>;
+  return (
+    <span className="ind-pulse">
+      <span className="n">{p.fired}</span> {p.fired === 1 ? "alert" : "alerts"} fired here in the last {days} days;{" "}
+      {p.measured ? (
+        <>
+          <span className="n">{p.moved_10}</span> moved 10%+.
+        </>
+      ) : (
+        "five-session windows still open."
+      )}
+    </span>
+  );
+}
+
 export default function Onboarding() {
   const { me, refresh } = useMe();
   const { full } = useMode();
+  const q = useQuery();
+  const next = safeNext(q.get("next"));
   const [step, setStep] = useState(1);
   const [footH, setFootH] = useState(0);
   const [ind, setInd] = useState(null);
@@ -159,12 +202,10 @@ export default function Onboarding() {
   const [limit, setLimit] = useState(1);
   const [tiers, setTiers] = useState(null);
   const [err, setErr] = useState(null);
-  const [tz, setTz] = useState(tzGuess());
-  const [push, setPush] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [shape, setShape] = useState({}); // industry key -> overview aggregates
+  const [shape, setShape] = useState({}); // industry key -> overview aggregates (More detail)
   const [pulse, setPulse] = useState(null); // null loading, false failed, else the body
-  const [focus, setFocus] = useState(null); // industry the examples come from
+  const [focus, setFocus] = useState(null); // industry the names come from
   const [board, setBoard] = useState(null); // {rows, strategy} or null while loading
   const [boardFor, setBoardFor] = useState("");
   const [pins, setPins] = useState(() => new Set());
@@ -174,7 +215,7 @@ export default function Onboarding() {
   const firstStep = useRef(true);
 
   // Live shape of each followed industry (names scored, how the bands fell)
-  // from the overview. Best effort: no run yet means no counts, not an error.
+  // from the overview; shown in More detail only. Best effort.
   const loadShape = () => {
     const n = ++shapeReq.current;
     api("/overview")
@@ -206,8 +247,6 @@ export default function Onboarding() {
     api("/me/picks")
       .then((d) => alive && setPins(new Set(d.picks.map((p) => p.symbol))))
       .catch(() => {});
-    // the universe's month: alerts fired and what moved after, per industry;
-    // public, cached server-side, and never a ticker
     fetchPulse(30)
       .then((d) => alive && setPulse(d))
       .catch(() => alive && setPulse(false));
@@ -228,7 +267,7 @@ export default function Onboarding() {
     if (headRef.current) headRef.current.focus({ preventScroll: true });
   }, [step]);
 
-  // The board for steps 2 and 3, fetched once per set of followed industries.
+  // The board for step 2, fetched once per set of followed industries.
   useEffect(() => {
     if (step < 2) return undefined;
     const key = picked.join(",");
@@ -252,7 +291,6 @@ export default function Onboarding() {
     const mine = focus ? all.filter((r) => r.industry && r.industry.key === focus) : all;
     return [...mine].sort((a, b) => b.value - a.value).slice(0, TOP);
   }, [board, focus]);
-  const example = rows[0] || null;
 
   const pulseInd = useMemo(() => {
     const m = {};
@@ -268,7 +306,7 @@ export default function Onboarding() {
   // so fetch it from each shown dossier, best effort, and fall back to the
   // plain verdict built from the row's own recorded fields.
   useEffect(() => {
-    if (step !== 3 || rows.length === 0) return undefined;
+    if (step !== 2 || rows.length === 0) return undefined;
     const want = rows.filter((r) => !r.hook && hooks[r.symbol] === undefined).map((r) => r.symbol);
     if (want.length === 0) return undefined;
     let alive = true;
@@ -291,9 +329,9 @@ export default function Onboarding() {
     try {
       if (isOn) {
         await api(`/me/industries/${key}`, { method: "DELETE" });
-        const next = picked.filter((k) => k !== key);
-        setPicked(next);
-        if (focus === key) setFocus(next[0] || null);
+        const rest = picked.filter((k) => k !== key);
+        setPicked(rest);
+        if (focus === key) setFocus(rest[0] || null);
       } else {
         if (limit < 999 && picked.length >= limit) return;
         await api("/me/industries", { method: "POST", json: { key } });
@@ -306,16 +344,16 @@ export default function Onboarding() {
     }
   };
 
-  // Home opens on the first brief; the welcome flag asks it to say so.
+  // Every exit: the browser's zone is saved so the digest lands in the
+  // morning (changeable in Account), the account is re-read, and the
+  // visitor goes where they were headed, else Home with the welcome flag.
   const finish = async () => {
     setBusy(true);
     try {
-      await api("/me/settings", { method: "PATCH", json: { timezone: tz, ...(hasChannel(me, "push") ? { channel_push: push } : {}) } });
+      await api("/me/settings", { method: "PATCH", json: { timezone: tzGuess() } }).catch(() => {});
       await refresh();
-      navigate("/overview?welcome=1");
-    } catch (e) {
-      toast(e.detail || "Couldn't save delivery settings.");
-      setBusy(false);
+    } finally {
+      navigate(next || "/home?welcome=1");
     }
   };
 
@@ -339,121 +377,34 @@ export default function Onboarding() {
   const alertTier = byPrice && byPrice.find((t) => t.alerts_limit !== 0);
   const tier = me && me.tier;
   const atLimit = limit < 999 && picked.length >= limit;
-  // the three words appear on the cards only once a run has counts to show
-  const anyShape = Object.values(shape).some((s) => s && s.scored != null);
   const stepStyle = footH ? { paddingBottom: footH } : undefined;
   const defaults = DEFAULT_TRIGGERS.map((k) => (TRIGGER_PLAIN[k] ? TRIGGER_PLAIN[k][0].toLowerCase() : k));
 
   if (err) {
     return (
       <div className="wrap wrap-narrow">
-        <ErrorCard error={err} title="Couldn't load onboarding." onRetry={() => window.location.reload()} />
+        <ErrorCard error={err} title="Couldn't load the first run." onRetry={() => window.location.reload()} />
       </div>
     );
   }
 
-  const preferences = (
-    <details className="acc ob-pref" open={full}>
-      <summary>
-        Preferences <span className="sum-note">timezone and delivery</span>
-      </summary>
-      <div className="acc-body">
-        <div className="field">
-          <label htmlFor="ob-tz">Timezone</label>
-          <select id="ob-tz" value={tz} onChange={(e) => setTz(e.target.value)}>
-            {[tz, ...tzList().filter((z) => z !== tz)].map((z) => (
-              <option key={z} value={z}>
-                {z}
-              </option>
-            ))}
-          </select>
-          <span className="help">Detected from your browser. Digests send Monday morning in this zone.</span>
-        </div>
-        <p className="muted small" style={{ margin: "var(--s-3) 0 var(--s-2)" }}>
-          Where alerts and digests reach you. Email is always on; other channels come with paid plans.
-        </p>
-        <label className="check">
-          <input type="checkbox" checked disabled />
-          <span>
-            Email
-            <span className="lock-note">Required · {me ? me.email : ""}</span>
-          </span>
-        </label>
-        <label className={`check ${hasChannel(me, "push") ? "" : "locked"}`}>
-          <input type="checkbox" checked={push} disabled={!hasChannel(me, "push")} onChange={(e) => setPush(e.target.checked)} />
-          <span>
-            Web push
-            {!hasChannel(me, "push") && (
-              <span className="lock-note">
-                Basic and above · <Link to="/pricing">See plans</Link>
-              </span>
-            )}
-          </span>
-        </label>
-        <label className={`check ${hasChannel(me, "sms") ? "" : "locked"}`}>
-          <input type="checkbox" disabled />
-          <span>
-            SMS
-            <span className="lock-note">
-              {hasChannel(me, "sms") ? (
-                "Add a phone number in your account to turn this on."
-              ) : (
-                <>
-                  Pro and above · <Link to="/pricing">See plans</Link>
-                </>
-              )}
-            </span>
-          </span>
-        </label>
-      </div>
-    </details>
-  );
-
-  // Step utilities: one sentence each, from the pulse, the overview and the
-  // plan's own limits. A figure that has not arrived is left out, never
-  // estimated.
+  // Step utilities: one sentence each, from the pulse and the plan's own
+  // limits. A figure that has not arrived is left out, never estimated.
   const t1 = pulse && pulse.alerts;
   const utility1 = t1 ? (
     <>
-      Across every industry in the last {days} days, {tallyLower(t1)} Your plan follows <b>{industriesLabel(limit)}</b>
+      Across every industry in the last {days} days, {tallyLower(t1)} Your plan watches <b>{industriesLabel(limit)}</b>
       {limit < 999 ? " at a time" : ""}.
     </>
   ) : (
     <>
-      Your plan follows <b>{industriesLabel(limit)}</b>
+      Your plan watches <b>{industriesLabel(limit)}</b>
       {limit < 999 ? " at a time" : ""}; every name inside is <Explain term="score">scored</Explain> each morning.
     </>
   );
 
   const t2 = pulseFor(focus);
-  const s2 = shape[focus];
-  const d2 = (s2 && s2.distribution) || {};
   const utility2 = (
-    <>
-      {t2 ? (
-        <>
-          In <b>{focusLabel}</b> over the last {days} days, {tallyLower(t2)}
-        </>
-      ) : pulse ? (
-        <>
-          No alerts fired in <b>{focusLabel}</b> in the last {days} days.
-        </>
-      ) : null}
-      {s2 && s2.scored != null ? (
-        <>
-          {" "}
-          On the latest <Explain term="run">run</Explain>, <b>{s2.scored}</b> names were <Explain term="score">scored</Explain> there: <b>{d2.strong || 0}</b>{" "}
-          <Explain term="strong">strong</Explain>, <b>{d2.elevated || 0}</b> <Explain term="elevated">elevated</Explain>.
-        </>
-      ) : !t2 && !pulse ? (
-        <>
-          Your plan follows <b>{industriesLabel(limit)}</b>; the example below is the top-scored name in {focusLabel || "your industry"} on the latest run.
-        </>
-      ) : null}
-    </>
-  );
-
-  const utility3 = (
     <>
       {t2 ? (
         <>
@@ -466,29 +417,30 @@ export default function Onboarding() {
       ) : null}
       {tier && tier.picks_limit != null ? (
         <>
-          Your plan pins <b>{plural(tier.picks_limit, "name")}</b> and arms <b>{alertsLabel(tier.alerts_limit)}</b>
+          Your plan watches <b>{plural(tier.picks_limit, "name")}</b> for you and sends <b>{alertsLabel(tier.alerts_limit)}</b>
           {tier.alerts_limit === 0 && alertTier ? (
             <>
-              ; {alertTier.label} arms {alertsLabel(alertTier.alerts_limit)} over {(alertTier.channels || ["email"]).join(" and ")}
+              ; {alertTier.label} sends {alertsLabel(alertTier.alerts_limit)} over {(alertTier.channels || ["email"]).join(" and ")}
             </>
           ) : null}
           .
         </>
       ) : (
-        <>
-          These are the top-scored names in {focusLabel || "your industry"} on the latest <Explain term="run">run</Explain>.
-        </>
+        <>These are the top-rated names in {focusLabel || "your industry"} this morning.</>
       )}
     </>
   );
 
   return (
-    <div className="wrap wrap-narrow">
+    <div className="wrap wrap-narrow onboarding">
       <Progress step={step} />
 
       {me && !me.verified && (
-        <Notice tone="info">
-          We sent a verification link to <b>{me.email}</b>. Your Home works now; alerts and digests start once it's clicked.
+        <Notice tone="info" className="ob-verify">
+          <span>
+            We sent a verification link to <b>{me.email}</b>. Your Home works now; alerts and digests start once it's clicked.
+          </span>{" "}
+          <ResendVerify />
         </Notice>
       )}
 
@@ -496,15 +448,10 @@ export default function Onboarding() {
         <div className="ob-step page-enter" style={stepStyle}>
           <div className="ob-head">
             <h1 ref={headRef} tabIndex={-1}>
-              Pick an industry
+              Pick what I should watch
             </h1>
             <p className="utility">{utility1}</p>
-            <p className="muted">Start with one you already follow in the news; you can change it any time. Each card shows its last {days} days.</p>
-            {anyShape && (
-              <p className="hint ob-hint">
-                “Scored” means rated this morning; strong and elevated are the two top bands. The next step explains them.
-              </p>
-            )}
+            <p className="muted">Start with one you already follow. You can change it any time.</p>
           </div>
           {!ind ? (
             <Skeleton rows={5} height={88} />
@@ -545,42 +492,34 @@ export default function Onboarding() {
                   >
                     <b>
                       {i.label}
-                      {i.benchmark_etf && (
+                      {full && i.benchmark_etf && (
                         <span className="etf">
                           <Explain term="benchmark">benchmark</Explain> <span className="etf-code">{i.benchmark_etf}</span>
                         </span>
                       )}
                     </b>
                     {i.description && <span className="desc">{i.description}</span>}
-                    <span className="facts">
-                      <span>
-                        <span className="n">{i.universe_count}</span> names
-                      </span>
-                      {s && s.scored != null && (
+                    <IndustryPlainLine industry={i} className="ind-plain" />
+                    <PulseLine p={p} pulse={pulse} days={days} />
+                    {full && (
+                      <span className="facts">
                         <span>
-                          <span className="n">{s.scored}</span> <Explain term="score">scored</Explain>
+                          <span className="n">{i.universe_count}</span> names
                         </span>
-                      )}
-                      {dist.strong > 0 && (
-                        <span>
-                          <span className="n">{dist.strong}</span> <Explain term="strong">strong</Explain>
-                        </span>
-                      )}
-                      {dist.elevated > 0 && (
-                        <span>
-                          <span className="n">{dist.elevated}</span> <Explain term="elevated">elevated</Explain>
-                        </span>
-                      )}
-                    </span>
-                    {p && (
-                      <span className="ind-pulse">
-                        <span className="n">{p.fired}</span> {p.fired === 1 ? "alert" : "alerts"} fired ·{" "}
-                        {p.measured ? (
-                          <>
-                            <span className="n">{p.moved_10}</span> moved 10%+ after
-                          </>
-                        ) : (
-                          "five-session windows still open"
+                        {s && s.scored != null && (
+                          <span>
+                            <span className="n">{s.scored}</span> <Explain term="score">scored</Explain>
+                          </span>
+                        )}
+                        {dist.strong > 0 && (
+                          <span>
+                            <span className="n">{dist.strong}</span> <Explain term="strong">strong</Explain>
+                          </span>
+                        )}
+                        {dist.elevated > 0 && (
+                          <span>
+                            <span className="n">{dist.elevated}</span> <Explain term="elevated">elevated</Explain>
+                          </span>
                         )}
                       </span>
                     )}
@@ -588,10 +527,10 @@ export default function Onboarding() {
                       <span className="ind-lock">
                         {canUpgrade ? (
                           <>
-                            Your plan follows {industriesLabel(limit)}; see what {nextTier.label} would watch
+                            Your plan watches {industriesLabel(limit)}; see what {nextTier.label} would watch
                           </>
                         ) : (
-                          <>Your plan follows {industriesLabel(limit)}.</>
+                          <>Your plan watches {industriesLabel(limit)}.</>
                         )}
                       </span>
                     )}
@@ -606,11 +545,11 @@ export default function Onboarding() {
                 <b>
                   {picked.length} of {industriesLabel(limit)}
                 </b>{" "}
-                selected
+                picked
                 {atLimit && nextTier && (
                   <>
                     {" "}
-                    · {nextTier.label} follows {industriesLabel(nextTier.industries_limit)}.
+                    · {nextTier.label} watches {industriesLabel(nextTier.industries_limit)}.
                   </>
                 )}
               </span>
@@ -621,9 +560,9 @@ export default function Onboarding() {
               )}
             </span>
             <span className="row">
-              <Link to="/overview" className="btn-quiet ob-skip">
+              <button type="button" className="btn-quiet ob-skip" disabled={busy} onClick={finish}>
                 Skip for now
-              </Link>
+              </button>
               <button type="button" className="btn btn-primary" disabled={picked.length === 0} onClick={() => setStep(2)}>
                 Continue
               </button>
@@ -636,75 +575,13 @@ export default function Onboarding() {
         <div className="ob-step page-enter" style={stepStyle}>
           <div className="ob-head">
             <h1 ref={headRef} tabIndex={-1}>
-              Three words you'll see everywhere
+              Tell me when something happens
             </h1>
             <p className="utility">{utility2}</p>
-            <p className="muted">Every screen uses them the same way. Anywhere in the app, tap an underlined word for its meaning.</p>
-          </div>
-          <div className="wordgrid">
-            <section className="obword" aria-labelledby="w-score">
-              <h2 id="w-score">{GLOSSARY.score.term}</h2>
-              <p>{GLOSSARY.score.short}</p>
-              <p>
-                Two things decide how much to trust it: <Term k="coverage" /> and <Term k="shrinkage" />.
-              </p>
-            </section>
-            <section className="obword" aria-labelledby="w-band">
-              <h2 id="w-band">{GLOSSARY.band.term}</h2>
-              <p>{GLOSSARY.band.short}</p>
-              <p>
-                In order: <Term k="strong" />, <Term k="elevated" />, <Term k="neutral" />, <Term k="weak" />, <Term k="excluded" />.
-              </p>
-            </section>
-            <section className="obword" aria-labelledby="w-alert">
-              <h2 id="w-alert">{GLOSSARY.alert.term}</h2>
-              <p>{GLOSSARY.alert.short}</p>
-              <p>
-                “Pin and notify me” keeps a name in view and turns on three <Term k="trigger">triggers</Term> over email with one tap: {defaults.join(", ")}.
-              </p>
-            </section>
-          </div>
-          {board === null && picked.length > 0 && <Skeleton rows={1} height={56} />}
-          {example && (
-            <div className="example" aria-label={`Example from ${focusLabel}`}>
-              <span>Today in {focusLabel}:</span>
-              <Link className="sym" to={`/stock/${example.symbol}`}>
-                {example.symbol}
-              </Link>
-              <ScoreBadge
-                band={example.band}
-                value={example.value}
-                present={example.components_present}
-                total={example.components_total}
-                size="full"
-                strategy={board.strategy}
-              />
-              <span>{verdict(example, board.strategy, example.symbol).headline}</span>
-            </div>
-          )}
-          <StickyFoot onHeight={setFootH}>
-            <button type="button" className="btn-quiet" onClick={() => setStep(1)}>
-              ← Back
-            </button>
-            <button type="button" className="btn btn-primary" onClick={() => setStep(3)}>
-              Continue
-            </button>
-          </StickyFoot>
-        </div>
-      )}
-
-      {step === 3 && (
-        <div className="ob-step page-enter" style={stepStyle}>
-          <div className="ob-head">
-            <h1 ref={headRef} tabIndex={-1}>
-              Pin one name and turn on alerts
-            </h1>
-            <p className="utility">{utility3}</p>
             <p className="muted">
-              A pinned name stays on your Home and in your digest; alerts email you when a fact prints on it. Nothing here is a recommendation: these
-              are the top-scored names in {focusLabel || "your industry"} on the latest run.
+              Watch a name and you are told the day a fact prints on it: {defaults.join(", ")}. These are the top-rated names in{" "}
+              {focusLabel || "your industry"} this morning, not a recommendation.
             </p>
-            {!full && <p className="hint ob-hint">Your timezone and where alerts reach you are further down this step, under Preferences.</p>}
           </div>
           {picked.length > 1 && (
             <div className="seg ob-seg" role="group" aria-label="Industry">
@@ -720,14 +597,14 @@ export default function Onboarding() {
           ) : rows.length === 0 ? (
             <Empty
               icon="board"
-              title={`No scored names in ${focusLabel || "this industry"} yet.`}
+              title={`No rated names in ${focusLabel || "this industry"} yet.`}
               steps={[
-                "Finish; your Home opens now and fills in after the next morning run.",
-                "Pin names from the Board once scores land.",
-                "Tap Notify me on any name to be emailed when a fact prints.",
+                "Take me home; it fills in after the next morning run.",
+                "Watch names from Explore once the ratings land.",
+                "Tap Alert me on any name to be emailed when a fact prints.",
               ]}
             >
-              Scores appear after the first run completes; the engine runs each morning.
+              Ratings appear after the first run completes; it runs each morning.
             </Empty>
           ) : (
             <ul className="picklist">
@@ -744,7 +621,7 @@ export default function Onboarding() {
                   </div>
                   <p className="pick-why">{why(r)}</p>
                   <div className="pick-act">
-                    <PinNotify symbol={r.symbol} pinned={pins.has(r.symbol)} onPin={onPin} />
+                    <WatchForMe symbol={r.symbol} pinned={pins.has(r.symbol)} onPin={onPin} />
                     <Link to={`/stock/${r.symbol}`} className="btn-quiet">
                       Why →
                     </Link>
@@ -753,17 +630,19 @@ export default function Onboarding() {
               ))}
             </ul>
           )}
-          {preferences}
+          <p className="muted small ob-tz">
+            Digests arrive in your morning ({tzGuess()}); change the zone and where alerts reach you in <Link to="/settings">Account</Link>.
+          </p>
           <StickyFoot onHeight={setFootH}>
-            <button type="button" className="btn-quiet" onClick={() => setStep(2)}>
+            <button type="button" className="btn-quiet" onClick={() => setStep(1)}>
               ← Back
             </button>
             <span className="row">
-              <button type="button" className="btn-quiet ob-skip" disabled={busy} onClick={finish}>
+              <button type="button" className="linkbtn ob-skip" disabled={busy} onClick={finish}>
                 Skip for now
               </button>
               <button type="button" className="btn btn-primary" disabled={busy} onClick={finish}>
-                {busy ? "Saving…" : "Open my Home"}
+                {busy ? "One moment…" : "Take me home"}
               </button>
             </span>
           </StickyFoot>

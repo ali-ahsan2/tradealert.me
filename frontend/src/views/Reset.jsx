@@ -95,14 +95,14 @@ export default function Reset() {
         {token && done && (
           <div>
             <h1>Password updated</h1>
-            <p className="muted">Sign in with the new password.</p>
+            <p className="muted">Log in with the new password.</p>
             <Link to="/login" className="btn btn-primary btn-block">
-              Sign in
+              Log in
             </Link>
           </div>
         )}
         <p className="small muted" style={{ marginTop: "var(--s-4)", marginBottom: 0 }}>
-          <Link to="/login">Back to sign in</Link>
+          <Link to="/login">Back to log in</Link>
         </p>
       </div>
     </div>

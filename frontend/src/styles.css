@@ -224,8 +224,8 @@ table.data th {
 }
 
 .brand-tld {
-  color: var(--ink-faint);
-  font-weight: 600;
+  color: var(--ink);
+  font-weight: 800;
 }
 
 /* visitors: a classic top bar */
@@ -276,7 +276,72 @@ table.data th {
   box-shadow: var(--shadow);
 }
 
-/* subscribers: rail + frame */
+/* the bare layout (onboarding, welcome): the brand and nothing else */
+.barebar {
+  border-bottom: 1px solid var(--border);
+}
+
+.barebar-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 var(--s-4);
+  height: 64px;
+  display: flex;
+  align-items: center;
+}
+
+/* Explore: one tab strip over Ranked, Find, What changed and Coming up */
+.xtabs-wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--s-4) var(--s-4) 0;
+}
+
+.xtabs {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--s-2);
+}
+
+.xtab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  color: var(--ink-muted);
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.xtab:hover {
+  color: var(--ink);
+  background: var(--surface-sunken);
+  text-decoration: none;
+}
+
+.xtab[aria-current="page"] {
+  color: var(--info);
+  background: var(--info-fill);
+}
+
+.xtabs-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+@media (max-width: 599px) {
+  .xtabs-mode .xs {
+    display: none;
+  }
+}
+
+/* members: rail + frame on desktop, header + tabs on phones */
 .rail {
   display: none;
 }
@@ -299,12 +364,6 @@ table.data th {
   display: flex;
   align-items: center;
   gap: var(--s-3);
-}
-
-.apphead-right {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
 }
 
 .searchpill {
@@ -333,7 +392,8 @@ table.data th {
   display: none;
 }
 
-.searchpill.wide {
+.searchpill.wide,
+.searchpill {
   width: 40px;
   justify-content: center;
   padding: 0;
@@ -450,7 +510,8 @@ table.data th {
   bottom: 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: saturate(1.4) blur(12px);
   -webkit-backdrop-filter: saturate(1.4) blur(12px);
@@ -500,7 +561,7 @@ table.data th {
 
 /* room for the fixed tab bar goes on the last thing in flow, the footer */
 @media (max-width: 899px) {
-  .app.authed .footer-inner {
+  .app.layout-app .footer-inner {
     padding-bottom: calc(var(--s-7) + 64px + env(safe-area-inset-bottom));
   }
 }
@@ -510,8 +571,13 @@ table.data th {
     display: flex;
   }
 
-  .app.authed {
+  .app.layout-app {
     flex-direction: row;
+  }
+
+  /* the phone header is gone; the rail is the one piece of chrome */
+  .app.layout-app .apphead {
+    display: none;
   }
 
   .rail {
@@ -530,6 +596,17 @@ table.data th {
   }
 
   .rail-top {
+    display: flex;
+    justify-content: center;
+    padding: 0 var(--s-3);
+    width: 100%;
+  }
+
+  .rail .brand-word {
+    display: none;
+  }
+
+  .rail-search {
     display: flex;
     justify-content: center;
     padding: 0 var(--s-3);
@@ -598,31 +675,11 @@ table.data th {
     gap: var(--s-3);
   }
 
-  .apphead-brand {
-    display: none;
-  }
-
-  .searchpill.wide {
-    width: min(420px, 100%);
-    justify-content: flex-start;
-    padding: 0 var(--s-4);
-  }
-
-  .searchpill-text,
-  .searchpill .kbd {
-    display: inline-block;
-  }
-
-  .searchpill-text {
-    flex: 1;
-    text-align: left;
-  }
-
   .bottombar {
     display: none;
   }
 
-  .app.authed .main {
+  .app.layout-app .main {
     padding-bottom: 0;
   }
 }
@@ -636,6 +693,30 @@ table.data th {
   .rail-top {
     justify-content: flex-start;
     padding: 0 var(--s-5);
+  }
+
+  .rail .brand-word {
+    display: inline;
+  }
+
+  .rail-search {
+    padding: 0 var(--s-4);
+  }
+
+  .rail-search .searchpill {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 0 var(--s-4);
+  }
+
+  .rail-search .searchpill-text,
+  .rail-search .searchpill .kbd {
+    display: inline-block;
+  }
+
+  .rail-search .searchpill-text {
+    flex: 1;
+    text-align: left;
   }
 
   .rail-item {
@@ -2466,148 +2547,118 @@ table.hf th.num {
 
 /* ---------- pricing ---------- */
 
-/* four columns on desktop; four stacked cards on mobile, never a
-   horizontally scrolling table */
-.plans-mobile {
-  display: flex;
-}
-
-.plans-desktop {
-  display: none;
-}
-
-@media (min-width: 900px) {
-  .plans-mobile {
-    display: none;
-  }
-
-  .plans-desktop {
-    display: block;
-  }
-}
-
-.plans-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-sm);
-}
-
-.plans-table th,
-.plans-table td {
-  padding: var(--s-3);
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-  vertical-align: top;
-}
-
-.plans-table thead th {
-  vertical-align: bottom;
-  border-bottom: 1px solid var(--border-strong);
-}
-
-.plans-table th[scope="row"] {
-  color: var(--ink-muted);
-  font-weight: 500;
-  width: 24%;
-}
-
-.plans-table td {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-.plans-table .tcol {
-  position: relative;
-}
-
-.plans-table .tcol.popular {
-  box-shadow: inset 0 0 0 1px var(--info);
-  background: var(--info-fill);
-}
-
-.plans-table .tname {
-  font-size: var(--fs-md);
-  font-weight: 600;
-  font-family: var(--font-sans);
-}
-
-.plans-table .tprice {
-  font-family: var(--font-mono);
-  font-size: var(--fs-lg);
-  font-weight: 600;
-  margin-top: var(--s-1);
-}
-
-.plans-table .tprice .per {
-  font-size: var(--fs-xs);
-  color: var(--ink-faint);
-  font-weight: 400;
-}
-
-.plans-table .tflag {
-  font-size: var(--fs-xs);
-  color: var(--info);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-family: var(--font-sans);
-}
-
-.plans-table tfoot td {
-  border-bottom: 0;
-  font-family: var(--font-sans);
-}
-
+/* one card per plan at every width; the promise, the price, six facts, one
+   button. The current plan is marked; no plan is "popular". */
 .plans-cards {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: var(--s-3);
+}
+
+@media (min-width: 700px) {
+  .plans-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1040px) {
+  .plans-cards {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .plan {
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
+  padding: var(--s-5);
+  min-width: 0;
 }
 
-.plan.popular {
+.plan.current {
   border-color: var(--info);
   box-shadow: inset 0 0 0 1px var(--info);
 }
 
 .plan .tname {
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 700;
+}
+
+.plan .tpromise {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.4;
+  color: var(--ink);
+  min-height: 3lh;
 }
 
 .plan .tprice {
-  font-family: var(--font-mono);
-  font-size: var(--fs-lg);
-  font-weight: 600;
+  font-size: var(--fs-2xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  margin-top: var(--s-1);
 }
 
 .plan .tprice .per {
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   color: var(--ink-faint);
-  font-weight: 400;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
-.plan dl {
-  margin: 0;
+.plan .tfacts {
+  list-style: none;
+  margin: var(--s-2) 0 var(--s-3);
+  padding: 0;
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--s-1) var(--s-3);
+  gap: 6px;
+  font-size: var(--fs-sm);
+  flex: 1;
+}
+
+.plan .tfacts li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.plan .tfacts li:last-child {
+  border-bottom: 0;
+}
+
+.plan .tfacts .k {
+  color: var(--ink-muted);
+  flex: 1 1 auto;
+}
+
+/* the value keeps its width; the label is what wraps */
+.plan .tfacts .v {
+  flex: 0 1 auto;
+  max-width: 60%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.plan .plan-current {
+  align-self: flex-start;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.plans-fine {
+  margin: var(--s-3) 0 0;
+  color: var(--ink-muted);
   font-size: var(--fs-sm);
 }
 
-.plan dt {
-  color: var(--ink-muted);
-}
-
-.plan dd {
-  margin: 0;
-  font-family: var(--font-mono);
-  text-align: right;
+.plans .plans-fineprint {
+  margin-top: var(--s-6);
 }
 
 .faq details {
@@ -2735,6 +2786,88 @@ table.hf th.num {
   .sticky-foot {
     bottom: var(--s-4);
   }
+}
+
+/* the bare layout has no tab bar under the footer */
+.layout-bare .sticky-foot {
+  bottom: var(--s-4);
+}
+
+.indcard .ind-plain {
+  margin: 2px 0 0;
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+.ob-verify .notice-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+}
+
+.ob-tz {
+  margin: var(--s-3) 0 var(--s-4);
+}
+
+.resend-btn {
+  margin-left: var(--s-2);
+  vertical-align: middle;
+}
+
+/* the consent tick, on the sign-up form and the welcome screen */
+.check.consent {
+  align-items: flex-start;
+  margin: var(--s-3) 0 var(--s-4);
+  line-height: 1.5;
+}
+
+.check.consent input {
+  margin-top: 3px;
+}
+
+.consent-links {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+}
+
+.welcome {
+  padding-top: var(--s-6);
+}
+
+.welcome-card {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: var(--s-6) var(--s-5);
+}
+
+.welcome-k {
+  margin: 0 0 var(--s-2);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.welcome-card h1 {
+  font-size: var(--fs-xl);
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--s-3);
+}
+
+.welcome-lede {
+  font-size: 17px;
+  line-height: 1.5;
+  font-weight: 600;
+  margin: 0 0 var(--s-3);
+}
+
+.welcome-out {
+  margin: var(--s-4) 0 0;
 }
 
 /* ---------- auth ---------- */
@@ -2928,6 +3061,33 @@ table.hf th.num {
   margin: var(--s-3) 0 0;
   max-width: 72ch;
   line-height: 1.6;
+}
+
+/* ".me" read aloud, where the name is explained */
+.footer-tag {
+  margin: var(--s-3) 0 0;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+/* the one fine-print component (DESIGN_V6 §6) */
+.fineprint {
+  color: var(--ink-faint);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  max-width: 72ch;
+}
+
+.fineprint p {
+  margin: 0 0 var(--s-2);
+}
+
+.fineprint a {
+  color: var(--ink-muted);
+}
+
+.fineprint-short {
+  margin: 0;
 }
 
 /* ---------- v2: chart, palette, shortcuts, badges ---------- */
@@ -4857,8 +5017,8 @@ select.inline,
 /* ---------- print: a report should fit one page and keep its dates ---------- */
 
 @media print {
-  .app.authed { display: block; }
-  .app.authed .main { padding-bottom: 0; }
+  .app.layout-app { display: block; }
+  .app.layout-app .main { padding-bottom: 0; }
   .rail,
   .apphead,
   .acct-menu,

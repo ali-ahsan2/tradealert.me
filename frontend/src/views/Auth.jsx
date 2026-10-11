@@ -1,15 +1,22 @@
-import React, { useEffect, useState } from "react";
-import { login, signup } from "../api.js";
-import { Link, navigate, useQuery } from "../lib/router.jsx";
+import React, { useEffect, useRef, useState } from "react";
+import { api, getToken, login, setToken } from "../api.js";
+import { Link, navigate, safeNext, useQuery } from "../lib/router.jsx";
+import { useMe } from "../lib/me.jsx";
+import { CONSENT_LABEL } from "../lib/legal.js";
 import { fetchPulse, leadPhrase } from "../lib/record.js";
 import { useCountUp, useReveal } from "../lib/motion.js";
 import { pct, plural, shortDate } from "../lib/fmt.js";
+import FinePrint from "../components/FinePrint.jsx";
 import "./auth.css";
 
-// Sign up and sign in (DESIGN_V5 §4, step 2). The form sits beside the live
-// pulse: three counts from /api/pulse (anonymous, aggregate, no tickers) so
-// what fired this month stays in view while the account is made. Nothing on
-// this screen promises anything; every number is measured.
+// Sign up and log in (DESIGN_V5 §4, step 2; DESIGN_V6 §3, §6). The form
+// sits beside the live pulse: three counts from /api/pulse (anonymous,
+// aggregate, no tickers) so what fired this month stays in view while the
+// account is made. Sign-up carries the consent tick; the request sends
+// accept_terms: true and the API refuses without it. Every door opens on
+// the same first screen: a new account goes to onboarding, a returning one
+// to `next` or Home. Nothing on this screen promises anything; every number
+// is measured.
 
 function GoogleMark() {
   return (
@@ -20,11 +27,6 @@ function GoogleMark() {
       <path fill="#EA4335" d="M10 4c1.44 0 2.72.5 3.74 1.47L16.63 3A10 10 0 0 0 1.23 5.42L4.48 7.95C5.26 5.73 7.44 4 10 4z" />
     </svg>
   );
-}
-
-function safeNext(raw) {
-  // only same-origin paths; never an absolute URL from the query string
-  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : null;
 }
 
 // One live number with its plain label; counts up once on reveal. A null
@@ -110,6 +112,7 @@ export default function Auth({ mode }) {
   const next = safeNext(q.get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [accept, setAccept] = useState(false);
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
   const [pulse, setPulse] = useState(null);
@@ -133,11 +136,13 @@ export default function Auth({ mode }) {
     setBusy(true);
     try {
       if (isSignup) {
-        await signup(email, password);
-        navigate("/onboarding");
+        if (!accept) throw Object.assign(new Error("Tick the box to continue."), { detail: "Tick the box to continue." });
+        const { token } = await api("/signup", { method: "POST", json: { email, password, accept_terms: true } });
+        setToken(token);
+        navigate(next ? `/onboarding?next=${encodeURIComponent(next)}` : "/onboarding");
       } else {
         await login(email, password);
-        navigate(next || "/overview");
+        navigate(next || "/home");
       }
     } catch (e2) {
       setErr(e2.detail || String(e2.message || e2));
@@ -150,9 +155,21 @@ export default function Auth({ mode }) {
       <div className="card form-card">
         <h1>{isSignup ? "Create your account" : "Welcome back"}</h1>
         <p className="sub">
-          {isSignup ? "Email and a password. Then pick an industry and see what fired in it." : "Sign in to your Home, watchlist and alerts."}
+          {isSignup ? "Email and a password. Then pick what I should watch." : "Log in to my Home, watchlist and alerts."}
         </p>
-        <button type="button" className="btn btn-google" onClick={() => window.location.assign("/api/oauth/start/google")}>
+        <button
+          type="button"
+          className="btn btn-google"
+          disabled={isSignup && !accept}
+          title={isSignup && !accept ? "Tick the box below first." : undefined}
+          onClick={() => {
+            const p = new URLSearchParams();
+            if (isSignup) p.set("accept_terms", "1");
+            if (next) p.set("next", next);
+            const qs = p.toString();
+            window.location.assign(`/api/oauth/start/google${qs ? `?${qs}` : ""}`);
+          }}
+        >
           <GoogleMark />
           Continue with Google
         </button>
@@ -180,39 +197,88 @@ export default function Auth({ mode }) {
               </span>
             )}
           </div>
+          {isSignup && (
+            <label className="check consent">
+              <input type="checkbox" required checked={accept} onChange={(e) => setAccept(e.target.checked)} />
+              <span>
+                {CONSENT_LABEL}{" "}
+                <span className="consent-links">
+                  <Link to="/legal/terms">Terms</Link> · <Link to="/legal/privacy">Privacy</Link> · <Link to="/legal/disclaimer">Disclaimer</Link>
+                </span>
+              </span>
+            </label>
+          )}
           {err && (
             <p className="err" role="alert">
               {err}
             </p>
           )}
-          <button className="btn btn-primary btn-block" disabled={busy}>
-            {busy ? "One moment…" : isSignup ? "Create my account" : "Sign in"}
+          <button className="btn btn-primary btn-block" disabled={busy || (isSignup && !accept)}>
+            {busy ? "One moment…" : isSignup ? "Create my account" : "Log in"}
           </button>
           {isSignup && (
             <p className="auth-after">
-              <b>Free plan, no card.</b> Your first brief is one industry away.
+              <b>Free plan, no card.</b> Your Home is one industry away.
             </p>
           )}
         </form>
         <p className="small muted auth-links">
           {isSignup ? (
             <>
-              Already have an account? <Link to={next ? `/login?next=${encodeURIComponent(next)}` : "/login"}>Sign in</Link>
+              Already have an account? <Link to={next ? `/login?next=${encodeURIComponent(next)}` : "/login"}>Log in</Link>
             </>
           ) : (
             <>
-              New here? <Link to="/signup">Create an account</Link> · <Link to="/reset">Forgot password</Link>
+              New here? <Link to={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}>Create an account</Link> ·{" "}
+              <Link to="/reset">Forgot password</Link>
             </>
           )}
         </p>
-        {isSignup && (
-          <p className="xs faint auth-legal">
-            By creating an account you agree to the <Link to="/legal/terms">terms</Link> and <Link to="/legal/privacy">privacy policy</Link>. Research and
-            information only; never investment advice.
-          </p>
-        )}
+        <FinePrint short className="auth-legal" />
       </div>
       <PulsePanel pulse={pulse} />
+    </div>
+  );
+}
+
+// /auth/done: where Google sign-in lands (app/oauth.py stores the token and
+// comes here with ?new=1 for a fresh row and the `next` it was started
+// with). Refresh the account, then onboarding when it follows no industries,
+// else `next` or Home. A session that failed to stick goes to log in.
+export function AuthDone() {
+  const q = useQuery();
+  const next = safeNext(q.get("next"));
+  const { refresh } = useMe();
+  const ran = useRef(false);
+  useEffect(() => {
+    if (ran.current) return;
+    ran.current = true;
+    if (!getToken()) {
+      navigate(next ? `/login?next=${encodeURIComponent(next)}` : "/login", { replace: true });
+      return;
+    }
+    refresh().then((me) => {
+      if (!me) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      // ?new=1 says the row was just created; the account's own count is
+      // what decides, so a returning user who never picked is sent too.
+      if (me.industries_following_count === 0) {
+        navigate(next ? `/onboarding?next=${encodeURIComponent(next)}` : "/onboarding", { replace: true });
+      } else {
+        navigate(next || "/home", { replace: true });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div className="wrap wrap-narrow" aria-busy="true">
+      <div className="sk" aria-hidden="true">
+        <div className="sk-row" style={{ height: 44 }} />
+        <div className="sk-row" style={{ height: 120 }} />
+      </div>
+      <p className="muted small">Signing you in…</p>
     </div>
   );
 }
