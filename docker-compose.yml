@@ -31,6 +31,8 @@ services:
       TWILIO_FROM: ${TWILIO_FROM}
       PULSE_CACHE_SECONDS: ${PULSE_CACHE_SECONDS:-300}
       TIINGO_TOKEN: ${TIINGO_TOKEN:-}
+      # 0 until the operator turns the engine on (deploy/UPGRADE.md step 8)
+      ENGINE_LIVE: ${ENGINE_LIVE:-0}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:

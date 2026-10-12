@@ -92,3 +92,13 @@ CREATE TABLE IF NOT EXISTS instrument_research (
     growth_pct     NUMERIC(7,1),                -- operator-verified y/y growth when the feed has none
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- The day the fact happened, beside the day the product noticed it. The
+-- morning pass looks back a few sessions (a volume spike is only visible
+-- once the session's bar exists; a FINRA short-interest print is dated its
+-- settlement day, a week or more before it is published), so one fact can
+-- be seen on several mornings. It is recorded once: the unique index below.
+-- fired_at stays the time of noticing, which the delivery sweep reads.
+ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS fact_on DATE;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_alert_events_fact
+    ON alert_events (instrument_id, trigger_id, fact_on) WHERE fact_on IS NOT NULL;

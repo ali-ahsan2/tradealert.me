@@ -11,8 +11,8 @@ whether it can fire live, be replayed, or neither. That status is served
 to the Lab verbatim: a trigger with no source is shown as not firing rather
 than quietly producing nothing.
 
-    python -m app.triggers              # evaluate today, write alert events
-    python -m app.triggers 2026-06-30   # evaluate a past date, print only
+    python -m app.triggers              # look back from today; writes only when ENGINE_LIVE=1
+    python -m app.triggers 2026-06-30   # look back from a past date, print only
 """
 from __future__ import annotations
 
@@ -35,6 +35,18 @@ FEE_FLOOR_PCT = 1.0
 SI_LINES = (10.0, 15.0, 20.0)
 SI_PRINT_MAX_AGE_DAYS = 16          # a FINRA print is news for one cycle
 CATALYST_LOOKAHEAD_DAYS = 45
+# How far back the morning pass looks for a fact it has not recorded yet.
+# The live pass runs before the session opens, so the newest bar is the last
+# session's; a weekend adds two days. Short interest is stamped with FINRA's
+# settlement date and published about a week later. Filings filed after the
+# pass are caught the next morning. Each fact is recorded once (fact_on).
+LIVE_LOOKBACK_DAYS = {
+    "volume_3x": 5,
+    "borrow_fee_2x": 4,
+    "si_cross": 21,
+    "catalyst_dated": 4,
+    "s3_424b": 5,
+}
 DILUTION_FORMS = ("S-3", "S-3/A", "S-3ASR", "424B1", "424B2", "424B3", "424B4", "424B5", "424B7")
 
 # key -> {source, live, replay, note}. `live` means the morning pass can fire
@@ -283,11 +295,40 @@ def evaluate(ctx, on, keys):
 # Live pass
 # --------------------------------------------------------------------------
 
+def live_candidates(ctx, today, keys):
+    """[(key, fact_on, result)] for facts inside each trigger's look-back
+    window ending on `today`. Pure, so the window logic is testable without
+    a database."""
+    out = []
+    for k in keys:
+        fn = FUNCS.get(k)
+        if not fn:
+            continue
+        back = LIVE_LOOKBACK_DAYS.get(k, 3)
+        for n in range(back, -1, -1):
+            d = today - timedelta(days=n)
+            r = fn(ctx, d)
+            if r:
+                out.append((k, d, r))
+    return out
+
+
 def fire_live(conn, on=None, keys=None, write=True):
-    """Evaluate every live trigger for every active instrument on `on`
-    (default today) and write alert_events. One event per instrument,
-    trigger and day (the table's unique key), so re-running is free."""
-    on = on or datetime.now(timezone.utc).date()
+    """Evaluate every live trigger for every active instrument over its
+    look-back window ending on `on` (default today) and write alert_events.
+
+    Each fact is recorded once (instrument, trigger, fact_on), so the same
+    fact seen again tomorrow is not sent twice. fired_at is the time it was
+    noticed, which is what the delivery sweep reads. Writes only for today
+    and only while the engine is live (ENGINE_LIVE=1, app.engine)."""
+    from app.engine import engine_live
+    today = datetime.now(timezone.utc).date()
+    on = on or today
+    dry_reason = None
+    if write and on != today:
+        write, dry_reason = False, "a past date is always a dry run"
+    elif write and not engine_live():
+        write, dry_reason = False, "the engine is off (ENGINE_LIVE is not 1)"
     keys = evaluable(keys, "live")
     cur = conn.cursor()
     cur.execute("SELECT id, key FROM triggers")
@@ -295,27 +336,32 @@ def fire_live(conn, on=None, keys=None, write=True):
     cur.execute("SELECT i.id, i.ticker_id, t.symbol FROM instruments i "
                 "JOIN tickers t ON t.id = i.ticker_id WHERE i.active")
     instruments = cur.fetchall()
-    ctxs = load_contexts(cur, {i[1] for i in instruments}, on, on)
-    fired = []
+    back = max((LIVE_LOOKBACK_DAYS.get(k, 3) for k in keys), default=3)
+    ctxs = load_contexts(cur, {i[1] for i in instruments}, on - timedelta(days=back), on)
+    fired, written = [], 0
     for iid, tid, sym in instruments:
-        for key, r in evaluate(ctxs[tid], on, keys):
-            fired.append((iid, sym, key, r))
+        for key, fact_on, r in live_candidates(ctxs[tid], on, keys):
+            fired.append((iid, sym, key, fact_on, r))
             if write and key in trig_ids:
+                detail = r["detail"] if fact_on == on else f"{r['detail']} (on {fact_on.isoformat()})"
                 cur.execute(
-                    "INSERT INTO alert_events (instrument_id, trigger_id, fired_at, detail) "
-                    "VALUES (%s, %s, %s, %s) ON CONFLICT (instrument_id, trigger_id, fired_on) DO NOTHING",
-                    (iid, trig_ids[key],
-                     datetime.combine(on, datetime.min.time(), tzinfo=timezone.utc).replace(hour=14),
-                     r["detail"]))
+                    "INSERT INTO alert_events (instrument_id, trigger_id, fired_at, detail, fact_on) "
+                    "VALUES (%s, %s, now(), %s, %s) ON CONFLICT DO NOTHING",
+                    (iid, trig_ids[key], detail, fact_on))
+                written += cur.rowcount
     if write:
         conn.commit()
     by_key = {}
-    for _, _, k, _ in fired:
+    for _, _, k, _, _ in fired:
         by_key[k] = by_key.get(k, 0) + 1
-    log.info("triggers on %s: %d fired %s", on, len(fired), by_key)
+    log.info("triggers through %s: %d facts in window, %d new events written %s",
+             on, len(fired), written, by_key)
     return {"on": on.isoformat(), "evaluated": keys, "instruments": len(instruments),
-            "fired": len(fired), "by_trigger": by_key,
-            "sample": [{"symbol": s, "trigger": k, "detail": r["detail"]} for _, s, k, r in fired[:25]]}
+            "fired": len(fired), "written": written, "by_trigger": by_key,
+            "write": write, "dry_run_reason": dry_reason,
+            "lookback_days": {k: LIVE_LOOKBACK_DAYS.get(k, 3) for k in keys},
+            "sample": [{"symbol": s, "trigger": k, "fact_on": f.isoformat(), "detail": r["detail"]}
+                       for _, s, k, f, r in fired[:25]]}
 
 
 def main(argv):

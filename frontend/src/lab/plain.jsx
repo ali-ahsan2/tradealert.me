@@ -526,7 +526,7 @@ export const PANELS = {
     plain: "did it score the universe this morning",
     shows: "The newest scored run: when, how many names, how many in the top bands.",
     why: "Until a run exists for today, every score a subscriber sees is yesterday's or older.",
-    read: "Score now makes a run from stored data; a band change against the previous run fires an alert unless more than a quarter of names moved, which is a change of data, not news.",
+    read: "Score now makes a run from stored data; while the engine is off (ENGINE_LIVE) it is a dry run that writes nothing. A band change against the previous run fires an alert unless more than a quarter of names moved, which is a change of data, not news.",
   },
   engine_universe: {
     plain: "what it watches",

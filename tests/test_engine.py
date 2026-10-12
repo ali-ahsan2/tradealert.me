@@ -7,7 +7,6 @@ checks like the other suites and need the dev fixture (db/bootstrap.py
 """
 from __future__ import annotations
 
-import os
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -16,7 +15,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app import engine_core, replay, triggers, universe  # noqa: E402
+from app import engine, engine_core, replay, triggers, universe  # noqa: E402
 from tests.test_lab import _raw as _raw3, admin_token  # noqa: E402
 
 
@@ -80,7 +79,7 @@ def test_filter_units_convert_from_raw_to_millions():
 # --------------------------------------------------------------------------
 
 def _bars(n, vol=1_000_000, start=date(2026, 1, 5)):
-    out, d, i = [], start, 0
+    out, d = [], start
     while len(out) < n:
         if d.weekday() < 5:
             out.append((d, 10.0, 10.5, 9.5, 10.0, vol))
@@ -150,6 +149,51 @@ def test_registry_states_a_source_for_every_product_trigger():
     assert "insider_buying" not in triggers.evaluable(None, "live")
 
 
+def test_live_window_sees_last_sessions_spike_and_old_si_print():
+    # The pass runs on a Monday before the open: the newest bar is Friday's.
+    bars = _bars(30, start=date(2026, 8, 31))
+    friday = bars[-1][0]
+    monday = friday + timedelta(days=3)
+    bars[-1] = (friday, 10.0, 10.5, 9.5, 10.0, 3_500_000)
+    settlement = monday - timedelta(days=12)           # published a week after settling
+    snaps = {"si_pct_float": [(settlement - timedelta(days=14), "12.0"), (settlement, "16.0")]}
+    ctx = triggers.Ctx(bars, snaps, [])
+    # what the first build did: evaluate on the calendar day only, and see nothing
+    assert triggers.evaluate(ctx, monday, ["volume_3x", "si_cross"]) == []
+    got = {(k, d) for k, d, _ in triggers.live_candidates(ctx, monday, ["volume_3x", "si_cross"])}
+    assert got == {("volume_3x", friday), ("si_cross", settlement)}
+
+
+def test_live_window_stops_at_each_triggers_lookback():
+    bars = _bars(40, start=date(2026, 8, 3))
+    old = bars[-8][0]
+    bars[-8] = (old, 10.0, 10.5, 9.5, 10.0, 3_500_000)
+    ctx = triggers.Ctx(bars, {}, [])
+    today = bars[-1][0] + timedelta(days=1)
+    assert (today - old).days > triggers.LIVE_LOOKBACK_DAYS["volume_3x"]
+    assert triggers.live_candidates(ctx, today, ["volume_3x"]) == []
+
+
+def test_engine_switch_reads_engine_live(monkeypatch):
+    monkeypatch.delenv("ENGINE_LIVE", raising=False)
+    assert engine.engine_live() is False
+    monkeypatch.setenv("ENGINE_LIVE", "0")
+    assert engine.engine_live() is False
+    monkeypatch.setenv("ENGINE_LIVE", "1")
+    assert engine.engine_live() is True
+
+
+def test_research_row_carries_haircut_and_quality():
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "db"))
+    import json
+    import seed_research
+    meta = json.loads(seed_research.META.read_text(encoding="utf-8"))
+    cut = next(t for t in meta["HAIRCUTS"])
+    row = next(r for r in meta["SHORTLIST"] if r.get("ticker") == cut)
+    values = seed_research.research_row(meta, row)
+    assert values[3] == meta["HAIRCUTS"][cut][0] and values[4]
+
+
 # --------------------------------------------------------------------------
 # replay resolver (pure)
 # --------------------------------------------------------------------------
@@ -215,17 +259,37 @@ def test_score_dry_run_on_a_past_date_writes_nothing(tok):
     assert [r["id"] for r in after["runs"]] == [r["id"] for r in before["runs"]]
 
 
-def test_score_today_writes_a_completed_run(tok):
+def test_score_today_writes_only_while_the_engine_is_live(tok):
+    st, before = _raw("GET", "/admin/lab/engine/status", token=tok)
     st, s = _raw("POST", "/admin/lab/engine/score", {}, token=tok)
-    assert st == 200 and s["written"] and s["run_id"] and s["scored"] > 0
+    assert st == 200 and s["scored"] > 0
     st, d = _raw("GET", "/admin/lab/engine/status", token=tok)
-    assert d["runs"][0]["id"] == s["run_id"] and d["runs"][0]["status"] == "completed"
+    if before["engine_live"]:
+        assert s["written"] and s["run_id"] and s["dry_run_reason"] is None
+        assert d["runs"][0]["id"] == s["run_id"] and d["runs"][0]["status"] == "completed"
+    else:
+        # off: a dry run that leaves the run subscribers read untouched
+        assert s["written"] is False and s["run_id"] is None and "ENGINE_LIVE" in s["dry_run_reason"]
+        assert [r["id"] for r in d["runs"]] == [r["id"] for r in before["runs"]]
+
+
+def test_status_reports_the_switch_and_research_coverage(tok):
+    st, d = _raw("GET", "/admin/lab/engine/status", token=tok)
+    assert st == 200 and isinstance(d["engine_live"], bool)
+    assert 0 <= d["data"]["research_rows"] <= d["universe"]["active"]
 
 
 def test_triggers_dry_run_returns_the_registry_slice(tok):
     st, r = _raw("POST", "/admin/lab/engine/triggers", {"triggers": ["volume_3x", "insider_buying"], "write": False},
                  token=tok)
     assert st == 200 and r["evaluated"] == ["volume_3x"] and r["instruments"] > 0
+    assert r["write"] is False and r["written"] == 0 and r["lookback_days"] == {"volume_3x": 5}
+
+
+def test_triggers_on_a_past_date_never_write(tok):
+    past = (date.today() - timedelta(days=40)).isoformat()
+    st, r = _raw("POST", "/admin/lab/engine/triggers", {"on": past, "write": True}, token=tok)
+    assert st == 200 and r["write"] is False and r["written"] == 0 and "past date" in r["dry_run_reason"]
 
 
 def test_replay_runs_resolves_and_is_marked_synthetic_on_the_fixture(tok):

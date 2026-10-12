@@ -66,6 +66,9 @@ def _status(cur):
     data["filings"] = {"rows": n, "tickers": t, "latest": str(m) if m else None}
     cur.execute("SELECT COUNT(*) FROM tickers WHERE sic <> ''")
     data["tickers_with_sic"] = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM instrument_research ir JOIN instruments i ON i.id = ir.instrument_id "
+                "WHERE i.active")
+    data["research_rows"] = cur.fetchone()[0]
     cur.execute("SELECT source, status, started_at, finished_at, ok_count, fail_count, rows_written "
                 "FROM source_runs ORDER BY id DESC LIMIT 12")
     data["recent_passes"] = [{"source": s, "status": st, "started_at": a.isoformat(),
@@ -109,7 +112,8 @@ def _status(cur):
                         "hit_rate": ov.get("hit_rate"), "synthetic": bool((summ or {}).get("synthetic_data_used"))})
     cur.execute("SELECT key, record_hits, record_n, record_source FROM strategies ORDER BY sort_order")
     records = [{"key": k, "hits": h, "n": n, "source": s} for k, h, n, s in cur.fetchall()]
-    return {"universe": {"active": active_total, "industries": list(uni.values())},
+    return {"engine_live": engine.engine_live(),
+            "universe": {"active": active_total, "industries": list(uni.values())},
             "data": data, "runs": runs, "triggers": trig, "replays": replays, "records": records,
             "now": now.isoformat()}
 
@@ -136,8 +140,7 @@ def engine_score(body: ScoreIn, creds: HTTPAuthorizationCredentials | None = Dep
     conn = get_conn()
     try:
         on = date.fromisoformat(body.as_of) if body.as_of else None
-        write = body.write and (on is None or on == datetime.now(timezone.utc).date())
-        s = engine.score_run(conn, as_of=on, write=write)
+        s = engine.score_run(conn, as_of=on, write=body.write)
         s.pop("results", None)
         return s
     finally:
@@ -156,8 +159,7 @@ def engine_triggers(body: TriggersIn, creds: HTTPAuthorizationCredentials | None
     conn = get_conn()
     try:
         on = date.fromisoformat(body.on) if body.on else None
-        write = body.write and (on is None or on == datetime.now(timezone.utc).date())
-        return triggers.fire_live(conn, on=on, keys=body.triggers, write=write)
+        return triggers.fire_live(conn, on=on, keys=body.triggers, write=body.write)
     finally:
         conn.close()
 

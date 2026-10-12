@@ -73,6 +73,17 @@ function StatusScreen({ onReplay }) {
   const synthetic = (d.bars.sources || []).includes("dev_fixture");
   return (
     <>
+      {data.engine_live ? (
+        <p className="badge ok block">
+          The engine is live: the morning pass writes a scored run subscribers read and records new alerts.
+        </p>
+      ) : (
+        <div className="errorbox">
+          The engine is off (ENGINE_LIVE is not 1). Score now and Evaluate triggers now are dry runs: they show
+          what would happen and write nothing a subscriber reads. Turn it on once the replays look right and the
+          research inputs are loaded ({d.research_rows} of {universe.active} names have them).
+        </div>
+      )}
       {synthetic && (
         <div className="errorbox">
           The stored bars include the dev fixture (a seeded random walk). Everything below
@@ -110,10 +121,14 @@ function StatusScreen({ onReplay }) {
               {last.err
                 ? `${last.what}: ${last.err}`
                 : last.what === "score"
-                  ? `Scored ${last.r.scored} names into run #${last.r.run_id}; ${last.r.band_changes} band changes` +
-                    (last.r.band_changes_withheld ? " (alerts withheld: regime change)" : `, ${last.r.alerts_fired} alerts fired`)
-                  : `Evaluated ${last.r.evaluated.join(", ")} on ${last.r.on}: ${last.r.fired} fired ` +
-                    JSON.stringify(last.r.by_trigger)}
+                  ? last.r.written
+                    ? `Scored ${last.r.scored} names into run #${last.r.run_id}; ${last.r.band_changes} band changes` +
+                      (last.r.band_changes_withheld ? " (alerts withheld: regime change)" : `, ${last.r.alerts_fired} alerts fired`)
+                    : `Dry run: scored ${last.r.scored} names, bands ${JSON.stringify(last.r.bands)}, mean coverage ` +
+                      `${last.r.mean_coverage}. Nothing written: ${last.r.dry_run_reason}.`
+                  : `Looked back from ${last.r.on} for ${last.r.evaluated.join(", ")}: ${last.r.fired} facts in the window ` +
+                    JSON.stringify(last.r.by_trigger) +
+                    (last.r.write ? `, ${last.r.written} new alerts recorded.` : `. Nothing written: ${last.r.dry_run_reason}.`)}
             </Busy>
           </p>
         )}
@@ -160,6 +175,11 @@ function StatusScreen({ onReplay }) {
           ))}
           <dt>EDGAR filings</dt>
           <dd>{d.filings.rows} rows on {d.filings.tickers} names · latest {d.filings.latest || "none"} · {d.tickers_with_sic} tickers carry a SIC code</dd>
+          <dt>Research inputs</dt>
+          <dd>
+            {d.research_rows} of {universe.active} active names carry the operator's heat, quality and haircuts
+            {d.research_rows < universe.active ? " · names without them score on market data alone, with no haircut" : ""}
+          </dd>
         </dl>
         {d.recent_passes.length > 0 && (
           <div className="table-scroll">

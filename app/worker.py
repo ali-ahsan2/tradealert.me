@@ -78,6 +78,9 @@ def run_engine():
     alert event per instrument, trigger and day)."""
     from app import engine, triggers
     from app.db import get_conn
+    if not engine.engine_live():
+        log.info("engine pass skipped: ENGINE_LIVE is not 1")
+        return {"skipped": "ENGINE_LIVE is not 1"}
     conn = get_conn()
     try:
         scored = engine.score_run(conn)

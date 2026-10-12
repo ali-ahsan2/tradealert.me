@@ -7,7 +7,7 @@ date, momentum measured from the stored daily bars, and the operator's
 research inputs. The arithmetic is app/engine_core.py, the same for the
 morning pass and for a Lab replay of a past date.
 
-    python -m app.engine              # score as of today, write the run
+    python -m app.engine              # score as of today; writes only when ENGINE_LIVE=1
     python -m app.engine 2026-06-30   # score as of a past date (dry run)
 
 A band change between the new run and the previous completed run fires the
@@ -25,6 +25,16 @@ from app import engine_core
 from app.db import get_conn
 
 log = logging.getLogger("tradealert.engine")
+
+
+def engine_live():
+    """True when ENGINE_LIVE=1. Off by default: until the operator turns it
+    on, the engine and the live triggers score and evaluate but write
+    nothing a subscriber reads, so a deploy changes no subscriber screen.
+    Turn it on after the Lab's dry runs and replays look right and the
+    research inputs are loaded (deploy/UPGRADE.md, step 8)."""
+    import os
+    return os.environ.get("ENGINE_LIVE") == "1"
 
 SNAPSHOT_FIELDS = ("cap_usd_m", "float_m", "so_m", "si_pct_float", "dtc", "fee_pct",
                    "growth_pct", "earnings", "earnings_conf", "run3m_pct",
@@ -189,6 +199,11 @@ def score_run(conn, as_of=None, strategy_key="fast_mover", write=True, fire_band
     """
     on = _as_of_date(as_of)
     today = datetime.now(timezone.utc).date()
+    dry_reason = None
+    if write and on != today:
+        write, dry_reason = False, "a past date is always a dry run"
+    elif write and not engine_live():
+        write, dry_reason = False, "the engine is off (ENGINE_LIVE is not 1)"
     as_of_ts = datetime.combine(on, datetime.min.time(), tzinfo=timezone.utc).replace(hour=13)
     cur = conn.cursor()
     ver = live_version(cur, strategy_key)
@@ -206,7 +221,7 @@ def score_run(conn, as_of=None, strategy_key="fast_mover", write=True, fire_band
     summary = {"as_of": on.isoformat(), "strategy": strategy_key, "version_id": ver["version_id"],
                "scored": len(results), "bands": tally,
                "mean_coverage": round(cov_sum / len(results), 3) if results else None,
-               "run_id": None, "band_changes": 0, "written": False}
+               "run_id": None, "band_changes": 0, "written": False, "dry_run_reason": dry_reason}
     if not write:
         summary["results"] = {iid: {"total": r["total"], "band": r["band"], "cov": round(r["cov"], 3)}
                               for iid, r in results.items()}

@@ -72,6 +72,11 @@ interest print, dated catalyst, S-3/424B filing) on a date and writes
 `alert_events`; its registry states, per trigger, the source and whether it
 can fire live or be replayed, and the Lab shows that verbatim. The worker
 runs both once a day after the price pass (`ENGINE_HOUR_UTC`, default 11).
+Each trigger looks back a few days (`LIVE_LOOKBACK_DAYS`) and records a fact
+once, by the date it happened. Nothing is written until `ENGINE_LIVE=1`: off,
+the morning pass skips and the Lab's buttons are dry runs, so deploying the
+engine changes no subscriber screen. `db/seed_research.py` loads the
+operator's research inputs without touching runs or scores.
 
 `app/replay.py` runs the same trigger code over a span of stored history,
 resolves every firing against the bars that followed (close and largest
@@ -112,7 +117,7 @@ Run them with pytest, so `tests/conftest.py` can give each test its own
 client address (the sign-up and log-in limiters are per address):
 
 ```sh
-pytest -q tests          # 108 passed, 1 skipped on a fresh `db/bootstrap.py --fixture` database
+pytest -q tests          # 113 passed, 1 skipped on a fresh `db/bootstrap.py --fixture` database
 ```
 
 The Lab suite signs in as `LAB_ADMIN_EMAIL` / `LAB_ADMIN_PASSWORD`, falling

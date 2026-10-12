@@ -44,7 +44,7 @@ for k in STRIPE_SECRET_KEY STRIPE_PRICE_ID_free STRIPE_PRICE_ID_basic \
          PULSE_CACHE_SECONDS VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT \
          TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_FROM WEBHOOK_SECRET_KEY \
          BILLING_DEV_MODE OAUTH_DEV_MODE GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET OPS_EMAIL \
-         TIINGO_TOKEN; do
+         TIINGO_TOKEN ENGINE_LIVE; do
   grep -q "^$k=" .env || echo "$k=" >> .env
 done
 ```
@@ -55,6 +55,7 @@ Then set, by hand:
   (`head -c 20 /dev/urandom | base64 | tr -d '/+=' | head -c 32`).
 - `BILLING_DEV_MODE=0` and `OAUTH_DEV_MODE=0`.
 - `PULSE_CACHE_SECONDS=300`, `VAPID_SUBJECT=mailto:alerts@tradealert.me`.
+- `ENGINE_LIVE=0` for now; step 8 says when to turn it on.
 - `OPS_EMAIL` to the address that should get the worker's disk and
   failure notices.
 - `TIINGO_TOKEN` to a Tiingo API token so daily bars come from a licensed
@@ -103,15 +104,12 @@ docker compose exec -T postgres psql -U tradealert -d tradealert -v ON_ERROR_STO
 docker compose exec -T app python db/seed_benchmarks.py      # reference ETFs, idempotent, no network
 ```
 
-The operator research inputs the engine reads (heat, quality, haircuts)
-are written by `db/seed_universe.py`, which is not in the image. Run it
-once from the checkout, against the compose database, if the Lab's engine
-status shows the latest run with a mean coverage far below the seeded run:
+The operator research inputs the engine reads (narrative heat, quality,
+haircuts) come from the workbench file in the image. Load them; this
+touches no run, score or instrument, so subscribers see no change:
 
 ```sh
-DATABASE_URL=postgresql://tradealert:<POSTGRES_PASSWORD>@localhost:5432/tradealert \
-  PGCLIENTENCODING=UTF8 python3 db/bootstrap.py --skip-universe && \
-  PGCLIENTENCODING=UTF8 python3 -c 'import sys; sys.path.insert(0, "db"); import bootstrap; bootstrap._seed_universe()'
+docker compose exec -T app python db/seed_research.py
 ```
 
 Do not run `seed_dev.py`, `seed_demo.py` or `seed_lab.py` on this box:
@@ -144,23 +142,51 @@ sudo cp deploy/logrotate /etc/logrotate.d/tradealert
 ## 8. Start the engine
 
 Migration 014 and the worker's new steps give the product its first live
-loop: a scored run every morning from stored data, the five sourced
-triggers evaluated every day, EDGAR filings ingested. The first pass on a
-box is best run by hand so you can read it:
+loop: a scored run every morning from stored data, five sourced triggers
+evaluated every morning, EDGAR filings ingested. The engine ships switched
+off (`ENGINE_LIVE=0`): until you turn it on, the daily score and the live
+triggers are dry runs and write nothing a subscriber reads, so this deploy
+changes no subscriber screen.
+
+Fill the data first and read it in the Lab:
 
 ```sh
 docker compose exec -T app python -m app.market_data            # bars for every name (minutes)
 docker compose exec -T app python -m app.filings_ingest         # two years of EDGAR filings (minutes)
-docker compose exec -T app python -m app.engine                 # today's run
-docker compose exec -T app python -m app.triggers               # today's alert events
+docker compose exec -T app python -m app.engine                 # dry run: what today's run would be
+docker compose exec -T app python -m app.triggers               # dry run: the facts in each look-back window
 ```
 
-Then open `/lab`, Engine tab: the status page shows the run, the data
-freshness and every trigger's source. Run a replay over the last year to
-read what would have fired and what followed; a replay over real bars with
-ten or more resolved alerts can be published as the strategy's record from
-its own page, with the replay named as the source. The Universe tab builds
-the rule-based universe from the SEC listing (plan first, then apply).
+Then open `/lab`, Engine tab. The status page says the engine is off,
+shows data freshness, how many names carry research inputs, and every
+trigger's source. Run a replay over the last year to read what would have
+fired and what followed; a replay over real bars with ten or more resolved
+alerts can be published as the strategy's record from its own page, with
+the replay named as the source.
+
+Replays hold every bar of the chosen names in memory. The workbench
+universe over two years is small; a rule-built universe of thousands of
+names on a 2 GB instance is not, so replay one industry at a time there.
+
+When the replays look right and research inputs cover the universe, turn
+it on:
+
+```sh
+sed -i 's/^ENGINE_LIVE=.*/ENGINE_LIVE=1/' .env
+docker compose up -d                                            # app and worker pick it up
+```
+
+The next morning pass (`ENGINE_HOUR_UTC`, default 11) writes the first
+live run. When more than a quarter of names change band against the
+previous run, as they will against a seeded run, band alerts for that run
+are withheld as a regime change, so the switch does not send a burst. Each trigger
+looks back a few days for facts it has not recorded (a volume spike shows
+once the session's bar exists; a short-interest print carries its
+settlement date, a week or more old), so the first live morning may record
+facts from the last days of that window; each is recorded once.
+
+The Universe tab builds the rule-based universe from the SEC listing:
+plan first, then apply.
 
 ## 9. Check
 
