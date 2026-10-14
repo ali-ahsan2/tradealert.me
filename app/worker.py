@@ -27,6 +27,8 @@ PRICES_EVERY_H = float(os.environ.get("PRICES_REFRESH_HOURS", "6"))
 EVENTS_EVERY_H = float(os.environ.get("EVENTS_REFRESH_HOURS", "12"))
 ALERTS_EVERY_M = float(os.environ.get("ALERTS_SWEEP_MINUTES", "15"))
 DIGEST_HOUR_UTC = int(os.environ.get("DIGEST_HOUR_UTC", "13"))
+# After the first price pass of the day (prices run every PRICES_REFRESH_HOURS).
+ENGINE_HOUR_UTC = int(os.environ.get("ENGINE_HOUR_UTC", "11"))
 
 # Housekeeping. The box is a t3.small with a 20GB root volume shared by
 # Docker images, logs and Postgres, so growth is worth watching before it
@@ -63,6 +65,31 @@ def refresh_prices():
 def refresh_events():
     from app.events_ingest import ingest_earnings
     return ingest_earnings(years=2, verbose=False)
+
+
+def refresh_filings():
+    from app.filings_ingest import ingest_filings
+    return ingest_filings(years=2, verbose=False)
+
+
+def run_engine():
+    """Score the universe from today's stored data, then evaluate the live
+    triggers for today. Both are idempotent per day (one run per as_of, one
+    alert event per instrument, trigger and day)."""
+    from app import engine, triggers
+    from app.db import get_conn
+    if not engine.engine_live():
+        log.info("engine pass skipped: ENGINE_LIVE is not 1")
+        return {"skipped": "ENGINE_LIVE is not 1"}
+    conn = get_conn()
+    try:
+        scored = engine.score_run(conn)
+        fired = triggers.fire_live(conn)
+    finally:
+        conn.close()
+    return {"scored": scored.get("scored"), "run_id": scored.get("run_id"),
+            "band_changes": scored.get("band_changes"), "withheld": scored.get("band_changes_withheld", False),
+            "fired": fired.get("fired"), "by_trigger": fired.get("by_trigger")}
 
 
 def sweep_alerts():
@@ -165,6 +192,8 @@ def housekeeping():
 def one_pass():
     _run("prices", refresh_prices)
     _run("events", refresh_events)
+    _run("filings", refresh_filings)
+    _run("engine", run_engine)
     _run("alerts", sweep_alerts)
     _run("digest", send_digests)
     _run("housekeeping", housekeeping)
@@ -183,7 +212,9 @@ def main():
     next_events = now + 300
     next_alerts = now + 60
     next_housekeep = now + 120
+    next_filings = now + 600
     last_digest_day = None
+    last_engine_day = None
 
     while True:
         now = time.time()
@@ -199,8 +230,17 @@ def main():
         if now >= next_housekeep:
             _run("housekeeping", housekeeping)
             next_housekeep = now + HOUSEKEEP_EVERY_H * 3600
+        if now >= next_filings:
+            _run("filings", refresh_filings)
+            next_filings = now + EVENTS_EVERY_H * 3600
 
         utc = datetime.now(timezone.utc)
+        # The engine scores once a day after the morning price pass; the
+        # trigger evaluation inside it is idempotent, so a second call on
+        # the same day (a restart) is free.
+        if utc.hour >= ENGINE_HOUR_UTC and last_engine_day != utc.date():
+            _run("engine", run_engine)
+            last_engine_day = utc.date()
         if utc.hour == DIGEST_HOUR_UTC and last_digest_day != utc.date():
             _run("digest", send_digests)
             last_digest_day = utc.date()

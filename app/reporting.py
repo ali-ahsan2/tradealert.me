@@ -25,11 +25,17 @@ bearer = HTTPBearer(auto_error=False)
 # Worker cadence, mirrored so the dashboard can show "next due" without the
 # worker having to publish it. Kept in sync with app/worker.py defaults.
 SOURCE_SCHEDULE = {
-    "yahoo_prices": {
-        "label": "Yahoo Finance — daily OHLCV",
+    "prices": {
+        "label": "Daily OHLCV (Tiingo when TIINGO_TOKEN is set, else Yahoo Finance)",
         "provides": "Open/high/low/close/volume, split and dividend adjusted",
         "every_hours": float(os.environ.get("PRICES_REFRESH_HOURS", "6")),
-        "auth": "none",
+        "auth": "token (Tiingo) or none (Yahoo)",
+    },
+    "sec_filings": {
+        "label": "SEC EDGAR — filings and identity",
+        "provides": "S-3/424B, 8-K items, Form 4 dates; CIK, SIC and exchange per ticker",
+        "every_hours": float(os.environ.get("EVENTS_REFRESH_HOURS", "12")),
+        "auth": "User-Agent only",
     },
     "sec_earnings": {
         "label": "SEC EDGAR — 8-K item 2.02",
@@ -77,8 +83,8 @@ def sources(creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
 
             out = []
             for key, meta in SOURCE_SCHEDULE.items():
-                run = last.get(key)
-                st = state.get("yahoo" if key == "yahoo_prices" else key, {})
+                run = last.get(key) or (last.get("yahoo_prices") if key == "prices" else None)
+                st = (state.get("tiingo") or state.get("yahoo") or {}) if key == "prices" else state.get(key, {})
                 nxt = None
                 if run and run["finished_at"]:
                     nxt = run["finished_at"] + timedelta(hours=meta["every_hours"])

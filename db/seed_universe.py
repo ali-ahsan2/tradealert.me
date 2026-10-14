@@ -41,6 +41,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.db import get_conn  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import seed_research  # noqa: E402
+
 RUN_AS_OF_STR = "2026-08-09T11:21:04Z"
 RUN_AS_OF = datetime.fromisoformat(RUN_AS_OF_STR)
 SEED_FILES = [
@@ -323,6 +326,10 @@ def main():
                     (ticker_id, industry_id))
         instrument_id = cur.fetchone()[0]
         n_instruments += 1
+
+        # Operator research inputs beside the score, so the live engine
+        # (app/engine.py) reproduces this run from stored data.
+        seed_research.upsert(cur, instrument_id, seed_research.research_row(meta, r))
 
         if not active:
             continue
