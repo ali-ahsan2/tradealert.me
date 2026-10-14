@@ -11,5 +11,8 @@ db/*
 !db/seed_lab.py
 !db/seed_oauth_test.py
 !db/seed_benchmarks.py
+!db/seed.sql
+!db/seed_research.py
+!db/_workbench_meta.json
 tests
 .vscode
