@@ -63,8 +63,14 @@ def refresh_prices():
 
 
 def refresh_events():
-    from app.events_ingest import ingest_earnings
-    return ingest_earnings(years=2, verbose=False)
+    from app.events_ingest import ingest_earnings, ingest_random_days
+    earnings_result = ingest_earnings(years=2, verbose=False)
+    # Depends on that pass's earnings dates to pick baseline days at least six
+    # sessions clear of a real event; without this, the only random_day rows
+    # available to a backtest are the synthetic seed fixtures.
+    random_written = ingest_random_days(verbose=False)
+    earnings_result["random_day_written"] = random_written
+    return earnings_result
 
 
 def refresh_filings():
