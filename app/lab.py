@@ -264,7 +264,7 @@ def _input_metrics(cur):
     comp_present = {}
     comp_labels = {}
     comp_shares = {}
-    cur.execute("SELECT inputs_json FROM backtest_events WHERE data_complete")
+    cur.execute("SELECT inputs_json FROM backtest_events WHERE data_complete AND NOT synthetic_data_used")
     for (inp,) in cur.fetchall():
         total += 1
         for h in (inp.get("hard_filters") or []):
@@ -651,8 +651,17 @@ def _normalize_spec(body: BacktestIn) -> dict:
 
 def _match_terms(spec, universe_on: bool):
     """Shared WHERE for backtest_events. universe_on=False drops the universe
-    selectors so the all-events baseline and excluded counts stay honest."""
-    where, params = [], []
+    selectors so the all-events baseline and excluded counts stay honest.
+
+    Synthetic fixture rows (db/seed_lab.py) are always excluded here, not
+    opted out of per-request: they existed only so the Lab had something to
+    render before real data existed, and a backtest that silently mixes
+    them in -- one fixture row anywhere flips the whole result's
+    synthetic_data_used flag -- stops meaning what it says. Real data now
+    covers the same ground, so there is nothing to lose by excluding
+    unconditionally rather than per-flag, which would just reopen the
+    same hole through a different door."""
+    where, params = ["NOT be.synthetic_data_used"], []
     uni = spec.get("universe") or {}
     kinds = spec.get("event_kinds") or ["earnings"]
     placeholders = ",".join(["%s"] * len(kinds))
@@ -824,7 +833,7 @@ def _run_backtest(body: BacktestIn, version_row, cur, strategy_id):
         kinds = spec.get("event_kinds") or ["earnings"]
         ph = ",".join(["%s"] * len(kinds))
         win = spec.get("window") or {}
-        conds = [f"be.event_kind IN ({ph})", "be.data_complete"]
+        conds = [f"be.event_kind IN ({ph})", "be.data_complete", "NOT be.synthetic_data_used"]
         wparams = list(kinds)
         if win.get("from"):
             conds.append("be.event_date >= %s")
@@ -852,7 +861,7 @@ def _run_backtest(body: BacktestIn, version_row, cur, strategy_id):
             cur.execute(
                 "SELECT COUNT(*), COUNT(*) FILTER (WHERE fwd_max_move_pct >= %s OR "
                 "fwd_vol_spike_x >= %s) FROM backtest_events "
-                "WHERE event_kind = 'random_day' AND data_complete",
+                "WHERE event_kind = 'random_day' AND data_complete AND NOT synthetic_data_used",
                 (hit_price, hit_vol),
             )
             n, k = cur.fetchone()
