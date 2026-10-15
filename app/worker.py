@@ -29,6 +29,7 @@ ALERTS_EVERY_M = float(os.environ.get("ALERTS_SWEEP_MINUTES", "15"))
 DIGEST_HOUR_UTC = int(os.environ.get("DIGEST_HOUR_UTC", "13"))
 # After the first price pass of the day (prices run every PRICES_REFRESH_HOURS).
 ENGINE_HOUR_UTC = int(os.environ.get("ENGINE_HOUR_UTC", "11"))
+FUNDAMENTALS_EVERY_H = float(os.environ.get("FUNDAMENTALS_REFRESH_HOURS", "12"))
 
 # Housekeeping. The box is a t3.small with a 20GB root volume shared by
 # Docker images, logs and Postgres, so growth is worth watching before it
@@ -76,6 +77,18 @@ def refresh_events():
 def refresh_filings():
     from app.filings_ingest import ingest_filings
     return ingest_filings(years=2, verbose=False)
+
+
+def refresh_fundamentals():
+    """Market cap, float, short interest, revenue growth -- the four
+    fields Fast Mover's hard filters check. Without this every real event
+    has inputs_json = {} and can never pass a filter (app/lab.py's
+    _evaluate_filters returns "unavailable" immediately); only the
+    synthetic seed fixtures carry fabricated values for these fields."""
+    from app.fundamentals_ingest import attach, fetch_all
+    fetched = fetch_all(verbose=False)
+    attached = attach(verbose=False)
+    return {**fetched, **attached}
 
 
 def run_engine():
@@ -199,6 +212,7 @@ def one_pass():
     _run("prices", refresh_prices)
     _run("events", refresh_events)
     _run("filings", refresh_filings)
+    _run("fundamentals", refresh_fundamentals)
     _run("engine", run_engine)
     _run("alerts", sweep_alerts)
     _run("digest", send_digests)
@@ -209,8 +223,8 @@ def main():
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    log.info("worker up: prices=%sh events=%sh alerts=%sm digest=%02d:00Z",
-             PRICES_EVERY_H, EVENTS_EVERY_H, ALERTS_EVERY_M, DIGEST_HOUR_UTC)
+    log.info("worker up: prices=%sh events=%sh fundamentals=%sh alerts=%sm digest=%02d:00Z",
+             PRICES_EVERY_H, EVENTS_EVERY_H, FUNDAMENTALS_EVERY_H, ALERTS_EVERY_M, DIGEST_HOUR_UTC)
 
     now = time.time()
     # Stagger the first runs so a restart does not fire everything at once.
@@ -219,6 +233,7 @@ def main():
     next_alerts = now + 60
     next_housekeep = now + 120
     next_filings = now + 600
+    next_fundamentals = now + 900
     last_digest_day = None
     last_engine_day = None
 
@@ -239,6 +254,9 @@ def main():
         if now >= next_filings:
             _run("filings", refresh_filings)
             next_filings = now + EVENTS_EVERY_H * 3600
+        if now >= next_fundamentals:
+            _run("fundamentals", refresh_fundamentals)
+            next_fundamentals = now + FUNDAMENTALS_EVERY_H * 3600
 
         utc = datetime.now(timezone.utc)
         # The engine scores once a day after the morning price pass; the
