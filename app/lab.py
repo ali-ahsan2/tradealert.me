@@ -637,8 +637,17 @@ class BacktestIn(BaseModel):
     family_key: str | None = None
 
 
+# Bumped whenever _run_backtest's query logic changes in a way that would
+# give a different result for the same spec -- events_max_id alone only
+# catches new data, not a changed WHERE clause, so a deployed fix (like
+# excluding synthetic rows) would otherwise keep serving the pre-fix
+# cached result until someone varied an unrelated field by hand.
+BACKTEST_LOGIC_VERSION = 2
+
+
 def _normalize_spec(body: BacktestIn) -> dict:
     return {
+        "_logic_version": BACKTEST_LOGIC_VERSION,
         "strategy": body.strategy_key,
         "version": body.version_number,
         "universe": body.universe.model_dump(exclude_none=True),
