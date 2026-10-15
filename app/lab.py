@@ -189,6 +189,10 @@ def lab_strategies(creds: HTTPAuthorizationCredentials | None = Depends(bearer))
             events_complete = cur.fetchone()[0]
             cur.execute("SELECT COUNT(*) FROM backtest_events")
             events_total = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM backtest_events WHERE NOT synthetic_data_used")
+            events_real = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM backtest_events WHERE synthetic_data_used")
+            events_synthetic = cur.fetchone()[0]
             out = []
             for r in rows:
                 sid, key, label = r[0], r[1], r[2]
@@ -215,6 +219,8 @@ def lab_strategies(creds: HTTPAuthorizationCredentials | None = Depends(bearer))
             return {"strategies": out,
                     "events_total": events_total,
                     "events_complete": events_complete,
+                    "events_real": events_real,
+                    "events_synthetic": events_synthetic,
                     # The floors the verdicts rest on, so the Lab's plain
                     # copy reads them from here instead of repeating them.
                     "floors": {"min_group": MIN_GROUP_FLOOR,

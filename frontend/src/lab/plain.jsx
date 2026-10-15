@@ -942,7 +942,7 @@ export const START_HERE = [
   { n: 2, label: "Inputs", screen: "inputs", strat: true,
     do: "Learn the vocabulary: must-pass rules (hard filters), ingredients and their weights (components), rating cutoffs (bands). This screen describes; it never judges." },
   { n: 3, label: "Reports › Sources", screen: "reports",
-    do: "See where the data comes from, when it last ran, and that today's events are synthetic. Then open Stock, type SPY, and look at a chart with event markers." },
+    do: "See where the data comes from, when it last ran, and the real vs fixture count. Then open Stock, type SPY, and look at a chart with event markers." },
   { n: 4, label: "Backtest", screen: "backtest", strat: true,
     do: "Run it with the defaults. Read the pass group against the two baselines, open the warnings, then open Provenance to see what was excluded." },
   { n: 5, label: "Findings", screen: "findings",
@@ -993,8 +993,10 @@ export function LabIntro({ onDismiss, onGo }) {
           can be cited that cannot be traced. Nothing here reaches subscribers.
         </p>
         <p>
-          Right now the history it tests on is a sandbox set of synthetic (made-up) events,
-          so every number is a rehearsal, not evidence; the amber banners say so.
+          The history it tests on is a mix of real recorded events (SEC filings, real
+          price history) and leftover sandbox fixtures. Every result says which it used;
+          a run built on synthetic rows still carries the amber banner and is a rehearsal,
+          not evidence. Check the Sources screen for exact real/fixture counts.
         </p>
         <dl className="labintro-ideas">
           <div>

@@ -1737,7 +1737,9 @@ function LabApp() {
         <span style={{ flex: 1 }} />
         <span
           className="muted mono labbar-count"
-          title="Dated events in the sandbox test set. Today all of them are synthetic fixtures."
+          title={strategies
+            ? `${strategies.events_real ?? 0} real, ${strategies.events_synthetic ?? 0} fixture`
+            : "Dated events in the test set."}
         >
           {strategies ? `${strategies.events_total} events in the test set` : ""}
         </span>
@@ -1828,14 +1830,23 @@ function LabApp() {
         </span>
         <span>
           events in the test set <b>{strategies ? strategies.events_total : "—"}</b>{" "}
-          <span className="labstatus-dim">(synthetic fixtures)</span>
+          {strategies && (
+            <span className="labstatus-dim">
+              ({strategies.events_real ?? 0} real
+              {strategies.events_synthetic ? `, ${strategies.events_synthetic} fixture` : ""})
+            </span>
+          )}
         </span>
         <span>
           screen <b>{screen.toUpperCase()}</b>
           {strat && STRATEGY_SCREENS.includes(screen) ? <> · <b>{strat}</b></> : null}
         </span>
         <span className="spacer" />
-        <span>synthetic rows never leave this surface</span>
+        <span>
+          {strategies && strategies.events_real > 0
+            ? "real rows are recorded, labelled source per row"
+            : "synthetic rows never leave this surface"}
+        </span>
         <button type="button" className="labstatus-btn" onClick={() => setShowWalk(true)}>
           <b>?</b> guide
         </button>
