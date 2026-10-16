@@ -566,8 +566,106 @@ function BandsTable({ bands }) {
   );
 }
 
+function FilterEditRow({ filter, draft, onChange }) {
+  const isBetween = filter.op === "between";
+  return (
+    <tr>
+      <td>
+        <span className="mono">{filter.label}</span>
+        <span className="muted"> {filter.op}{filter.unit ? ` (${filter.unit})` : ""}</span>
+      </td>
+      <td>
+        {isBetween ? (
+          <span style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 6 }}>
+            <input
+              type="number" step="any" value={draft[0] ?? ""}
+              onChange={(e) => onChange([Number(e.target.value), draft[1]])}
+            />
+            <input
+              type="number" step="any" value={draft[1] ?? ""}
+              onChange={(e) => onChange([draft[0], Number(e.target.value)])}
+            />
+          </span>
+        ) : (
+          <input
+            type="number" step="any" value={draft ?? ""}
+            onChange={(e) => onChange(Number(e.target.value))}
+          />
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function FiltersEditor({ filters, strat, onSaved, onCancel }) {
+  const [drafts, setDrafts] = useState(() =>
+    filters.map((f) => (f.op === "between" ? [...f.value] : f.value)));
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState("");
+
+  const save = async () => {
+    setSaving(true);
+    setSaveErr("");
+    try {
+      const body = {
+        hard_filters: filters.map((f, i) => ({
+          key: f.key, label: f.label, op: f.op, value: drafts[i], unit: f.unit || null,
+        })),
+        change_reason: reason,
+      };
+      await api(`/admin/lab/strategies/${strat}/versions`, { method: "POST", json: body });
+      onSaved();
+    } catch (ex) {
+      setSaveErr(ex.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <table className="labtable">
+        <thead>
+          <tr>
+            <th>Rule</th>
+            <th>New threshold</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filters.map((f, i) => (
+            <FilterEditRow
+              key={f.key}
+              filter={f}
+              draft={drafts[i]}
+              onChange={(v) => setDrafts((d) => d.map((x, j) => (j === i ? v : x)))}
+            />
+          ))}
+        </tbody>
+      </table>
+      <label className="labfield" style={{ marginTop: 12 }}>
+        Reason for this change
+        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Tightening growth threshold to test for a stronger edge" />
+      </label>
+      {saveErr && <div className="errorbox" role="alert" style={{ marginTop: 8 }}>{saveErr}</div>}
+      <div className="formrow" style={{ marginTop: 12 }}>
+        <button type="button" className="btn btn-primary" onClick={save} disabled={saving}>
+          {saving ? "Saving…" : "Save as new version"}
+        </button>
+        <button type="button" className="btn" onClick={onCancel} disabled={saving}>Cancel</button>
+      </div>
+      <p className="muted" style={{ marginTop: 8 }}>
+        This creates a new version rather than changing the current one, so every past backtest
+        result stays attributable to the version it actually ran against.
+      </p>
+    </>
+  );
+}
+
 function InputsScreen({ strat }) {
-  const { data, err, loading } = useFetch([strat], () =>
+  const [editing, setEditing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const { data, err, loading } = useFetch([strat, refreshKey], () =>
     api(`/admin/lab/strategies/${strat}/inputs`));
   const coverage = useFetch([strat], () =>
     api(`/admin/lab/strategies/${strat}/coverage`));
@@ -602,9 +700,25 @@ function InputsScreen({ strat }) {
           <PanelHead id="filters" title="Hard filters">
             <p>Fail any one and the stock is excluded, whatever it scores.</p>
           </PanelHead>
-          <div className="table-scroll">
-            <FiltersTable filters={data.hard_filters} />
-          </div>
+          {editing ? (
+            <FiltersEditor
+              filters={data.hard_filters}
+              strat={strat}
+              onCancel={() => setEditing(false)}
+              onSaved={() => { setEditing(false); setRefreshKey((k) => k + 1); }}
+            />
+          ) : (
+            <>
+              <div className="table-scroll">
+                <FiltersTable filters={data.hard_filters} />
+              </div>
+              {data.hard_filters.length > 0 && (
+                <button type="button" className="btn" style={{ marginTop: 12 }} onClick={() => setEditing(true)}>
+                  Edit thresholds…
+                </button>
+              )}
+            </>
+          )}
         </div>
         <div className="card">
           <PanelHead id="components" title="Component weights">

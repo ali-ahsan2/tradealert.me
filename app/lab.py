@@ -407,6 +407,73 @@ def lab_versions(key: str, creds: HTTPAuthorizationCredentials | None = Depends(
         conn.close()
 
 
+class HardFilterIn(BaseModel):
+    key: str
+    label: str
+    op: str
+    value: float | list[float]
+    unit: str | None = None
+
+
+class VersionCreateIn(BaseModel):
+    hard_filters: list[HardFilterIn]
+    change_reason: str = ""
+
+
+_VALID_FILTER_OPS = {"between", ">", "<", ">=", "<="}
+
+
+@router.post("/api/admin/lab/strategies/{key}/versions",
+             dependencies=[Depends(_no_cache)])
+def lab_version_create(key: str, body: VersionCreateIn,
+                       creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
+    """New strategy_versions row with edited hard_filters, everything else
+    carried forward unchanged from the current version. Never edits a
+    version in place -- every past backtest result stays attributable to
+    the version_number it actually ran against (spec 5.3)."""
+    admin = _require_admin(creds)
+    admin_id = user_id(admin)
+    seen_keys = set()
+    for f in body.hard_filters:
+        if f.op not in _VALID_FILTER_OPS:
+            raise HTTPException(400, f"unknown op {f.op!r} for filter {f.key!r}")
+        if f.op == "between":
+            if not isinstance(f.value, list) or len(f.value) != 2:
+                raise HTTPException(400, f"{f.key!r}: op 'between' needs a [low, high] value")
+            if f.value[0] > f.value[1]:
+                raise HTTPException(400, f"{f.key!r}: low must not exceed high")
+        elif isinstance(f.value, list):
+            raise HTTPException(400, f"{f.key!r}: op {f.op!r} needs a single number, not a range")
+        if f.key in seen_keys:
+            raise HTTPException(400, f"duplicate filter key {f.key!r}")
+        seen_keys.add(f.key)
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            strat = _strategy_key(cur, key)
+            current = _current_version(cur, strat["id"])
+            if not current:
+                raise HTTPException(400, "strategy has no existing version to branch from")
+            cur.execute(
+                "SELECT COALESCE(MAX(version_number), 0) FROM strategy_versions "
+                "WHERE strategy_id = %s", (strat["id"],))
+            next_version = cur.fetchone()[0] + 1
+            hard_filters_json = [f.model_dump(exclude_none=True) for f in body.hard_filters]
+            cur.execute(
+                "INSERT INTO strategy_versions (strategy_id, version_number, "
+                "band_cutoffs_json, component_weights_json, hard_filters_json, "
+                "created_by_admin_id, change_reason, state, hit_definition_json) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, 'live', %s) RETURNING id",
+                (strat["id"], next_version, json.dumps(current[2]), json.dumps(current[3]),
+                 json.dumps(hard_filters_json), admin_id,
+                 body.change_reason.strip(), json.dumps(current[10])))
+            new_id = cur.fetchone()[0]
+            conn.commit()
+            return {"id": new_id, "version_number": next_version}
+    finally:
+        conn.close()
+
+
 def _diff_sets(a, b):
     """Dict-of-dicts diff between two version payloads (earlier vs later)."""
     changed = []
