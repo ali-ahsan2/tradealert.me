@@ -966,6 +966,7 @@ function BacktestScreen({ strat, onCite }) {
   const [price, setPrice] = useState("20");
   const [vol, setVol] = useState("3.0");
   const [combine, setCombine] = useState("or");
+  const [filterCombine, setFilterCombine] = useState("and");
   const [baselines, setBaselines] = useState(["all_events", "random_day"]);
   const [hypothesis, setHypothesis] = useState("");
   const [family, setFamily] = useState("");
@@ -1025,6 +1026,7 @@ function BacktestScreen({ strat, onCite }) {
         baselines: baselines,
         hypothesis,
         family_key: family || null,
+        filter_combine: filterCombine,
       };
       const r = await api("/admin/lab/backtest", { method: "POST", json: body });
       setResult(r);
@@ -1165,6 +1167,27 @@ function BacktestScreen({ strat, onCite }) {
             </div>
           </div>
           </Collapsible>
+        </section>
+        <section className="lab-step">
+          <PanelHead id="step2b" title={<><span className="stepnum">2b</span> How strict the hard filters are</>}>
+            <p>The strategy's hard filters (cap, float, short interest, growth) are checked per event. Require all of them, or any one.</p>
+          </PanelHead>
+          <div className="hitrule">
+            <span className="hitrule-lead">An event passes when</span>
+            <label className="labfield hitrule-field hitrule-join">
+              <span className="labfield-label" style={{ margin: 0 }}>&nbsp;</span>
+              <select aria-label="Hard filter combine" value={filterCombine} onChange={(e) => setFilterCombine(e.target.value)}>
+                <option value="and">all</option>
+                <option value="or">any</option>
+              </select>
+            </label>
+            <span className="hitrule-lead">of its hard filters clear.</span>
+          </div>
+          <p className="hitrule-plain">
+            {filterCombine === "or"
+              ? "Loosest reading: an event passes if even one hard filter clears. Useful for seeing which single filter, if any, carries signal."
+              : "The strategy's real definition: an event passes only if every hard filter clears at once."}
+          </p>
         </section>
         <section className="lab-step">
           <PanelHead id="step3" title={<><span className="stepnum">3</span> What counts as a hit</>}>

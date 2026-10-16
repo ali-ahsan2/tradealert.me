@@ -635,14 +635,17 @@ class BacktestIn(BaseModel):
     baselines: list[str] | None = None
     hypothesis: str = ""
     family_key: str | None = None
+    filter_combine: str = "and"
 
 
-# Bumped whenever _run_backtest's query logic changes in a way that would
-# give a different result for the same spec -- events_max_id alone only
-# catches new data, not a changed WHERE clause, so a deployed fix (like
-# excluding synthetic rows) would otherwise keep serving the pre-fix
+# Bumped whenever _run_backtest's query logic changes, or an existing
+# event row's inputs_json/provenance_json changes in place (e.g. a
+# fundamentals refresh), in a way that would give a different result for
+# the same spec -- events_max_id alone only catches new rows, not an
+# updated WHERE clause or updated column values on existing rows, so a
+# deployed fix or a data refresh would otherwise keep serving the stale
 # cached result until someone varied an unrelated field by hand.
-BACKTEST_LOGIC_VERSION = 2
+BACKTEST_LOGIC_VERSION = 4
 
 
 def _normalize_spec(body: BacktestIn) -> dict:
@@ -655,6 +658,7 @@ def _normalize_spec(body: BacktestIn) -> dict:
         "event_kinds": body.event_kinds,
         "hit": body.hit_definition.model_dump(),
         "baselines": body.baselines,
+        "filter_combine": body.filter_combine,
     }
 
 
@@ -708,11 +712,18 @@ def _match_terms(spec, universe_on: bool):
     return where, params
 
 
-def _evaluate_filters(version_row, inputs_json):
-    """Pass/fail per the version's hard filters on the event's raw inputs."""
+def _evaluate_filters(version_row, inputs_json, combine="and"):
+    """Pass/fail per the version's hard filters on the event's raw inputs.
+
+    combine="and" (the strategy's real definition) requires every filter to
+    pass. combine="or" is an exploratory override for the backtest only --
+    it never changes the stored strategy version -- that passes an event
+    if ANY filter clears, to see which single filter (if any) is carrying
+    signal rather than only ever seeing their tight intersection."""
     hf = (version_row[4] or []) if version_row else []
     if not hf:
         return True, None
+    results = []
     for rule in hf:
         key = rule["key"]
         raw = None
@@ -725,7 +736,8 @@ def _evaluate_filters(version_row, inputs_json):
                 found = True
                 break
         if not found:
-            return False, f"filter_{key}_unavailable"
+            results.append((False, f"filter_{key}_unavailable"))
+            continue
         ok = stored_pass
         op = rule.get("op")
         if raw is not None and op:
@@ -741,8 +753,14 @@ def _evaluate_filters(version_row, inputs_json):
                 ok = raw >= thr
             elif op == "<=":
                 ok = raw <= thr
+        results.append((ok, None if ok else f"filter_{key}"))
+    if combine == "or":
+        if any(ok for ok, _ in results):
+            return True, None
+        return False, results[0][1]
+    for ok, reason in results:
         if not ok:
-            return False, f"filter_{key}"
+            return False, reason
     return True, None
 
 
@@ -751,6 +769,7 @@ def _run_backtest(body: BacktestIn, version_row, cur, strategy_id):
     hit_price = body.hit_definition.price_move_pct
     hit_vol = body.hit_definition.volume_spike_x
     combine = body.hit_definition.combine
+    filter_combine = body.filter_combine
 
     where, params = _match_terms(spec, universe_on=True)
     cur.execute(
@@ -788,7 +807,7 @@ def _run_backtest(body: BacktestIn, version_row, cur, strategy_id):
         by_price = max_move >= hit_price
         by_vol = vol_spike >= hit_vol
         hit = (by_price or by_vol) if combine == "or" else (by_price and by_vol)
-        pass_ok, _fail = _evaluate_filters(version_row, inputs_json)
+        pass_ok, _fail = _evaluate_filters(version_row, inputs_json, filter_combine)
         if _kind == "random_day":
             key = "na"
         else:
@@ -803,8 +822,12 @@ def _run_backtest(body: BacktestIn, version_row, cur, strategy_id):
             sources.add(src)
 
     groups_out = []
-    labels = (("pass", "All hard filters passed"),
-              ("fail", "Any hard filter failed"),
+    pass_label = ("Any hard filter passed" if filter_combine == "or"
+                  else "All hard filters passed")
+    fail_label = ("Every hard filter failed" if filter_combine == "or"
+                  else "Any hard filter failed")
+    labels = (("pass", pass_label),
+              ("fail", fail_label),
               ("na", "Random-day baseline (filters not applicable)"))
     for key, label in labels:
         g = groups.get(key)
@@ -925,6 +948,7 @@ def _run_backtest(body: BacktestIn, version_row, cur, strategy_id):
         "sources": sorted(sources),
         "synthetic_data_used": synthetic,
         "version_confidence_assumed_count": assumed_count,
+        "filter_combine": filter_combine,
     }
 
     all_warnings = [w for g in groups_out for w in g["warnings"]]
